@@ -37,6 +37,8 @@ v1.3.0 可从公开的 `createAgentSession()`、`AgentSessionRuntime` 及其工�
 
 保留原生 SYSTEM/APPEND/AGENTS、skills、工具、模型与信任行为。SDK 不会自动装载 CLI 的 codemode、tool_search、MCP 内置扩展；需要这些能力时用 Pi 公开工厂及原有配置接线，不自行实现替代品。保持原生发现不等于承诺任意第三方扩展兼容：若扩展覆盖已预算上下文、强制重写 system 或另行摘要，应明确报告冲突，不静默禁用用户资源。
 
+当前首个实现切片为无界面 SDK 宿主。Pi 1.3.0 的裸 SDK 默认信任项目，CLI 信任解析则未从包根导出；`src/pi/trust.ts` 通过公开的资源加载回调、信任存储和扩展类型接通无界面流程，不使用私有导入。已有信任决定和扩展优先级保持一致，未知项目的 `ask` 在无界面时不授权；交互式确认界面及完整 TUI 仍须后续接入验收。
+
 ### 1.2 实例级 compaction 与请求失败隔离
 
 宿主向原生 Session 和 ResourceLoader 注入同一个每实例 SettingsManager 适配对象。普通设置继续按 Pi 原生配置/信任/保存行为工作；只有本 Runtime 的 compaction 有效读取固定为关闭，reload、其他设置保存、受信任项目覆盖和重新创建 Session 都不能使它重新开启。不能调用会改写共享配置的压缩 setter，也不能仅依赖一次 `applyOverrides()`。手动压缩取消与发送前组装成功检查仍需保留，具体约束见 Recent Window §2.2、§10.3。
