@@ -1,0 +1,13 @@
+# Local credentials and private validation settings
+.env
+.env.*
+!.env.example
+/.secrets/
+/.pi/auth.json
+/.pi/models.local.json
+
+# Local development artifacts
+.DS_Store
+node_modules/
+dist/
+coverage/
