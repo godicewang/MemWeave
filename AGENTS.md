@@ -4,7 +4,7 @@
 
 本项目是复用固定版本 Pi Coding Agent SDK 底层能力的独立 MemWeave 应用，核心是长程任务记忆 Runtime。MemWeave 自己持有 SDK 宿主入口，通过 `src/pi/` 适配层复用 Pi 原生 Agent Loop、Session、模型/工具与交互界面；不 fork Pi，不重新实现 Agent Loop。
 
-第一阶段目标：Task 管理、Task 级 Symbolic State、基于 Pi Session 的 Recent Window、已知引用的原文读取、Rule 模板请求前渲染，以及可复现的基线与轻量评测。
+第一阶段目标：Task 管理、Task 级 Symbolic State、基于 Pi Session 的 Recent Window、已知引用的原文读取，以及 Rule 模板请求前渲染。
 
 第一阶段不实现子 Agent、task_fork、独立摘要 Agent、第二套全量 Session 存储、独立 Memory Operation Log 或通用 Workflow Engine。
 
@@ -66,9 +66,9 @@
 
 本项目采用**一个开发仓库构建独立 MemWeave 应用**，通过 SDK 宿主管理自己的 Pi 运行版本，不维护第二份平行源码，也不把开发知识库作为普通用户的运行时资源。
 
-- Git 仓库是唯一开发源，包含 `AGENTS.md`、`docs/specs/`、设计文档、测试、评测和源码。
+- Git 仓库是唯一开发源，包含 `AGENTS.md`、`docs/specs/`、设计文档、测试和源码。
 - 应用发布产物包含 `memweave` 入口、Runtime、Pi 适配层、必要运行资源、安装元数据及依赖锁；使用应用自己的 Pi 依赖，不要求用户另装对应版本的全局 Pi。
-- `AGENTS.md`、`docs/specs/`、`IMPLEMENTATION_PLAN.md`、测试代码和评测材料默认不进入普通用户安装包。
+- `AGENTS.md`、`docs/specs/`、`IMPLEMENTATION_PLAN.md` 和测试代码默认不进入普通用户安装包。
 - `~/.pi/memory/` 是运行时数据目录，与 Git 仓库、应用安装目录分离。Pi 原生配置/凭据/资源发现与 Session 存储仍复用用户实际的 `agentDir` 和工作区口径。
 - 不因发布或兼容性要求修改 Task、State、Recent Window、Rule 的既定语义、接口或持久化协议。
 - 不为每个 Pi 版本复制业务实现；Pi API 差异只允许收敛在 `src/pi/` 适配层及依赖/构建配置。CLI 入口只做参数与界面接线，不承载记忆业务规则。
@@ -78,7 +78,7 @@
 - 完整 Runtime 当前不以普通 Pi Package 为主发布入口；未来仅在公开宿主能力满足相同验收条件时考虑该渠道，不维护功能削弱的平行实现。
 
 默认发布：应用运行代码、安装/版本/依赖元数据、必要运行时资源、用户安装说明及依赖许可材料。
-默认不发布：`AGENTS.md`、`docs/specs/`、内部方案文档、测试/评测、开发脚本、用户数据、密钥、Session 或 State 文件。
+默认不发布：`AGENTS.md`、`docs/specs/`、内部方案文档、测试、开发脚本、用户数据、密钥、Session 或 State 文件。
 
 ## 5. 模块职责
 
@@ -96,7 +96,6 @@
 | `src/storage/` | 路径、原子写、JSONL 追加、幂等工具 | Task/State 语义 |
 | `tests/unit/` | schema、reducer、窗口算法、模板函数测试 | 依赖真实供应商 |
 | `tests/integration/` | Pi Session、extension hook、工具流程集成测试 | 取代单元测试 |
-| `eval/` | 基线配置、对照实验与结果汇总 | 生产运行时状态 |
 
 跨模块交互必须通过清晰的小接口，不允许直接改写其他模块的私有文件格式。
 
