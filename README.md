@@ -26,14 +26,14 @@ MemWeave 是复用 Pi 底层能力的独立长程任务记忆应用：通过适�
 
 宿主与适配层负责 SDK 接线、每实例 compaction 隔离、资源定位和兼容检查；不得为发布便利改变已定稿的工具协议、记忆语义、窗口规则或存储格式。完整 Runtime 当前采用 SDK 应用入口，普通 Pi Package 仅保留为未来有条件的渠道。
 
-目前已建立全部模块目录，并实现阶段 0 的 SDK 宿主基础切片：Pi 版本检查、每实例 compaction 隔离、无界面项目信任接线、请求准备/组装/发送检查，以及原生 Session 生命周期复用。`memweave` 当前提供帮助和版本信息，尚未连接交互式 TUI 和长程记忆业务。配置/Rule、Task、State、Window、memory_read 目录暂未实现业务逻辑。
+目前已建立全部模块目录，并实现阶段 0 的 SDK 宿主和锁定安装切片：Pi 版本检查、每实例 compaction 隔离、无界面项目信任接线、请求准备/组装/发送检查、原生 Session 生命周期复用，以及可重复构建、安装与版本回切。`memweave` 当前提供帮助、版本和安装管理，尚未连接交互式 TUI 和长程记忆业务。配置/Rule、Task、State、Window、memory_read 目录暂未实现业务逻辑。
 
 ## 本地开发
 
 当前验证环境为 Node.js 24.22.0、npm 11.19.1；在仓库根目录执行：
 
 ```sh
-npm ci
+npm ci --ignore-scripts
 npm run check
 node dist/cli/index.js --version
 ```
@@ -45,3 +45,5 @@ MEMWEAVE_LIVE_AGENT_DIR=/path/to/private/pi-agent npm run test:live
 ```
 
 开发入口与边界见 `src/pi/README.md`；当前兼容证据和剩余阶段 0 验收见 `docs/PACKAGING.md`。基础切片通过测试不代表完整记忆产品已经完成。
+
+生成本地安装产物：`npm run release:build -- --out <不存在的新目录>`。当前仅验收 macOS arm64、Node 24.22.0、npm 11.19.1；安装、更新、回切和卸载见 [安装指南](docs/INSTALL.md)。尚未发布 GitHub Release。

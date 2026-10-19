@@ -50,6 +50,7 @@ v1.3.0 可从公开的 `createAgentSession()`、`AgentSessionRuntime` 及其工�
 ```text
 src/
 ├── cli/                     # MemWeave 命令、参数、启动退出与界面接线
+├── install/                 # 产物校验、锁定安装与版本激活；不管理用户数据
 ├── extension/index.ts       # 宿主内扩展工厂：生命周期、工具/hook 注册
 ├── config/                  # config schema、默认值、实例覆盖合并
 ├── rule/                    # rule.md 读取、白名单变量替换、请求 hook

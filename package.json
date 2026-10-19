@@ -11,6 +11,7 @@
   "packageManager": "npm@11.19.1",
   "scripts": {
     "build": "node scripts/build.mjs",
+    "release:build": "node scripts/release.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --exclude '**/*.live.test.ts'",
     "test:live": "vitest run tests/integration/host.live.test.ts",
