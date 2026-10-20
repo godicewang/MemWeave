@@ -11,7 +11,7 @@ import { discoverAndLoadExtensions } from "@earendil-works/pi-coding-agent";
 const run = promisify(execFile);
 const root = fileURLToPath(new URL("../../", import.meta.url));
 
-async function assertSkeletonLoads(packageRoot: string, temporaryRoot: string) {
+async function assertPackageLoads(packageRoot: string, temporaryRoot: string) {
   const workspace = join(temporaryRoot, "workspace");
   const agentDir = join(temporaryRoot, "agent");
   await mkdir(workspace, { recursive: true });
@@ -25,8 +25,9 @@ async function assertSkeletonLoads(packageRoot: string, temporaryRoot: string) {
   const extension = result.extensions[0];
   assert.ok(extension);
   assert.equal(extension.resolvedPath, join(packageRoot, "src/extension/index.ts"));
-  assert.equal(extension.tools.size, 0, "骨架尚未注册业务工具");
-  assert.equal(extension.handlers.size, 0, "骨架尚未修改请求或会话");
+  assert.equal(extension.tools.size, 0, "阶段 0 不注册生产业务工具");
+  assert.deepEqual([...extension.handlers.keys()].sort(), ["context_with_system", "session_before_compact", "session_start"]);
+  for (const handlers of extension.handlers.values()) assert.equal(handlers.length, 1);
   assert.deepEqual(await readdir(workspace), []);
   assert.deepEqual(await readdir(agentDir), []);
 }
@@ -35,7 +36,7 @@ test("Pi v1.3.0 通过 manifest 加载本地 TypeScript 入口", async (t) => {
   const temporaryRoot = await mkdtemp(join(tmpdir(), "memweave-local-load-"));
   t.after(() => rm(temporaryRoot, { recursive: true, force: true }));
 
-  await assertSkeletonLoads(root, temporaryRoot);
+  await assertPackageLoads(root, temporaryRoot);
 });
 
 test("npm 归档只含运行资源，解包后由 Pi 加载同一入口", async (t) => {
@@ -59,6 +60,8 @@ test("npm 归档只含运行资源，解包后由 Pi 加载同一入口", async 
     "package.json",
     "resources/rule.md",
     "src/extension/index.ts",
+    "src/pi/context-limit.ts",
+    "src/pi/request-lifecycle.ts",
   ]);
 
   await run("tar", ["-xzf", join(temporaryRoot, archive.filename), "-C", temporaryRoot]);
@@ -67,5 +70,5 @@ test("npm 归档只含运行资源，解包后由 Pi 加载同一入口", async 
     await readFile(join(packageRoot, "resources/rule.md")),
     await readFile(join(root, "docs/specs/1.2.rule_v1_3_final_updated.md")),
   );
-  await assertSkeletonLoads(packageRoot, temporaryRoot);
+  await assertPackageLoads(packageRoot, temporaryRoot);
 });
