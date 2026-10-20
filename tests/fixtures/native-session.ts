@@ -9,7 +9,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { fauxProvider, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 
-export async function nativeSession(t: TestContext, factories: ExtensionFactory[] = [], enabled = false, reserveTokens = 512) {
+export async function nativeSession(t: TestContext, factories: ExtensionFactory[] = [], enabled = false, reserveTokens = 512, additionalExtensionPaths: string[] = []) {
   const root = await mkdtemp(join(tmpdir(), "memweave-stage0-"));
   let activeSession: AgentSession | undefined;
   t.after(async () => {
@@ -36,7 +36,7 @@ export async function nativeSession(t: TestContext, factories: ExtensionFactory[
   });
   runtime.registerNativeProvider(faux.provider);
   const loader = new DefaultResourceLoader({
-    cwd, agentDir, settingsManager: settings, extensionFactories: factories,
+    cwd, agentDir, settingsManager: settings, extensionFactories: factories, additionalExtensionPaths,
     noExtensions: true, noSkills: true, noThemes: true, noPromptTemplates: true,
   });
   await loader.reload();

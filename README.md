@@ -18,7 +18,7 @@
 
 源代码仓库、Pi Session 和 `~/.pi/memory/` 运行时数据必须分开存放。
 
-已确认的默认设计：Agent 总预算为实际调用模型最大上下文的一半（按 token 向下取整，含输出预留）；Recent Window 容量为 200 个事件、每批移出 40 个；State 容量为 2000 个事件、每批管理 200 个，沿用最多保留 20 个的规则。精确定义见 Rule 技术稿 §3、State §7 与 Recent Window §5.1；这些参数尚待业务模块实现。
+已确认的默认设计：Agent 总预算为实际调用模型最大上下文的一半（按 token 向下取整，含输出预留）；Recent Window 容量为 200 个事件、每批移出 40 个；State 容量为 2000 个事件、每批管理 200 个，沿用最多保留 20 个的规则。配置读取、校验和请求上限派生已实现；窗口裁剪、完整 token 预算及 State 管理按后续阶段实现。
 
 ## 开发与发布分离
 
@@ -30,17 +30,36 @@ Rule 热读取、Window 预算和 State 注入统一使用 `context_with_system`
 
 ## 当前进度
 
-阶段 0 已完成：原生请求适配、主动取消、压缩边界、共享设置、reload/实例隔离和最小 Package 安装/加载有可复现测试。常规测试共 24 项；独立 DeepSeek 冒烟完成了 2 次真实请求和工具续跑，详情见 [阶段 0 验收记录](docs/PHASE_0_VALIDATION.md)。
+阶段 0–1 已完成：原生生命周期保护、最小 Package，以及正式配置校验、Rule 热读取和模型精确容量适配均有可复现测试。45 项常规测试通过；2 项独立 DeepSeek 测试共完成 4 次真实推理，其中阶段 1 使用正式模块完成首次请求和工具续跑。详情见 [阶段 0 验收记录](docs/PHASE_0_VALIDATION.md)及[阶段 1 验收记录](docs/PHASE_1_VALIDATION.md)。
 
-当前生产入口检查目标 Pi 版本和有效 `compaction.enabled=false`，并取消手动 compaction；请求失败会先取消再报告。正式 Rule/config、Task、State 和 Recent Window 业务尚未实现，组装测试使用隔离夹具。启用开发入口前，用户须明确按 Pi 原生方式关闭有效自动压缩，优先受信任项目的 `.pi/settings.json`；扩展不会代写设置，卸载不自动恢复。具体范围见 `docs/PACKAGING.md`。
+当前入口检查 Pi 版本及有效 `compaction.enabled=false`，取消手动 compaction；在同一个请求 hook 中固定配置/容量快照，再读取、渲染并有界加入 Rule。错误时先取消再报告。Task、State 和 Recent Window 业务尚未实现；测试用 State 仅存在于夹具。启用开发入口前，用户须明确按 Pi 原生方式关闭有效自动压缩，优先受信任项目的 `.pi/settings.json`；扩展不会代写设置，卸载不自动恢复。具体范围见 `docs/PACKAGING.md`。
 
-下一步为阶段 1 的正式配置与 Rule 模块，再继续 Task＋State、完整 State、原文回读、Recent Window 和恢复/发布验收。旧 SDK 应用实现保留在 Git 历史中。
+下一步为阶段 2 的 Task＋State 最小闭环；开始前须确认引用映射及 Session/分支绑定、覆盖值的持久化位置。旧 SDK 应用实现保留在 Git 历史中。
+
+## 阶段 1 的运行文件
+
+运行入口只读取 `~/.pi/memory/config.json` 和 `~/.pi/memory/rule.md`，不会自动创建或覆盖文件。首次试用时，在该目录创建下列配置，并将安装包内 `resources/rule.md` 的内容复制为 `rule.md`；已有合法配置和自定义模板应保留。安装包目录只提供默认模板，不保存运行数据。
+
+```json
+{
+  "recent_turns": 200,
+  "evict_turns": 40,
+  "state_max_events": 2000,
+  "state_event_max_chars": 100,
+  "state_evict_batch": 200,
+  "state_keep_limit": 20
+}
+```
+
+六个字段均为必填正整数，`evict_turns` 不能超过 `recent_turns`；不接受额外字段。模板只展开这六个白名单变量，不处理用户提示中的占位符。修改配置或模板在下次逻辑请求（含工具续跑）生效，供应商内部网络重试沿用原快照；文件缺失或非法时停止本次推理。
+
+当前容量适配通过 Pi 公开接口解析所选模型的认证与端点，每次逻辑请求读取 OpenAI 兼容 `/models` 的精确 `context_window`，不缓存、不改宿主模型目录。已真实验收 DeepSeek Flash：1,048,576 → 524,288；未提供精确容量的供应商/API 会明确诊断并取消，不能据 peer 通配符推断兼容。完整输入/输出预算与裁剪在阶段 5 接通。
 
 ## 骨架与开发命令
 
 ```text
 src/
-├── extension/index.ts       Pi Package 扩展入口与阶段 0 生命周期保护
+├── extension/index.ts       Pi Package 扩展入口、生命周期保护和 Rule 接线
 ├── config/                 配置与校验
 ├── rule/                   Rule 读取与渲染
 ├── task/                   Task 生命周期
@@ -55,7 +74,7 @@ tests/
 ├── unit/                   纯逻辑与资源一致性
 ├── integration/            Pi 与 Package 集成
 ├── live/                   单独执行的真实 DeepSeek 冒烟
-└── fixtures/               后续测试夹具
+└── fixtures/               隔离 Session 与请求测试夹具
 ```
 
 Node 最低版本与目标 Pi 一致，为 22.19.0；本机验证使用 `.node-version` 中的 24.22.0。开发依赖精确固定 Pi v1.3.0，生产使用宿主 peer。安装和验证命令：

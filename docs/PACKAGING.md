@@ -66,7 +66,7 @@ MemWeave 在 Session 启动/恢复及每次请求前检查 `pi.getSettings()` �
 
 | Pi / 路径 | Package 安装 | Rule/Window/State 组装 | 主动取消与压缩 | Session/共存 | 状态 |
 |---|---|---|---|---|---|
-| v1.3.0 普通主会话 | 本地项目安装/移除、npm 归档解包和 Git HEAD 入口已验证；远程安装待阶段 6 | 单入口组装夹具、资源一致性与真实 DeepSeek 工具续跑通过；正式业务待实现 | 主动取消、HTTP 无发送、关闭/重开压缩对照及手动取消已通过 | reload、新 Session、双实例、原生提示信任通过；完整业务恢复/高级共存待测 | 阶段 0 通过，尚非完整产品兼容声明 |
+| v1.3.0 普通主会话 | 本地项目安装/移除、npm 归档解包和 Git HEAD 入口已验证；远程安装待阶段 6 | 正式配置/Rule 热读取、容量快照和真实 DeepSeek 工具续跑通过；正式 Window/State 待实现 | 主动取消、HTTP 无发送、关闭/重开压缩对照及手动取消已通过 | reload、新 Session、双实例、原生提示信任通过；完整业务恢复/高级共存待测 | 阶段 0–1 通过，尚非完整产品兼容声明 |
 | v1.3.0 虚拟路由 / 动态工具 / 第三方上下文变换 | 待测 | 最终模型容量、工具成本和提示覆盖需逐组合检查 | 待测 | 待测 | 不预先宣称支持 |
 | 其他 Pi 版本 | 未验证 | 未验证 | 未验证 | 未验证 | 不宣称支持 |
 
@@ -74,6 +74,10 @@ MemWeave 在 Session 启动/恢复及每次请求前检查 `pi.getSettings()` �
 
 模型兼容验收还须核验实际容量：Agent 总预算为精确模型容量的一半（含输出预留），不能仅依赖“1M”等展示名称或过期的宿主目录值。模型切换、容量冲突诊断及最终请求成本按 Recent Window §5.1 验收；不通过时不得静默使用完整模型容量。默认 Recent Window 200/40、State 2000/200 的加载与窗口行为在功能测试中覆盖，不因 npm/Git 渠道而改变。
 
-当前阶段 0 的 24 项常规检查和独立真实 DeepSeek 冒烟已通过，证据见 `PHASE_0_VALIDATION.md`。验证使用系统临时目录并清理，私有配置仍在仓库外且字节不变；未执行正式 npm/Git 远程源发布、升级或完整业务恢复。旧 SDK 应用与早期临时测试不能直接替代当前 Package 证据，加载测试、替身/本机 HTTP 和真实模型结果分别记录。
+阶段 0 的历史证据见 `PHASE_0_VALIDATION.md`；阶段 1 已通过累计 45 项常规检查及 2 项独立真实 DeepSeek 测试，证据见 `PHASE_1_VALIDATION.md`。SDK 使用根导出的公开重放函数，避免 v1.3.0 扩展加载器对子路径的别名解析限制；npm 归档与当前代码 Git commit 均已重新加载验证。生产 peer 仅声明实际导入的 coding-agent、pi-ai 和 typebox，不捆绑另一份 SDK。
+
+阶段 1 的生产容量适配每次逻辑请求读取 OpenAI 兼容 `/models` 的精确 `context_window`，已验收 DeepSeek Flash；不支持的 API、缺失/不唯一容量或元数据失败均取消。HTTP 兼容形状不代表其他供应商已验收。运行配置/模板缺失时诊断，不自动创建或覆盖用户文件；首次试用准备方式见 README。
+
+验证使用系统临时目录并清理，私有配置仍在仓库外且字节不变；未执行正式 npm/Git 远程源发布、升级或完整业务恢复。旧 SDK 应用与早期临时测试不能直接替代当前 Package 证据，加载测试、替身/本机 HTTP 和真实模型结果分别记录。
 
 依据：[v1.3.0 Packages](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/docs/packages.md)、[Extensions](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/docs/extensions.md)、[扩展类型](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/extensions/types.ts)、[runner](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/extensions/runner.ts)、[settings](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/settings-manager.ts)、[压缩/恢复](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/agent-session.ts)。

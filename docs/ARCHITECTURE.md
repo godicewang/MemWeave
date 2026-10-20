@@ -43,7 +43,9 @@ resources/rule.md           # 从独立 Rule 模板生成并校验，支持 Git 
 
 这是职责边界，不要求第一天创建每个文件。随实现逐步建立，避免空抽象层。模块之间通过明确的小接口交互，不直接改写彼此的内部文件格式。
 
-当前已完成阶段 0：`extension/index.ts` 接入 `src/pi/` 的原生生命周期保护，业务模块仍保留目录占位。内部 `RequestServices` 只连接一次请求的准备和诊断，测试夹具借此验证接线；不新增持久化接口或独立服务。TypeScript 入口由宿主直接加载；构建只生成必要 Rule 资源并校验类型，npm 归档按白名单排除开发目录和占位文件。实际证据见 `PHASE_0_VALIDATION.md`。
+当前已完成阶段 0–1：`extension/index.ts` 接入 `src/pi/` 的生命周期保护和正式配置/Rule 组装；Task/State/Window/原文回读仍保留目录占位。内部 `RequestServices` 连接一次请求的准备和诊断，不新增持久化接口或独立服务。TypeScript 入口由宿主直接加载；构建只生成必要 Rule 资源并校验类型，npm 归档按白名单排除开发目录和占位文件。实际证据见 `PHASE_0_VALIDATION.md`、`PHASE_1_VALIDATION.md`。
+
+阶段 1 的内部接线为 `rule-services` → 配置读取/覆盖合并 → 容量快照 → `prepareRule` → 后续模块接口；运行路径统一由 `storage/paths.ts` 提供，文件只读。容量核验通过 Pi 公开认证接口与供应商模型列表取得精确值，当前真实验收 DeepSeek Flash；每次逻辑请求核验，供应商内部网络重试不重读。SDK 导入及原生 system 重放收敛于 `src/pi/`，不复制 Pi 重放算法。
 
 ## 3. 核心数据流
 
@@ -104,11 +106,11 @@ Codex 不得擅自选方案，需先向用户提问：
 2. **Recent Window 批次元数据**：规范允许 Pi custom entry 或 Session metadata，但没有唯一指定恢复/幂等的持久化位置。
 3. **Session/branch 窗口覆盖值**：全局默认在 `config.json`，但实例覆盖值的具体持久化位置尚未定。
 
-以上三项在 Task/Session 持久化实现前确认。不影响先完成无业务持久化的阶段 0 接入验证，未确认的字段不先写入正式数据。Recent Window 默认值已于 2026-10-20 确认为 N=200、B=40，不再作为规范缺口；5/2 仍只是小窗口示例。
+以上三项在 Task/Session 持久化实现前确认。不影响无业务持久化的阶段 0–1；阶段 1 仅提供隔离覆盖合并接口，未确认的字段不先写入正式数据。Recent Window 默认值已于 2026-10-20 确认为 N=200、B=40，不再作为规范缺口；5/2 仍只是小窗口示例。
 
 ### 已确定接线、仍需验证的工程边界
 
-- **Rule 热加载**：`context_with_system` 统一组装已确认；将现有临时验证落实为项目测试，覆盖工具续跑、模板更新、原生 SYSTEM/APPEND、主动取消和 reload，不再将入口选择列为待决定。
+- **Rule 热加载**：阶段 1 已用正式模块验证工具续跑、模板更新、原生 SYSTEM/APPEND/AGENTS、主动取消和 reload；后续接入 Task/State/Window 时持续回归。
 - **并行工具提交**：验证同一 assistant 同时调用 `state_remain` 和 `state_append` 时的实际提交时序，保留独立提交/幂等契约，不假设串行。
 - **真实请求成本**：普通模型先验收精确容量与半额上限；覆盖 Pi 静态模型目录和供应商容量不一致的诊断。虚拟路由、MCP/codemode 的动态声明及后置上下文变换逐组合检查实际模型容量与工具成本。无法满足既定预算时报告限制，不静默改变 Q。
 
