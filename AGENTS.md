@@ -55,6 +55,7 @@
 - 源代码放在独立的 MemWeave 开发仓库，与业务项目和 Package 安装目录分开。
 - 运行时数据放在 `~/.pi/memory/`，不得写入业务项目仓库。
 - `~/.pi/memory/config.json` 保存全局默认值；Session/分支运行时覆盖必须隔离，避免多个 Pi 进程互相覆盖设置。
+- Agent 总预算固定为实际调用模型最大上下文的 `floor(C_model / 2)`，包含输入、输出预留及协议开销；Recent Window 默认 200 个事件、每批移出 40 个，State 默认 2000 个事件、每批管理 200 个，单事件正文 100 字符与最多保留 20 个的既定限制不变。精确容量与预算定义见 Recent Window §5.1，配置见 Rule 技术稿 §3。
 - `rule.md` 独立维护并在请求准备阶段读取；仅支持白名单 `{{variable}}` 替换。禁止 eval、表达式、递归模板，禁止处理用户自己的 SYSTEM/APPEND 文本。
 - 保留 Pi 原生 SYSTEM/APPEND/AGENTS 的发现、信任和优先级，不修改或静默屏蔽用户文件。
 - 请求语义顺序为 Rule → Recent Window → State；State 和提醒是请求级临时内容，不写入 Session、不参与真实交互事件计数。

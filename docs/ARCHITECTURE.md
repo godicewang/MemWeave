@@ -62,6 +62,8 @@ Agent Tool Calls
 
 每次正常主会话模型请求，在同一个 `context_with_system` 处理中读取 Rule、固定 Task/配置/State 快照，先渲染 Rule，再执行上述 Window/State 流程。预算使用实际渲染的有效 system 和工具声明，保留原生消息协议。程序生成的 Rule、State/Window 提醒只存在于请求视图，不写入 Pi Session。
 
+请求快照同时固定实际模型容量 C_model 与 Agent 上限 `C = floor(C_model / 2)`；全部输入、输出预留、协议开销和安全余量共同受 C 约束，Q 的结构不变。容量核验收敛于 `src/pi/`，不改 Pi 全局目录；模型切换后重新计算，网络重试沿用原快照。Recent Window 默认 200/40，State 默认 2000/100/200/20，字段含义以 Rule §3、State §7、Recent Window §5.1 为准；事件容量不能替代 token 校验。
+
 ```text
 Pi 原生准备 → 普通 context 处理 → Pi 恢复 system/工具状态
   → MemWeave context_with_system：
@@ -97,15 +99,14 @@ Codex 不得擅自选方案，需先向用户提问：
 1. **U/A/T 跨 Session 映射**：Task 可跨多个 Session，但 U/A/T 按 Task 编号且不另建映射文件；必须明确引用到 Pi entry 的映射保存在哪里。
 2. **Recent Window 批次元数据**：规范允许 Pi custom entry 或 Session metadata，但没有唯一指定恢复/幂等的持久化位置。
 3. **Session/branch 窗口覆盖值**：全局默认在 `config.json`，但实例覆盖值的具体持久化位置尚未定。
-4. **Recent Window 默认值**：规范示例的 N=5、B=2 不是已确认的全局默认值。正式配置 schema 的默认值实现前须确认，不从示例推断。
 
-前三项在 Task/Session 持久化实现前确认；第四项在配置模块实现前确认。不影响先完成无业务持久化的阶段 0 接入验证，未确认的字段不先写入正式数据。
+以上三项在 Task/Session 持久化实现前确认。不影响先完成无业务持久化的阶段 0 接入验证，未确认的字段不先写入正式数据。Recent Window 默认值已于 2026-10-20 确认为 N=200、B=40，不再作为规范缺口；5/2 仍只是小窗口示例。
 
 ### 已确定接线、仍需验证的工程边界
 
 - **Rule 热加载**：`context_with_system` 统一组装已确认；将现有临时验证落实为项目测试，覆盖工具续跑、模板更新、原生 SYSTEM/APPEND、主动取消和 reload，不再将入口选择列为待决定。
 - **并行工具提交**：验证同一 assistant 同时调用 `state_remain` 和 `state_append` 时的实际提交时序，保留独立提交/幂等契约，不假设串行。
-- **真实请求成本**：普通模型先验收；虚拟路由、MCP/codemode 的动态声明及后置上下文变换逐组合检查实际模型容量与工具成本。无法满足既定预算时报告限制，不静默改变 Q。
+- **真实请求成本**：普通模型先验收精确容量与半额上限；覆盖 Pi 静态模型目录和供应商容量不一致的诊断。虚拟路由、MCP/codemode 的动态声明及后置上下文变换逐组合检查实际模型容量与工具成本。无法满足既定预算时报告限制，不静默改变 Q。
 
 
 ## 6. 发布与安装边界（仅适配层，不改变核心方案）

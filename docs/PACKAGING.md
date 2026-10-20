@@ -72,6 +72,8 @@ MemWeave 在 Session 启动/恢复及每次请求前检查 `pi.getSettings()` �
 
 编译通过不等于版本兼容。每个宣称支持的版本必须通过 smoke/integration tests。
 
+模型兼容验收还须核验实际容量：Agent 总预算为精确模型容量的一半（含输出预留），不能仅依赖“1M”等展示名称或过期的宿主目录值。模型切换、容量冲突诊断及最终请求成本按 Recent Window §5.1 验收；不通过时不得静默使用完整模型容量。默认 Recent Window 200/40、State 2000/200 的加载与窗口行为在功能测试中覆盖，不因 npm/Git 渠道而改变。
+
 此前独立 SDK 应用代码已回退；其测试结果不能直接移作当前 Package 的验收。临时可行性代码与 Session 已清理，当前仓库仍为文档。真实模型验证仅使用仓库外 DeepSeek 配置，测试替身和本机 HTTP 不是供应商测试；本次文档同步未重跑模型测试。
 
 依据：[v1.3.0 Packages](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/docs/packages.md)、[Extensions](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/docs/extensions.md)、[扩展类型](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/extensions/types.ts)、[runner](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/extensions/runner.ts)、[settings](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/settings-manager.ts)、[压缩/恢复](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/agent-session.ts)。
