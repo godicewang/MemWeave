@@ -66,7 +66,7 @@ MemWeave 在 Session 启动/恢复及每次请求前检查 `pi.getSettings()` �
 
 | Pi / 路径 | Package 安装 | Rule/Window/State 组装 | 主动取消与压缩 | Session/共存 | 状态 |
 |---|---|---|---|---|---|
-| v1.3.0 普通主会话 | 当前包未实现，待验收 | 临时扩展验证了 Rule/工具续跑及请求级注入；完整业务待实现 | 替身/本机 HTTP 已检查取消及 overflow 恢复反例 | 新 Package 的完整恢复/共存待验收 | 首个目标，尚非完整兼容声明 |
+| v1.3.0 普通主会话 | 骨架的本地目录及 npm 归档解包入口已加载；远程安装待验收 | 默认 Rule 资源一致性通过；当前空入口，组装/业务待实现 | 先前临时替身/HTTP 已检查部分反例，新骨架尚未接入 | 新 Package 的完整恢复/共存待验收 | 首个目标，尚非完整兼容声明 |
 | v1.3.0 虚拟路由 / 动态工具 / 第三方上下文变换 | 待测 | 最终模型容量、工具成本和提示覆盖需逐组合检查 | 待测 | 待测 | 不预先宣称支持 |
 | 其他 Pi 版本 | 未验证 | 未验证 | 未验证 | 未验证 | 不宣称支持 |
 
@@ -74,6 +74,6 @@ MemWeave 在 Session 启动/恢复及每次请求前检查 `pi.getSettings()` �
 
 模型兼容验收还须核验实际容量：Agent 总预算为精确模型容量的一半（含输出预留），不能仅依赖“1M”等展示名称或过期的宿主目录值。模型切换、容量冲突诊断及最终请求成本按 Recent Window §5.1 验收；不通过时不得静默使用完整模型容量。默认 Recent Window 200/40、State 2000/200 的加载与窗口行为在功能测试中覆盖，不因 npm/Git 渠道而改变。
 
-此前独立 SDK 应用代码已回退；其测试结果不能直接移作当前 Package 的验收。临时可行性代码与 Session 已清理，当前仓库仍为文档。真实模型验证仅使用仓库外 DeepSeek 配置，测试替身和本机 HTTP 不是供应商测试；本次文档同步未重跑模型测试。
+此前独立 SDK 应用代码已回退，其测试结果不能直接移作当前 Package 的验收，临时可行性代码与 Session 已清理。当前骨架的项目测试已通过本地 manifest/TypeScript 加载、npm 归档白名单及解包加载，验证包在系统临时目录中清理；未执行完整 npm/Git 远程安装或真实模型验证。需要真实模型时继续使用仓库外 DeepSeek 配置，不能把加载测试或测试替身称为供应商测试。
 
 依据：[v1.3.0 Packages](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/docs/packages.md)、[Extensions](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/docs/extensions.md)、[扩展类型](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/extensions/types.ts)、[runner](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/extensions/runner.ts)、[settings](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/settings-manager.ts)、[压缩/恢复](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/agent-session.ts)。

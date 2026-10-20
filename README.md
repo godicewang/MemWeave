@@ -18,7 +18,7 @@
 
 源代码仓库、Pi Session 和 `~/.pi/memory/` 运行时数据必须分开存放。
 
-已确认的默认设计：Agent 总预算为实际调用模型最大上下文的一半（按 token 向下取整，含输出预留）；Recent Window 容量为 200 个事件、每批移出 40 个；State 容量为 2000 个事件、每批管理 200 个，沿用最多保留 20 个的规则。精确定义见 Rule 技术稿 §3、State §7 与 Recent Window §5.1；当前仅完成文档设计。
+已确认的默认设计：Agent 总预算为实际调用模型最大上下文的一半（按 token 向下取整，含输出预留）；Recent Window 容量为 200 个事件、每批移出 40 个；State 容量为 2000 个事件、每批管理 200 个，沿用最多保留 20 个的规则。精确定义见 Rule 技术稿 §3、State §7 与 Recent Window §5.1；这些参数尚待业务模块实现。
 
 ## 开发与发布分离
 
@@ -30,4 +30,39 @@ Rule 热读取、Window 预算和 State 注入统一使用 `context_with_system`
 
 ## 当前进度
 
-当前仓库处于文档阶段，旧 SDK 应用实现已回退。既有临时验证支持接入方案的部分可行性，不代表可安装的完整产品或全部兼容验收已完成。开发顺序为：接入验证 → 配置/Rule → Task＋State 最小闭环 → 完整 State → 原文回读 → Recent Window → 恢复与发布验收。不再开发独立安装器或自建 TUI；下一步按实施计划阶段 0 建立最小原生扩展和可复现测试。
+已建立目录、TypeScript strict 配置、依赖锁、最小 Pi Package 入口、Rule 资源生成与测试入口。扩展入口目前为空，不注册业务工具或请求 hook，加载骨架不会启用记忆功能。旧 SDK 应用实现保留在 Git 历史中。
+
+开发顺序为：接入验证 → 配置/Rule → Task＋State 最小闭环 → 完整 State → 原文回读 → Recent Window → 恢复与发布验收。下一步是阶段 0.2 的请求组装、主动取消与 compaction 验证；骨架不代表阶段 0 全部完成或完整产品已兼容 Pi。
+
+## 骨架与开发命令
+
+```text
+src/
+├── extension/index.ts       Pi Package 扩展入口
+├── config/                 配置与校验
+├── rule/                   Rule 读取与渲染
+├── task/                   Task 生命周期
+├── state/                  Symbolic State
+├── window/                 Recent Window
+├── memory/                 引用与原文回读
+├── pi/                     Pi 适配层
+└── storage/                路径与存储基础能力
+resources/rule.md           从独立模板生成，提交以支持 Git 安装
+scripts/                    开发构建脚本
+tests/
+├── unit/                   纯逻辑与资源一致性
+├── integration/            Pi 与 Package 集成
+└── fixtures/               后续测试夹具
+```
+
+Node 最低版本与目标 Pi 一致，为 22.19.0；本机验证使用 `.node-version` 中的 24.22.0。开发依赖精确固定 Pi v1.3.0，生产使用宿主 peer。安装和验证命令：
+
+```sh
+npm ci --ignore-scripts
+npm run build
+npm run check
+```
+
+`build` 生成默认 Rule 资源并做类型检查；Pi 直接加载 TypeScript，不生成第二套应用或捆绑宿主。`resources:check` 检查生成资源是否过期；`test:unit` 与 `test:integration` 可分别执行。集成测试在系统临时目录中打包、解包并使用 Pi 的公开加载器检查入口，结束后清理，不调用模型 API。
+
+当前版本为 `0.0.0`，`private: true` 用于防止开发骨架被误发布到 npm；正式包名、版本与发布验收在交付前确定。不要手改 `resources/rule.md`，应维护规范中的两份一致模板后执行 `npm run resources:sync`。密钥继续使用仓库外的私有配置。
