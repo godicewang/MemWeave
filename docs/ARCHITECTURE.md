@@ -2,8 +2,8 @@
 
 ## 1. 三种位置，严格分开
 
-- **开发仓库**：建议 `~/code/pi-long-task-agent/`。保存源代码、测试和知识库，使用 Git 管理。
-- **Pi 安装与会话**：沿用用户现有 Pi 安装、`agentDir`、扩展发现和 Session 存储。不得复制或改写 Pi 核心源码。构建后通过 Pi v1.1.0 支持的扩展配置指向项目构建入口；在阶段 0 用真实 SDK smoke test 锁定具体加载方式。
+- **开发仓库**：当前 MemWeave 仓库。保存唯一源码、测试和知识库，使用 Git 管理，与用户业务项目分开。
+- **Pi 安装与会话**：沿用用户现有 Pi 安装、`agentDir`、扩展发现、信任和 Session 存储。MemWeave 作为 Package 扩展加载，首个验收目标为 v1.3.0；不持有独立 SDK 应用宿主，不复制或改写 Pi 核心源码。
 - **运行时记忆**：放在 `~/.pi/memory/`，不得放入业务项目仓库。
 
 ```text
@@ -31,7 +31,7 @@ src/
 ├── state/                   # event store、reducer、renderer、State tools/window
 ├── window/                  # event index、selector、budget、renderer、lifecycle
 ├── memory/                  # U/A/T/R resolver、memory_read
-├── pi/                      # Pi v1.1.0 API 和 SessionManager 薄适配
+├── pi/                      # 目标宿主公开 API、上下文/Session 与兼容诊断薄适配
 └── storage/                 # 路径、原子写、JSONL、幂等辅助函数
 tests/
 ├── unit/
@@ -60,7 +60,19 @@ Agent Tool Calls
    └── memory_read → U/A/T/R Resolver → Pi Session 或 blobs
 ```
 
-Rule 模板由请求准备层读取和渲染；Rule、Window 与 State 使用同一份请求配置快照。程序生成的 State/Window 提醒只存在于请求视图，不写入 Pi Session。
+每次正常主会话模型请求，在同一个 `context_with_system` 处理中读取 Rule、固定 Task/配置/State 快照，先渲染 Rule，再执行上述 Window/State 流程。预算使用实际渲染的有效 system 和工具声明，保留原生消息协议。程序生成的 Rule、State/Window 提醒只存在于请求视图，不写入 Pi Session。
+
+```text
+Pi 原生准备 → 普通 context 处理 → Pi 恢复 system/工具状态
+  → MemWeave context_with_system：
+      有效压缩配置/兼容检查 → 请求快照 → Rule 渲染与有界插入
+      → window_select → window_allocate → window_render → state_insert
+  → Pi 原生转换/供应商适配 → 主会话模型
+```
+
+不包装 `session.agent.prepareRequest`，不改 `DefaultResourceLoader` 配置来挂载模板，不增加模型供应商 JSON 补丁。模板、配置或预算错误时，先通过公开 `ctx.abort()` 取消当前执行，再报告诊断；普通上下文 hook 的异常会被 Pi 捕获，不能仅靠 `throw` 或空消息阻断。取消可能留下原生错误条目，不等于业务操作成功。
+
+此链路描述已验收的普通主会话路径；Pi 后续的强制 prompt/工具投影、虚拟模型路由和其他扩展仍可能影响最终请求。兼容验收须检查实际模型收到的内容，不以“本 hook 最后注册”代替证据；不承诺任意第三方组合兼容。
 
 ## 4. 持久化边界
 
@@ -72,6 +84,12 @@ Rule 模板由请求准备层读取和渲染；Rule、Window 与 State 使用同
 - **`config.json`**：全局默认参数；Session/branch 覆盖值必须隔离保存。
 - **`blobs/`**：仅保存确实需要跨会话保留、且不能可靠从 Session 取回的原件，不复制全部工具输出。
 
+### Pi 压缩配置的共享边界
+
+Pi 的 `settings.json` 与 MemWeave 的 `~/.pi/memory/config.json` 是不同配置。前者的 `compaction.enabled=false` 由用户明确选择作用范围，优先受信任的项目 `.pi/settings.json`；后者仍只管理记忆参数，不能用它假装关闭 Pi 压缩。
+
+接受同一配置范围内其他 Pi 在读取设置后关闭自动压缩；禁用/卸载 Package 不自动恢复该值。运行中重新启用压缩时，Pi 可能在取消 hook 前追加恢复用 `context_edit`，改变有效会话视图。本扩展不主动用它实现窗口、不删除这些原生记录，也不把恢复记录当成新的认知证据；旧表示的支持边界沿用 Window §4.3。
+
 ## 5. 编码前必须确认的规范缺口
 
 Codex 不得擅自选方案，需先向用户提问：
@@ -79,8 +97,15 @@ Codex 不得擅自选方案，需先向用户提问：
 1. **U/A/T 跨 Session 映射**：Task 可跨多个 Session，但 U/A/T 按 Task 编号且不另建映射文件；必须明确引用到 Pi entry 的映射保存在哪里。
 2. **Recent Window 批次元数据**：规范允许 Pi custom entry 或 Session metadata，但没有唯一指定恢复/幂等的持久化位置。
 3. **Session/branch 窗口覆盖值**：全局默认在 `config.json`，但实例覆盖值的具体持久化位置尚未定。
-4. **Rule 热加载接入**：先做 spike，验证包装 `prepareRequest` 后下一次请求可更新 Rule，且不覆盖用户 SYSTEM/APPEND、不重复注入；若公开 API 不支持，先报告。
-5. **并行工具提交**：验证同一 assistant 同时调用 `state_remain` 和 `state_append` 时的实际执行与提交时序，不可假设串行。
+4. **Recent Window 默认值**：规范示例的 N=5、B=2 不是已确认的全局默认值。正式配置 schema 的默认值实现前须确认，不从示例推断。
+
+前三项在 Task/Session 持久化实现前确认；第四项在配置模块实现前确认。不影响先完成无业务持久化的阶段 0 接入验证，未确认的字段不先写入正式数据。
+
+### 已确定接线、仍需验证的工程边界
+
+- **Rule 热加载**：`context_with_system` 统一组装已确认；将现有临时验证落实为项目测试，覆盖工具续跑、模板更新、原生 SYSTEM/APPEND、主动取消和 reload，不再将入口选择列为待决定。
+- **并行工具提交**：验证同一 assistant 同时调用 `state_remain` 和 `state_append` 时的实际提交时序，保留独立提交/幂等契约，不假设串行。
+- **真实请求成本**：普通模型先验收；虚拟路由、MCP/codemode 的动态声明及后置上下文变换逐组合检查实际模型容量与工具成本。无法满足既定预算时报告限制，不静默改变 Q。
 
 
 ## 6. 发布与安装边界（仅适配层，不改变核心方案）
@@ -89,12 +114,12 @@ Codex 不得擅自选方案，需先向用户提问：
 
 ```text
 pi-long-task-agent/                 # 唯一 Git 源
-├── AGENTS.md                       # 开发规范，不随普通 Package 发布
-├── docs/                           # 规范/知识库/计划，不随普通 Package 发布
+├── AGENTS.md                       # 开发规范，不是运行资源
+├── docs/                           # 规范/知识库/计划，不是运行资源
 ├── src/                            # 唯一源码
-├── tests/ scripts/           # 开发/验证资源，不随普通 Package 发布
+├── tests/ scripts/                 # 开发/验证资源，不进 npm 归档
 └── package.json                    # 构建与 Pi Package 入口
-          ↓ build
+          ↓ 生成/校验 Package
 发布产物：Package 元数据 + 扩展运行代码 + 必要运行资源
 ```
 
@@ -102,4 +127,6 @@ pi-long-task-agent/                 # 唯一 Git 源
 
 发布层不得改变核心记忆方案，不得为兼容性修改工具参数、State 事件模型、Window 计数/截断规则、Rule 占位符协议或提交边界。兼容差异只能放在 `src/pi/` 与打包配置。
 
-具体 manifest 字段、安装命令和文件白名单，应在阶段 0 根据 Pi v1.1.0 的实际文档/CLI 做最小验证后确定，不提前猜测字段，也不把开发目录整体直接发布。
+manifest 使用公开的 `pi.extensions`，优先指向可直接加载的 `src/extension/index.ts`。npm 归档白名单排除开发资料；Git 安装可克隆出这些资料，但只按 manifest 加载运行入口，不改变 cwd 或把包内 AGENTS 加入用户上下文。两种渠道不要求用户自行编译，实际产物仍须阶段 0 验收。
+
+宿主依赖采用官方 peer 约定，开发依赖锁用于复现测试，不控制用户宿主。安装、更新、移除和 TUI 由 Pi 负责；本项目不另建安装器或 TUI。共享配置、恢复记录、宿主版本和扩展共存四项副作用见 `PACKAGING.md`。
