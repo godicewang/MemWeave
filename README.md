@@ -30,17 +30,17 @@ Rule 热读取、Window 预算和 State 注入统一使用 `context_with_system`
 
 ## 当前进度
 
-阶段 0–1 已完成：原生生命周期保护、最小 Package，以及正式配置校验、Rule 热读取和模型精确容量适配均有可复现测试。45 项常规测试通过；2 项独立 DeepSeek 测试共完成 4 次真实推理，其中阶段 1 使用正式模块完成首次请求和工具续跑。详情见 [阶段 0 验收记录](docs/PHASE_0_VALIDATION.md)及[阶段 1 验收记录](docs/PHASE_1_VALIDATION.md)。
+阶段 0–2 已完成。当前入口提供 `task_create`、`task_find`、`task_resume`、`task_status` 和 `state_append`，并在每次请求末尾注入当前 Task 的 State。Task 可跨 Session 恢复，U/A/T 编号从 Pi 元数据继续；批量 State 写入、同调用重试、分支绑定和多进程写入均有测试。详情见[阶段 2 验收记录](docs/PHASE_2_VALIDATION.md)；既有 Rule/容量证据见[阶段 1 验收记录](docs/PHASE_1_VALIDATION.md)。
 
-当前入口检查 Pi 版本及有效 `compaction.enabled=false`，取消手动 compaction；在同一个请求 hook 中固定配置/容量快照，再读取、渲染并有界加入 Rule。错误时先取消再报告。Task、State 和 Recent Window 业务尚未实现；测试用 State 仅存在于夹具。启用开发入口前，用户须明确按 Pi 原生方式关闭有效自动压缩，优先受信任项目的 `.pi/settings.json`；扩展不会代写设置，卸载不自动恢复。具体范围见 `docs/PACKAGING.md`。
+启用开发入口前，须明确按 Pi 原生方式关闭有效自动压缩，优先受信任项目的 `.pi/settings.json`。扩展检查 Pi v1.3.0 与压缩设置；准备失败先取消再报告，卸载不恢复设置，具体范围见 `docs/PACKAGING.md`。
 
-下一步为阶段 2 的 Task＋State 最小闭环；开始前须确认引用映射及 Session/分支绑定、覆盖值的持久化位置。旧 SDK 应用实现保留在 Git 历史中。
+下一步为阶段 3：补齐 Goal 更新、事实修正、State 读取及 State 窗口管理。完整原文回读、Recent Window 裁剪和完整 token 预算仍按后续阶段实现。旧 SDK 应用保留在 Git 历史中。
 
 阶段 6 的部分安装验收也已完成：GitHub SSH 固定 commit 安装/更新、npm 本地归档安装、禁用/reload 和卸载通过；外置用户文件与共享压缩设置保留。HTTPS 克隆遇到网络错误，npm registry 和完整业务验收尚未完成，见[安装验收与前置状态](docs/PHASE_6_READINESS.md)。
 
-## 阶段 1 的运行文件
+## 运行文件
 
-运行入口只读取 `~/.pi/memory/config.json` 和 `~/.pi/memory/rule.md`，不会自动创建或覆盖文件。首次试用时，在该目录创建下列配置，并将安装包内 `resources/rule.md` 的内容复制为 `rule.md`；已有合法配置和自定义模板应保留。安装包目录只提供默认模板，不保存运行数据。
+启动所需的 `~/.pi/memory/config.json` 和 `~/.pi/memory/rule.md` 不会自动创建或覆盖。首次试用时，在该目录创建下列配置，并将安装包内 `resources/rule.md` 的内容复制为 `rule.md`；已有合法配置和自定义模板应保留。安装包目录只提供默认模板，不保存运行数据。
 
 ```json
 {
@@ -56,6 +56,10 @@ Rule 热读取、Window 预算和 State 注入统一使用 `context_with_system`
 六个字段均为必填正整数，`evict_turns` 不能超过 `recent_turns`；不接受额外字段。模板只展开这六个白名单变量，不处理用户提示中的占位符。修改配置或模板在下次逻辑请求（含工具续跑）生效，供应商内部网络重试沿用原快照；文件缺失或非法时停止本次推理。
 
 当前容量适配通过 Pi 公开接口解析所选模型的认证与端点，每次逻辑请求读取 OpenAI 兼容 `/models` 的精确 `context_window`，不缓存、不改宿主模型目录。已真实验收 DeepSeek Flash：1,048,576 → 524,288；未提供精确容量的供应商/API 会明确诊断并取消，不能据 peer 通配符推断兼容。完整输入/输出预算与裁剪在阶段 5 接通。
+
+Task 创建后，程序在同一 memory 目录维护 `index.json` 和 `<cwd_key>/tasks/<task_id>/state.json`（JSONL 认知事件）及可重建的 `state.md`。引用与分支绑定写入 Pi 原生 custom 元数据；没有第二套聊天文件。State 与临时引用头只加入模型请求，原始消息正文不改写。
+
+同一 Task 的 State 在所有绑定它的 Session/分支间共享；回退聊天不撤销认知。Task 切换不自动暂停其他任务；本阶段没有暂停/完成工具，`latest_paused` 仅恢复已存在的 paused 记录。来源 Session 删除/损坏时明确失败；不要把这些文件作为可随意清理的缓存。写盘失败会说明已提交部分；Session 元数据未落盘时须从磁盘重新打开 Session，普通扩展 reload 不会修复脏内存。进程被强杀可能留下锁，需确认写入者退出后清理；不会自动抢占。
 
 ## 骨架与开发命令
 

@@ -80,7 +80,7 @@ State 整批原子提交，重试不会重复记账；代价是目前每批提�
 - Task 创建/恢复将目标设为 `active`；切换、关闭或回退 Session 不自动把共享 Task 改为 `paused`，避免影响其他仍在使用它的 Session。`task_status.running` 仅表示当前 Pi 实例是否正在执行该 Task，不冒充跨进程运行注册表。
 - **当前规范没有暂停/完成工具。阶段 2 不擅自增加新工具；`latest_paused` 支持查询和恢复已有 paused 记录，但本阶段不会自动产生暂停状态。** 若希望本阶段具备主动暂停/完成入口，应另行确认工具与状态迁移后纳入实现。
 
-为避免实现时继续追问琐碎输入细节，建议同时明确：`task_create` 的 title/goal/project_name/summary/keywords 必填且非空，context 可选；`task_find` 的 query 必填、keywords 默认为空数组、limit 默认为 5 且为正整数；`task_status` 的 task_id 按现有示例必填；`task_resume` 两种输入互斥；`state_append` 为非空批量，正文按 Unicode 码点校验已有字符上限，不截断保存。字段名称与现有工具保持一致。同一轮存在多个 Task 切换调用，或混合 Task 切换与 State 写入时，拒绝冲突调用，避免依赖并行执行顺序决定归属。
+同时确认以下输入边界：`task_create` 的 title/goal/project_name/summary/keywords 必填且非空，context 可选；`task_find` 的 query 必填、keywords 默认为空数组、limit 默认为 5 且为正整数；`task_status` 的 task_id 按现有示例必填；`task_resume` 两种输入互斥；`state_append` 为非空批量，正文按 Unicode 码点校验已有字符上限，不截断保存。字段名称与现有工具保持一致。同一轮存在多个 Task 切换调用，或混合 Task 切换与 State 写入时，拒绝冲突调用，避免依赖并行执行顺序决定归属。
 
 ## 已执行的 Pi v1.3.0 临时验证
 

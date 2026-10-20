@@ -25,8 +25,11 @@ async function assertPackageLoads(packageRoot: string, temporaryRoot: string) {
   const extension = result.extensions[0];
   assert.ok(extension);
   assert.equal(extension.resolvedPath, join(packageRoot, "src/extension/index.ts"));
-  assert.equal(extension.tools.size, 0, "阶段 0 不注册生产业务工具");
-  assert.deepEqual([...extension.handlers.keys()].sort(), ["context_with_system", "session_before_compact", "session_start"]);
+  const phase2 = (await readFile(join(packageRoot, "src/extension/index.ts"), "utf8")).includes("registerMemweave");
+  assert.deepEqual([...extension.tools.keys()].sort(), phase2 ? ["state_append", "task_create", "task_find", "task_resume", "task_status"] : []);
+  assert.deepEqual([...extension.handlers.keys()].sort(), phase2
+    ? ["context_with_system", "session_before_compact", "session_start", "session_tree", "tool_call", "turn_end"]
+    : ["context_with_system", "session_before_compact", "session_start"]);
   for (const handlers of extension.handlers.values()) assert.equal(handlers.length, 1);
   assert.deepEqual(await readdir(workspace), []);
   assert.deepEqual(await readdir(agentDir), []);
