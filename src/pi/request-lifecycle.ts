@@ -12,12 +12,14 @@ export function assertSupportedHost(version: string): void {
   if (version !== "1.3.0") throw new Error(`UNVERIFIED_PI_VERSION: ${version}; verified target is 1.3.0`);
 }
 
+export function reportRequestError(error: unknown, ctx: ExtensionContext): void {
+  const message = error instanceof Error ? error.message : "MEMWEAVE_REQUEST_FAILED";
+  if (ctx.hasUI) ctx.ui.notify(message, "error");
+  else console.error(`[MemWeave] ${message}`);
+}
+
 export function registerRequestLifecycle(pi: ExtensionAPI, services?: RequestServices): () => void {
-  const report = services?.report ?? ((error: unknown, ctx: ExtensionContext) => {
-    const message = error instanceof Error ? error.message : "MEMWEAVE_REQUEST_FAILED";
-    if (ctx.hasUI) ctx.ui.notify(message, "error");
-    else console.error(`[MemWeave] ${message}`);
-  });
+  const report = services?.report ?? reportRequestError;
   const check = () => {
     assertSupportedHost(VERSION);
     if (pi.getSettings().compaction?.enabled !== false) {

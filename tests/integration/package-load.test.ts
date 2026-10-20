@@ -55,14 +55,13 @@ test("npm 归档只含运行资源，解包后由 Pi 加载同一入口", async 
   }>;
   assert.ok(archive);
   const paths = archive.files.map((file) => file.path).sort();
+  const sources = (await readdir(join(root, "src"), { recursive: true })).filter(path => path.endsWith(".ts")).map(path => `src/${path}`);
   assert.deepEqual(paths, [
     "README.md",
     "package.json",
     "resources/rule.md",
-    "src/extension/index.ts",
-    "src/pi/context-limit.ts",
-    "src/pi/request-lifecycle.ts",
-  ]);
+    ...sources,
+  ].sort());
 
   await run("tar", ["-xzf", join(temporaryRoot, archive.filename), "-C", temporaryRoot]);
   const packageRoot = join(temporaryRoot, "package");
