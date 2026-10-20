@@ -118,7 +118,7 @@
 
 ### 本机 Pi 模型验证配置
 
-- 本项目后续涉及真实模型 API 的 Pi 验证统一使用 DeepSeek，使用本机 `~/.local/share/memweave-dev/pi-agent/` 下的配置；命令入口为 `memweave-pi`。测试替身不发起外部模型请求。
+- 每次测试需要真实模型 API 时，优先使用本项目已经配置好的真实 DeepSeek API，复用本机 `~/.local/share/memweave-dev/pi-agent/` 下的私有配置；命令入口为 `memweave-pi`。测试替身不发起外部模型请求，其结果不得冒充真实 API 验证结果。
 - API 密钥只保存在仓库外的私有 `auth.json`，不得写入源码、文档、测试夹具、验证报告或日志，也不得提交到 Git。仓库内的本地凭据文件必须先由 `.gitignore` 排除。
 - 临时可行性验证的代码、构建产物和 Session 放在系统临时目录；验证失败后删除相关临时文件，仅报告不含密钥的结果。
 
