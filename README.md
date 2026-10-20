@@ -6,8 +6,8 @@
 
 1. 阅读 `AGENTS.md`。
 2. 阅读 `docs/INDEX.md` 和当前任务对应的 `docs/specs/`。
-3. 先执行 `docs/IMPLEMENTATION_PLAN.md` 的阶段 0，确认 Pi 的真实扩展/API 接入方式。
-4. 不要在阶段 0 前生成整套业务实现。
+3. 复现 `docs/PHASE_0_VALIDATION.md` 中的接入检查，再按实施计划推进当前阶段。
+4. 每个阶段按验收范围开发，不提前生成整套业务实现。
 
 ## 文档
 
@@ -30,28 +30,31 @@ Rule 热读取、Window 预算和 State 注入统一使用 `context_with_system`
 
 ## 当前进度
 
-已建立目录、TypeScript strict 配置、依赖锁、最小 Pi Package 入口、Rule 资源生成与测试入口。扩展入口目前为空，不注册业务工具或请求 hook，加载骨架不会启用记忆功能。旧 SDK 应用实现保留在 Git 历史中。
+阶段 0 已完成：原生请求适配、主动取消、压缩边界、共享设置、reload/实例隔离和最小 Package 安装/加载有可复现测试。常规测试共 24 项；独立 DeepSeek 冒烟完成了 2 次真实请求和工具续跑，详情见 [阶段 0 验收记录](docs/PHASE_0_VALIDATION.md)。
 
-开发顺序为：接入验证 → 配置/Rule → Task＋State 最小闭环 → 完整 State → 原文回读 → Recent Window → 恢复与发布验收。下一步是阶段 0.2 的请求组装、主动取消与 compaction 验证；骨架不代表阶段 0 全部完成或完整产品已兼容 Pi。
+当前生产入口检查目标 Pi 版本和有效 `compaction.enabled=false`，并取消手动 compaction；请求失败会先取消再报告。正式 Rule/config、Task、State 和 Recent Window 业务尚未实现，组装测试使用隔离夹具。启用开发入口前，用户须明确按 Pi 原生方式关闭有效自动压缩，优先受信任项目的 `.pi/settings.json`；扩展不会代写设置，卸载不自动恢复。具体范围见 `docs/PACKAGING.md`。
+
+下一步为阶段 1 的正式配置与 Rule 模块，再继续 Task＋State、完整 State、原文回读、Recent Window 和恢复/发布验收。旧 SDK 应用实现保留在 Git 历史中。
 
 ## 骨架与开发命令
 
 ```text
 src/
-├── extension/index.ts       Pi Package 扩展入口
+├── extension/index.ts       Pi Package 扩展入口与阶段 0 生命周期保护
 ├── config/                 配置与校验
 ├── rule/                   Rule 读取与渲染
 ├── task/                   Task 生命周期
 ├── state/                  Symbolic State
 ├── window/                 Recent Window
 ├── memory/                 引用与原文回读
-├── pi/                     Pi 适配层
+├── pi/                     请求生命周期、兼容诊断与上下文半额上限
 └── storage/                路径与存储基础能力
 resources/rule.md           从独立模板生成，提交以支持 Git 安装
 scripts/                    开发构建脚本
 tests/
 ├── unit/                   纯逻辑与资源一致性
 ├── integration/            Pi 与 Package 集成
+├── live/                   单独执行的真实 DeepSeek 冒烟
 └── fixtures/               后续测试夹具
 ```
 
@@ -61,8 +64,10 @@ Node 最低版本与目标 Pi 一致，为 22.19.0；本机验证使用 `.node-v
 npm ci --ignore-scripts
 npm run build
 npm run check
+# 独立执行真实 DeepSeek API 验证
+npm run test:live
 ```
 
-`build` 生成默认 Rule 资源并做类型检查；Pi 直接加载 TypeScript，不生成第二套应用或捆绑宿主。`resources:check` 检查生成资源是否过期；`test:unit` 与 `test:integration` 可分别执行。集成测试在系统临时目录中打包、解包并使用 Pi 的公开加载器检查入口，结束后清理，不调用模型 API。
+`build` 生成默认 Rule 资源并做类型检查；Pi 直接加载 TypeScript，不生成第二套应用或捆绑宿主。`resources:check` 检查生成资源是否过期；`test:unit` 与 `test:integration` 可分别执行。常规测试使用替身与本机 HTTP，在系统临时目录中创建 Session、安装、打包和解包，成功/失败时均清理，不调用真实模型 API。`test:live` 使用仓库外既有 DeepSeek 私有配置，详情见验收记录。
 
 当前版本为 `0.0.0`，`private: true` 用于防止开发骨架被误发布到 npm；正式包名、版本与发布验收在交付前确定。不要手改 `resources/rule.md`，应维护规范中的两份一致模板后执行 `npm run resources:sync`。密钥继续使用仓库外的私有配置。

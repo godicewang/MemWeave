@@ -17,6 +17,7 @@
 | `ARCHITECTURE.md` | 原生扩展的数据流、模块/存储边界、待确认契约 |
 | `PACKAGING.md` | npm/Git 分发、宿主依赖、四项副作用及兼容验收 |
 | `IMPLEMENTATION_PLAN.md` | 当前进度、阶段依赖、交付范围和进入条件 |
+| `PHASE_0_VALIDATION.md` | 阶段 0 的实际测试证据、复现命令、兼容与未验证范围 |
 
 2026-10-20 确认：以原生 Pi 扩展和 Pi Package 交付，首个宿主验收目标 v1.3.0。Rule 渲染与 Window/State 在同一个 `context_with_system` 请求处理中组装；失败时主动取消。用户接受共享压缩设置、压缩恢复记录、宿主版本由用户决定及扩展共存/缓存限制，具体范围见 `PACKAGING.md`。这次接入调整不改变 Task/State 工具和持久化协议，也不改变 Window 计数、Q 公式与固定 Rule 正文。
 
