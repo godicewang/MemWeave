@@ -98,15 +98,11 @@ Pi 的 `settings.json` 与 MemWeave 的 `~/.pi/memory/config.json` 是不同配�
 
 接受同一配置范围内其他 Pi 在读取设置后关闭自动压缩；禁用/卸载 Package 不自动恢复该值。运行中重新启用压缩时，Pi 可能在取消 hook 前追加恢复用 `context_edit`，改变有效会话视图。本扩展不主动用它实现窗口、不删除这些原生记录，也不把恢复记录当成新的认知证据；旧表示的支持边界沿用 Window §4.3。
 
-## 5. 编码前必须确认的规范缺口
+## 5. 持久化决定与剩余确认项
 
-Codex 不得擅自选方案，需先向用户提问：
+2026-10-21 用户已批准 `PHASE_2_PROPOSAL.md`：U/A/T 定位使用 `memweave.references.v1` Pi custom 条目，index 只登记 Session 来源；绑定与六字段覆盖使用分支祖先链上的 `memweave.scope.v1`。State 为 Task 共享事件流，不随 Pi 分支回退。提交与输入边界已同步到 Task §8、State §14 和 Rule §3。
 
-1. **U/A/T 跨 Session 映射**：Task 可跨多个 Session，但 U/A/T 按 Task 编号且不另建映射文件；必须明确引用到 Pi entry 的映射保存在哪里。
-2. **Recent Window 批次元数据**：规范允许 Pi custom entry 或 Session metadata，但没有唯一指定恢复/幂等的持久化位置。
-3. **Session/branch 窗口覆盖值**：全局默认在 `config.json`，但实例覆盖值的具体持久化位置尚未定。
-
-以上三项在 Task/Session 持久化实现前确认。不影响无业务持久化的阶段 0–1；阶段 1 仅提供隔离覆盖合并接口，未确认的字段不先写入正式数据。Recent Window 默认值已于 2026-10-20 确认为 N=200、B=40，不再作为规范缺口；5/2 仍只是小窗口示例。
+Recent Window 批次元数据的唯一持久化位置仍需在阶段 5 前确认；本次批准不扩展到该决定。阶段 2 不开启 Window 裁剪。
 
 ### 已确定接线、仍需验证的工程边界
 
