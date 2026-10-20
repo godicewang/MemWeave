@@ -66,7 +66,7 @@ MemWeave 在 Session 启动/恢复及每次请求前检查 `pi.getSettings()` �
 
 | Pi / 路径 | Package 安装 | Rule/Window/State 组装 | 主动取消与压缩 | Session/共存 | 状态 |
 |---|---|---|---|---|---|
-| v1.3.0 普通主会话 | 本地项目安装/移除、npm 归档解包和 Git HEAD 入口已验证；远程安装待阶段 6 | 正式配置/Rule 热读取、容量快照和真实 DeepSeek 工具续跑通过；正式 Window/State 待实现 | 主动取消、HTTP 无发送、关闭/重开压缩对照及手动取消已通过 | reload、新 Session、双实例、原生提示信任通过；完整业务恢复/高级共存待测 | 阶段 0–1 通过，尚非完整产品兼容声明 |
+| v1.3.0 普通主会话 | 本地、npm 归档实际安装、GitHub SSH 固定 commit 安装/更新/禁用/移除已通过；HTTPS 网络失败、npm registry 待测 | 正式配置/Rule 热读取、容量快照和真实 DeepSeek 工具续跑通过；正式 Window/State 待实现 | 主动取消、HTTP 无发送、关闭/重开压缩对照及手动取消已通过 | reload、新 Session、双实例、原生提示信任通过；完整业务恢复/高级共存待测 | 阶段 0–1 与部分分发验收通过，尚非完整产品兼容声明 |
 | v1.3.0 虚拟路由 / 动态工具 / 第三方上下文变换 | 待测 | 最终模型容量、工具成本和提示覆盖需逐组合检查 | 待测 | 待测 | 不预先宣称支持 |
 | 其他 Pi 版本 | 未验证 | 未验证 | 未验证 | 未验证 | 不宣称支持 |
 
@@ -78,6 +78,8 @@ MemWeave 在 Session 启动/恢复及每次请求前检查 `pi.getSettings()` �
 
 阶段 1 的生产容量适配每次逻辑请求读取 OpenAI 兼容 `/models` 的精确 `context_window`，已验收 DeepSeek Flash；不支持的 API、缺失/不唯一容量或元数据失败均取消。HTTP 兼容形状不代表其他供应商已验收。运行配置/模板缺失时诊断，不自动创建或覆盖用户文件；首次试用准备方式见 README。
 
-验证使用系统临时目录并清理，私有配置仍在仓库外且字节不变；未执行正式 npm/Git 远程源发布、升级或完整业务恢复。旧 SDK 应用与早期临时测试不能直接替代当前 Package 证据，加载测试、替身/本机 HTTP 和真实模型结果分别记录。
+2026-10-21 又完成 2 项独立分发测试：通过真实 GitHub SSH 验证固定 commit 安装与 ref 更新，另通过 Pi 原生 PackageManager 实际安装 npm 本地归档，并检查禁用/移除、外置文件与宿主 peer。首次 HTTPS 克隆因 HTTP/2 网络错误失败；该路径未通过。详情和复现入口 `npm run test:distribution` 见 `PHASE_6_READINESS.md`。
+
+验证使用系统临时目录并清理，私有配置保存在仓库外；本轮分发检查只使用临时认证/运行数据哨兵，不调用模型。未执行正式 npm registry 或 Git release 发布、完整业务升级/恢复。旧 SDK 应用与早期临时测试不能直接替代当前 Package 证据，加载测试、替身/本机 HTTP 和真实模型结果分别记录。
 
 依据：[v1.3.0 Packages](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/docs/packages.md)、[Extensions](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/docs/extensions.md)、[扩展类型](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/extensions/types.ts)、[runner](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/extensions/runner.ts)、[settings](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/settings-manager.ts)、[压缩/恢复](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/agent-session.ts)。

@@ -36,6 +36,8 @@ Rule 热读取、Window 预算和 State 注入统一使用 `context_with_system`
 
 下一步为阶段 2 的 Task＋State 最小闭环；开始前须确认引用映射及 Session/分支绑定、覆盖值的持久化位置。旧 SDK 应用实现保留在 Git 历史中。
 
+阶段 6 的部分安装验收也已完成：GitHub SSH 固定 commit 安装/更新、npm 本地归档安装、禁用/reload 和卸载通过；外置用户文件与共享压缩设置保留。HTTPS 克隆遇到网络错误，npm registry 和完整业务验收尚未完成，见[安装验收与前置状态](docs/PHASE_6_READINESS.md)。
+
 ## 阶段 1 的运行文件
 
 运行入口只读取 `~/.pi/memory/config.json` 和 `~/.pi/memory/rule.md`，不会自动创建或覆盖文件。首次试用时，在该目录创建下列配置，并将安装包内 `resources/rule.md` 的内容复制为 `rule.md`；已有合法配置和自定义模板应保留。安装包目录只提供默认模板，不保存运行数据。
@@ -83,10 +85,14 @@ Node 最低版本与目标 Pi 一致，为 22.19.0；本机验证使用 `.node-v
 npm ci --ignore-scripts
 npm run build
 npm run check
+# 独立执行分发检查，包含 GitHub 网络访问并需要仓库读取权限
+npm run test:distribution
 # 独立执行真实 DeepSeek API 验证
 npm run test:live
 ```
 
 `build` 生成默认 Rule 资源并做类型检查；Pi 直接加载 TypeScript，不生成第二套应用或捆绑宿主。`resources:check` 检查生成资源是否过期；`test:unit` 与 `test:integration` 可分别执行。常规测试使用替身与本机 HTTP，在系统临时目录中创建 Session、安装、打包和解包，成功/失败时均清理，不调用真实模型 API。`test:live` 使用仓库外既有 DeepSeek 私有配置，详情见验收记录。
+
+`test:distribution` 默认使用既有 GitHub SSH 通道，Git 候选取本地 `origin/main`；可用 `MEMWEAVE_DISTRIBUTION_REF=<完整commit>` 指定已推送候选，用 `MEMWEAVE_DISTRIBUTION_TRANSPORT=https` 复测 HTTPS。该组测试独立于常规检查，npm 路径验证的是本地归档实际安装，尚未验证 registry 发布。
 
 当前版本为 `0.0.0`，`private: true` 用于防止开发骨架被误发布到 npm；正式包名、版本与发布验收在交付前确定。不要手改 `resources/rule.md`，应维护规范中的两份一致模板后执行 `npm run resources:sync`。密钥继续使用仓库外的私有配置。
