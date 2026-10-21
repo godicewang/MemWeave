@@ -62,7 +62,7 @@ test(
       messagesBefore,
     );
     t.diagnostic(
-      `Installed npm archive, disk restart, source read and State append: ${after.requests} real DeepSeek requests; bootstrap used 3 local HTTP requests separately`,
+      `Unpacked npm artifact, disk restart, source read and State append: ${after.requests} real DeepSeek requests; bootstrap used 3 local HTTP requests separately`,
     );
   },
 );

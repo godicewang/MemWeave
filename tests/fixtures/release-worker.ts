@@ -10,7 +10,7 @@ import { memoryPaths } from "../../src/storage/paths.ts";
 import type { Task } from "../../src/task/model.ts";
 import type { ReleaseCase, ReleaseResult } from "./release.ts";
 test(
-  "installed Runtime in an independent Pi process",
+  "product Runtime in an independent Pi process",
   { timeout: 80_000 },
   async (t) => {
     const input = JSON.parse(
@@ -171,6 +171,11 @@ test(
         : input.action === "create"
           ? "Source user requested release recovery verification; retain this original."
           : `${input.label} continue persisted work`;
+    const outcomes: string[] = [];
+    h.session.subscribe((event) => {
+      if (event.type === "message_end" && event.message.role === "assistant")
+        outcomes.push(event.message.stopReason);
+    });
     await h.session.prompt(prompt);
     assert.deepEqual(h.errors, []);
     const index = JSON.parse(await readFile(paths.index, "utf8")) as Task[];
@@ -183,6 +188,11 @@ test(
       .filter((e) => e.type === "message" && e.message.role === "toolResult");
     if (input.action !== "blocked") {
       assert.ok(requests > 0 && requests <= 6);
+      // Historical failed requests must survive recovery; check only this run.
+      assert.ok(!outcomes.includes("error"));
+      assert.ok(!outcomes.includes("aborted"));
+      assert.equal(outcomes.at(-1), "stop");
+      assert.equal(h.session.messages.at(-1)?.role, "assistant");
       for (const entry of results)
         if (entry.type === "message" && entry.message.role === "toolResult")
           assert.equal(entry.message.isError, false);
