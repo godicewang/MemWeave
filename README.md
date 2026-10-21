@@ -18,7 +18,7 @@
 
 源代码仓库、Pi Session 和 `~/.pi/memory/` 运行时数据必须分开存放。
 
-已确认的默认设计：Agent 总预算为实际调用模型最大上下文的一半（按 token 向下取整，含输出预留）；Recent Window 容量为 200 个事件、每批移出 40 个；State 容量为 2000 个事件、每批管理 200 个，沿用最多保留 20 个的规则。配置读取、校验和请求上限派生已实现；窗口裁剪、完整 token 预算及 State 管理按后续阶段实现。
+已确认的默认设计：Agent 总预算为实际调用模型最大上下文的一半（按 token 向下取整，含输出预留）；Recent Window 容量为 200 个事件、每批移出 40 个；State 容量为 2000 个事件、每批管理 200 个，沿用最多保留 20 个的规则。配置、Rule、Task、State 和原文回读已实现；Recent Window 裁剪与完整 token 预算仍待阶段 5。
 
 ## 开发与发布分离
 
@@ -30,11 +30,11 @@ Rule 热读取、Window 预算和 State 注入统一使用 `context_with_system`
 
 ## 当前进度
 
-阶段 0–3 已完成。当前入口提供四个 Task 工具，以及 `state_append`、`update_goal`、`modify_fact`、`state_read`、`state_remain` 五个 State 工具，并在每次请求末尾注入当前 Task 的 State。Task 可跨 Session 恢复，U/A/T 编号从 Pi 元数据继续；批量提交、归档、窗口恢复、重试和并发均有测试。详情见[阶段 3 验收记录](docs/PHASE_3_VALIDATION.md)和[阶段 2 验收记录](docs/PHASE_2_VALIDATION.md)。
+阶段 0–4 已完成。当前入口提供四个 Task 工具、五个 State 工具，以及 `memory_read`，并在每次请求末尾注入当前 Task 的 State。Task 可跨 Session 恢复，U/A/T/R 编号从 Pi 元数据继续；批量提交、归档、State 窗口恢复、原文回读、重试和并发均有测试。详情见[阶段 4 验收记录](docs/PHASE_4_VALIDATION.md)、[阶段 3 验收记录](docs/PHASE_3_VALIDATION.md)和[阶段 2 验收记录](docs/PHASE_2_VALIDATION.md)。
 
 启用开发入口前，须明确按 Pi 原生方式关闭有效自动压缩，优先受信任项目的 `.pi/settings.json`。扩展检查 Pi v1.3.0 与压缩设置；准备失败先取消再报告，卸载不恢复设置，具体范围见 `docs/PACKAGING.md`。
 
-State 窗口只计活动 F/D，Goal 常驻；默认到 2000 时提醒管理最早 200 个、最多保留 20 个。提醒期间正常载入新增认知，允许临时超量；只在可靠提交后移除未保留候选。下一步为阶段 4 的完整原文回读；Recent Window 裁剪和完整 token 预算仍属阶段 5。旧 SDK 应用保留在 Git 历史中。
+State 窗口只计活动 F/D，Goal 常驻；默认到 2000 时提醒管理最早 200 个、最多保留 20 个。提醒期间正常载入新增认知，允许临时超量；只在可靠提交后移除未保留候选。下一步为阶段 5 的 Recent Window、完整 token 预算和回读 X 豁免；旧 SDK 应用保留在 Git 历史中。
 
 阶段 6 的部分安装验收也已完成：GitHub SSH 固定 commit 安装/更新、npm 本地归档安装、禁用/reload 和卸载通过；外置用户文件与共享压缩设置保留。HTTPS 克隆遇到网络错误，npm registry 和完整业务验收尚未完成，见[安装验收与前置状态](docs/PHASE_6_READINESS.md)。
 
@@ -60,6 +60,24 @@ State 窗口只计活动 F/D，Goal 常驻；默认到 2000 时提醒管理最�
 Task 创建后，程序在同一 memory 目录维护 `index.json` 和 `<cwd_key>/tasks/<task_id>/state.json`（JSONL 认知事件）及可重建的 `state.md`。引用与分支绑定写入 Pi 原生 custom 元数据；没有第二套聊天文件。State 与临时引用头只加入模型请求，原始消息正文不改写。
 
 同一 Task 的 State 在所有绑定它的 Session/分支间共享；回退聊天不撤销认知。Task 切换不自动暂停其他任务；本阶段没有暂停/完成工具，`latest_paused` 仅恢复已存在的 paused 记录。来源 Session 删除/损坏时明确失败；不要把这些文件作为可随意清理的缓存。写盘失败会说明已提交部分；Session 元数据未落盘时须从磁盘重新打开 Session，普通扩展 reload 不会修复脏内存。进程被强杀可能留下锁，需确认写入者退出后清理；不会自动抢占。
+
+## 已知原文回读
+
+`memory_read` 只读已知 U/A/T/R，不搜索、不恢复 Task，也不修改 State。跨 Task 时在该项提供明确的来源 `task_id` 与 U/A/T，成功后返回当前 Task 的 R 别名。没有当前 Task 时拒绝调用；不要在同一轮同时切换 Task 和回读。
+
+```json
+{
+  "items": [
+    {"ref": "T20", "offset": 0, "limit": 2000},
+    {"ref": "U3", "task_id": "task_known_source", "limit": 1000}
+  ],
+  "max_total_chars": 5000
+}
+```
+
+offset/limit 按 Unicode 码点计算，默认总正文预算为 8000、最大 50000 字符。每项分别报告来源、实际范围、原件完整性和截断状态；一个坏引用不影响其他成功结果。图片先返回附件 R，明确读取且模型支持时才发送原生图片块，单次合计不超过 10 MiB；不支持图片字符切片。这里只读 Session 已保存的版本，无法恢复 Pi 保存前已缩放或省略的原图。
+
+原生 Bash 有完整临时输出时，程序在下一次推理前按哈希保存到 `blobs/`；这些原件与 R 定位需要保留，不随卸载删除。没有原件的历史截断输出只报告可得片段，不冒充全文。普通消息与 Session 已有图片不另外复制。当前阶段尚未启用 Window 截断；完整回读的请求级 X 预算在阶段 5 接通。
 
 ## 骨架与开发命令
 

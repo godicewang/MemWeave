@@ -37,6 +37,8 @@ import { withLock } from "../storage/files.ts";
 import { now, stableId } from "../storage/identity.ts";
 import type { MemoryPaths } from "../storage/paths.ts";
 import { GoalMetadataResolver } from "./goal-metadata.ts";
+import { MemoryService } from "../memory/service.ts";
+import { MemoryReadSchema, type MemoryReadInput } from "../memory/model.ts";
 import { TaskIndex } from "./index-store.ts";
 import {
   CreateSchema,
@@ -61,12 +63,14 @@ export class TaskService {
   readonly state: StateStore;
   readonly memory: SessionMemory;
   readonly goalMetadata: GoalMetadataResolver;
+  readonly reader: MemoryService;
   constructor(paths: MemoryPaths, pi: Pick<ExtensionAPI, "appendEntry">) {
     this.paths = paths;
     this.index = new TaskIndex(paths);
     this.state = new StateStore(paths);
     this.memory = new SessionMemory(pi);
     this.goalMetadata = new GoalMetadataResolver(this.memory);
+    this.reader = new MemoryService(paths, this.index, this.memory);
   }
   scope(ctx: ExtensionContext) {
     this.memory.check();
@@ -97,11 +101,12 @@ export class TaskService {
             "update_goal",
             "modify_fact",
             "state_remain",
+            "memory_read",
           ].includes(c.name),
         ))
     )
       throw Error(
-        "CONFLICTING_TASK_CALLS: separate Task switching from State writes",
+        "CONFLICTING_TASK_CALLS: separate Task switching from State writes and original reads",
       );
   }
   async register(task: Task, ctx: ExtensionContext): Promise<Task> {
@@ -276,7 +281,14 @@ export class TaskService {
           items,
           this.operation(ctx, callId, task.task_id),
           config.state_event_max_chars,
-          new Set(refs.keys()),
+          async () =>
+            new Set([
+              ...refs.keys(),
+              ...(await this.reader.evidence(
+                task,
+                items.flatMap((item) => Object.keys(item.evidence)),
+              )),
+            ]),
         );
         await this.derivatives({ ...task, updated_at: now() }, state);
         return `State updated: v${state.version}`;
@@ -313,7 +325,14 @@ export class TaskService {
           input,
           this.operation(ctx, callId, task.task_id),
           config.state_event_max_chars,
-          new Set(refs.keys()),
+          async () =>
+            new Set([
+              ...refs.keys(),
+              ...(await this.reader.evidence(
+                task,
+                Object.keys(input.evidence),
+              )),
+            ]),
         );
         await this.derivatives({ ...task, updated_at: now() }, state);
         return `State updated: v${state.version}`;
@@ -350,7 +369,14 @@ export class TaskService {
           input,
           this.operation(ctx, callId, task.task_id),
           config.state_event_max_chars,
-          new Set(refs.keys()),
+          async () =>
+            new Set([
+              ...refs.keys(),
+              ...(await this.reader.evidence(
+                task,
+                Object.keys(input.append_fact.evidence),
+              )),
+            ]),
         );
         await this.derivatives({ ...task, updated_at: now() }, state);
         return `State updated: v${state.version}`;
@@ -390,6 +416,31 @@ export class TaskService {
     return withLock(
       this.paths.taskLock(task),
       async () => renderState(task.task_id, await this.state.read(task)),
+      ctx.signal,
+    );
+  }
+  async readMemory(
+    input: MemoryReadInput,
+    ctx: ExtensionContext,
+    callId: string,
+  ) {
+    if (!Check(MemoryReadSchema, input)) throw Error("INVALID_MEMORY_READ");
+    await this.memory.verify(ctx);
+    this.checkCalls(ctx, callId);
+    const scope = this.scope(ctx);
+    if (!scope.task_id) throw Error("NO_CURRENT_TASK");
+    const initial = await this.index.get(scope.task_id);
+    return withLock(
+      this.paths.taskLock(initial),
+      async () => {
+        const task = await this.register(
+          await this.index.get(initial.task_id),
+          ctx,
+        );
+        const refs = await synchronizeReferences(task, ctx, this.memory);
+        await this.reader.capture(task, refs, ctx);
+        return this.reader.read(task, input, ctx);
+      },
       ctx.signal,
     );
   }
@@ -526,6 +577,7 @@ export class TaskService {
           ),
           references = await synchronizeReferences(task, ctx, this.memory),
           state = await this.state.read(task);
+        await this.reader.capture(task, references, ctx);
         const updated = await this.derivatives(task, state);
         const batch = prepareStateBatch(task.task_id, state, config);
         if (batch) await this.memory.append(ctx, STATE_REQUEST_TYPE, batch);
@@ -554,7 +606,12 @@ export class TaskService {
         this.paths.taskLock(initial),
         async () => {
           const task = await this.register(await this.index.get(id), ctx);
-          await synchronizeReferences(task, ctx, this.memory);
+          const references = await synchronizeReferences(
+            task,
+            ctx,
+            this.memory,
+          );
+          await this.reader.capture(task, references, ctx);
         },
         ctx.signal,
       );

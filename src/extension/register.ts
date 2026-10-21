@@ -26,6 +26,7 @@ import {
 import { createRuleRequestServices } from "../pi/rule-services.ts";
 import type { CapacityVerifier } from "../pi/model-capacity.ts";
 import { SCOPE_TYPE } from "../pi/session-memory.ts";
+import { MemoryReadSchema } from "../memory/model.ts";
 export interface MemweaveOptions {
   paths?: MemoryPaths;
   verifyCapacity?: CapacityVerifier;
@@ -136,6 +137,37 @@ export function registerMemweave(
     RemainSchema,
     (p, ctx, id) => tasks.remain(p.event_ids, ctx, id),
   );
+  pi.registerTool({
+    name: "memory_read",
+    label: "memory_read",
+    description:
+      "Read known U/A/T/R originals in order, never search or switch Task. items[].task_id reads an explicit other Task U/A/T and returns a reusable current-Task R. offset/limit use Unicode code points. max_total_chars defaults to 8000, at most 50000. Failures/completeness are per item. Read attachment R explicitly for supported images, never use character ranges on images.",
+    parameters: MemoryReadSchema,
+    async execute(id, input, signal, _update, ctx) {
+      signal?.throwIfAborted();
+      const output = await tasks.readMemory(input, ctx, id);
+      return {
+        content: [
+          { type: "text" as const, text: JSON.stringify(output.result) },
+          ...output.images,
+        ],
+        details: {
+          memweave_read: {
+            version: 1,
+            ranges: output.result.items.map((item) => ({
+              ref: item.resolved_ref ?? item.ref,
+              source_task_id: item.source_task_id,
+              offset: item.offset,
+              returned_chars: [...item.content].length,
+              range_complete: item.range_complete,
+              source_complete: item.source_complete,
+              status: item.status,
+            })),
+          },
+        },
+      };
+    },
+  });
   // Hook failures must actively stop execution: Pi otherwise catches extension exceptions.
   const guarded =
     (run: (ctx: ExtensionContext) => Promise<void>) =>
@@ -167,6 +199,7 @@ export function registerMemweave(
         "update_goal",
         "modify_fact",
         "state_remain",
+        "memory_read",
       ].includes(event.toolName)
     )
       return;

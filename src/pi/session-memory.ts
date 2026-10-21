@@ -11,6 +11,12 @@ import type {
 import { CONFIG_SCHEMA } from "../config/schema.ts";
 import { StateBatchSchema } from "../state/window.ts";
 import { TaskIdSchema } from "../task/model.ts";
+import {
+  ALIAS_TYPE,
+  ORIGINAL_TYPE,
+  AliasesSchema,
+  OriginalsSchema,
+} from "../memory/model.ts";
 export const SCOPE_TYPE = "memweave.scope.v1",
   REF_TYPE = "memweave.references.v1";
 export const STATE_REQUEST_TYPE = "memweave.state.request.v1";
@@ -218,7 +224,9 @@ export class SessionMemory {
           e.type === "custom" &&
           (e.customType === SCOPE_TYPE ||
             e.customType === REF_TYPE ||
-            e.customType === STATE_REQUEST_TYPE),
+            e.customType === STATE_REQUEST_TYPE ||
+            e.customType === ALIAS_TYPE ||
+            e.customType === ORIGINAL_TYPE),
       );
     if (!own.length) return;
     const file = ctx.sessionManager.getSessionFile();
@@ -244,7 +252,9 @@ export class SessionMemory {
     if (
       (kind === SCOPE_TYPE && !Check(ScopeSchema, data)) ||
       (kind === REF_TYPE && !Check(ReferencesSchema, data)) ||
-      (kind === STATE_REQUEST_TYPE && !Check(StateBatchSchema, data))
+      (kind === STATE_REQUEST_TYPE && !Check(StateBatchSchema, data)) ||
+      (kind === ALIAS_TYPE && !Check(AliasesSchema, data)) ||
+      (kind === ORIGINAL_TYPE && !Check(OriginalsSchema, data))
     )
       throw Error("INVALID_SESSION_METADATA");
     await this.verify(ctx);

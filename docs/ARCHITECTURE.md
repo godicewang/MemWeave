@@ -43,13 +43,15 @@ resources/rule.md           # 从独立 Rule 模板生成并校验，支持 Git 
 
 这是职责边界，不要求第一天创建每个文件。随实现逐步建立，避免空抽象层。模块之间通过明确的小接口交互，不直接改写彼此的内部文件格式。
 
-当前已完成阶段 0–3：`extension/index.ts` 调用注册模块，统一接入生命周期、Rule 与 Task/State 快照，以及四个 Task 工具和五个 State 工具。引用解析已落在 `memory/`，State schema/reducer/renderer、归档、活动窗口和批次恢复已接通；Recent Window 和完整原文回读仍待后续阶段。内部 `RequestServices` 没有新增持久化接口或独立服务。TypeScript 入口由宿主直接加载，实际证据见 `PHASE_0_VALIDATION.md` 至 `PHASE_3_VALIDATION.md`。
+当前已完成阶段 0–4：`extension/index.ts` 调用注册模块，统一接入生命周期、Rule 与 Task/State 快照，以及四个 Task 工具、五个 State 工具和 memory_read。引用解析、跨 Task R 别名及必要原件保存已落在 `memory/`；State schema/reducer/renderer、归档、活动窗口和批次恢复已接通；Recent Window 和完整 Q/X 预算仍待阶段 5。内部 `RequestServices` 没有新增持久化接口或独立服务。TypeScript 入口由宿主直接加载，实际证据见 `PHASE_0_VALIDATION.md` 至 `PHASE_4_VALIDATION.md`。
 
 阶段 1 的内部接线为 `rule-services` → 配置读取/覆盖合并 → 容量快照 → `prepareRule` → 后续模块接口；运行路径统一由 `storage/paths.ts` 提供，文件只读。容量核验通过 Pi 公开认证接口与供应商模型列表取得精确值，当前真实验收 DeepSeek Flash；每次逻辑请求核验，供应商内部网络重试不重读。SDK 导入及原生 system 重放收敛于 `src/pi/`，不复制 Pi 重放算法。
 
 阶段 2 在容量核验的异步步骤前捕获当前 Task/State/引用和分支配置，同一请求只使用该快照；原生 Session 文件按验证过的字节偏移增量读取，来源替换/截断时重新严格读取。Task 锁串行化跨进程认知写入与引用分配，全局索引锁避免不同 Task 互相覆盖；State 以保留旧前缀的原子替换提交，派生文件失败按部分完成报告。
 
 阶段 3 在同一请求快照中计算批次，将定位写入 Pi custom 后才继续准备请求。工具沿来源 assistant 祖先链读取本请求定位，不能拿旧记录发起新滑动。并行工具独立提交；同一 Session 的增量读取按文件串行更新缓存，避免把合法追加误判成重复条目。Goal 发现元数据可从原生调用参数恢复，不给 State 事件增加索引字段。
+
+阶段 4 的 memory_read 从原始 Session 条目回读，逐项校验来源、字符范围与预算。R 定位和必要 Bash 完整输出定位分别保存为 memweave.aliases.v1 / memweave.originals.v1，格式见 Task §9；不改 U/A/T 元数据。blobs 按 SHA-256 寻址并以流式复制、哈希核验和有限范围读取控制内存；Session 已有图片直接按内容块定位。Task 锁保护跨进程别名序列，R evidence 回到最终来源核验；读取不切换 Task、不改变认知版本。完整回读范围在原生工具 details 中标记，阶段 5 再接统一 X 预算。
 
 ## 3. 核心数据流
 

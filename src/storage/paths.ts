@@ -11,6 +11,7 @@ export interface MemoryPaths {
   readonly rule: string;
   readonly index: string;
   readonly indexLock: string;
+  blob(hash: string): string;
   state(task: TaskLocation): string;
   view(task: TaskLocation): string;
   taskLock(task: TaskLocation): string;
@@ -49,6 +50,10 @@ export function memoryPaths(
     rule: join(normalized, "rule.md"),
     index: join(normalized, "index.json"),
     indexLock: join(normalized, "index.lock"),
+    blob: (hash: string) => {
+      if (!/^[a-f0-9]{64}$/.test(hash)) throw Error("INVALID_BLOB_HASH");
+      return join(normalized, "blobs", hash);
+    },
     state: (task: TaskLocation) => taskFile(task, "state.json"),
     view: (task: TaskLocation) => taskFile(task, "state.md"),
     taskLock: (task: TaskLocation) => taskFile(task, "write.lock"),

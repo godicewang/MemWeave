@@ -18,6 +18,9 @@ import { StateBatchSchema, stateBatchId, type StateBatch } from "./window.ts";
 import { atomicWrite, readOptional } from "../storage/files.ts";
 import { now, stableId } from "../storage/identity.ts";
 import type { MemoryPaths, TaskLocation } from "../storage/paths.ts";
+type EvidenceReferences = Set<string> | (() => Promise<Set<string>>);
+const resolveReferences = (refs: EvidenceReferences) =>
+  typeof refs === "function" ? refs() : Promise.resolve(refs);
 /** Mutations require the caller to hold the Task write lock. */
 export class StateStore {
   readonly paths: MemoryPaths;
@@ -77,7 +80,7 @@ export class StateStore {
     items: StateItem[],
     operation: string,
     maxChars: number,
-    refs: Set<string>,
+    refs: EvidenceReferences,
   ): Promise<State> {
     if (!Check(AppendSchema, { items })) throw Error("INVALID_STATE_APPEND");
     const state = await this.read(task),
@@ -109,7 +112,10 @@ export class StateStore {
     }
     if (found.some(Boolean))
       throw Error("CORRUPT_STATE: partially committed batch");
-    const evidence = new Set([...refs, ...state.entries.keys()]);
+    const evidence = new Set([
+      ...(await resolveReferences(refs)),
+      ...state.entries.keys(),
+    ]);
     let f = state.factCount,
       d = state.decisionCount;
     const events: StateEvent[] = [];
@@ -143,7 +149,7 @@ export class StateStore {
     input: UpdateGoalInput,
     operation: string,
     maxChars: number,
-    refs: Set<string>,
+    refs: EvidenceReferences,
   ): Promise<State> {
     if (!Check(UpdateGoalSchema, input)) throw Error("INVALID_UPDATE_GOAL");
     const state = await this.read(task),
@@ -159,7 +165,10 @@ export class StateStore {
     }
     if ([...input.goal].length > maxChars)
       throw Error("STATE_CONTENT_TOO_LONG");
-    const known = new Set([...refs, ...state.entries.keys()]);
+    const known = new Set([
+      ...(await resolveReferences(refs)),
+      ...state.entries.keys(),
+    ]);
     for (const ref of Object.keys(input.evidence))
       if (!known.has(ref)) throw Error(`INVALID_EVIDENCE: ${ref}`);
     const event: StateEvent = {
@@ -179,7 +188,7 @@ export class StateStore {
     input: ModifyFactInput,
     operation: string,
     maxChars: number,
-    refs: Set<string>,
+    refs: EvidenceReferences,
   ): Promise<State> {
     if (!Check(ModifyFactSchema, input)) throw Error("INVALID_MODIFY_FACT");
     const state = await this.read(task),
@@ -203,7 +212,10 @@ export class StateStore {
     }
     if ([...input.append_fact.content].length > maxChars)
       throw Error("STATE_CONTENT_TOO_LONG");
-    const known = new Set([...refs, ...state.entries.keys()]);
+    const known = new Set([
+      ...(await resolveReferences(refs)),
+      ...state.entries.keys(),
+    ]);
     for (const ref of Object.keys(input.append_fact.evidence))
       if (!known.has(ref)) throw Error(`INVALID_EVIDENCE: ${ref}`);
     const event: StateEvent = {

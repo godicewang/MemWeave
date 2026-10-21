@@ -130,4 +130,33 @@ test("Pi native loader executes formal Task/State modules using host SDK and typ
     state_version: number;
   }>;
   assert.equal(finalIndex[0]?.state_version, 5);
+  h.faux.setResponses([
+    fauxAssistantMessage([
+      fauxToolCall("memory_read", {
+        items: [{ ref: "U1", limit: 6 }, { ref: "T999" }],
+      }),
+    ]),
+    fauxAssistantMessage("original read through native loader"),
+  ]);
+  await h.session.prompt("Read original evidence using loaded memory module");
+  const read = h.manager
+    .getEntries()
+    .findLast(
+      (entry) =>
+        entry.type === "message" &&
+        entry.message.role === "toolResult" &&
+        entry.message.toolName === "memory_read",
+    );
+  assert.ok(
+    read?.type === "message" &&
+      read.message.role === "toolResult" &&
+      !read.message.isError,
+  );
+  const part = read.message.content[0];
+  assert.ok(part?.type === "text");
+  const result = JSON.parse(part.text);
+  assert.equal(result.items[0].content, "Verify");
+  assert.equal(result.items[0].source_task_id, task.task_id);
+  assert.equal(result.items[1].status, "not_found");
+  assert.deepEqual(h.errors, []);
 });

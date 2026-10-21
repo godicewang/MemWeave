@@ -30,6 +30,7 @@ async function assertPackageLoads(packageRoot: string, temporaryRoot: string) {
   const registration = phase2 ? await readFile(join(packageRoot, "src/extension/register.ts"), "utf8") : "";
   if (registration.includes('"update_goal"')) expectedTools.push("update_goal", "state_read");
   if (registration.includes('"state_remain"')) expectedTools.push("modify_fact", "state_remain");
+  if (registration.includes('"memory_read"')) expectedTools.push("memory_read");
   assert.deepEqual([...extension.tools.keys()].sort(), expectedTools.sort());
   assert.deepEqual([...extension.handlers.keys()].sort(), phase2
     ? ["context_with_system", "session_before_compact", "session_start", "session_tree", "tool_call", "turn_end"]
