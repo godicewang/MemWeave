@@ -2,6 +2,8 @@ import { isDeepStrictEqual } from "node:util";
 import { Check } from "typebox/value";
 import {
   AppendSchema,
+  UpdateGoalSchema,
+  type UpdateGoalInput,
   reduceState,
   renderState,
   type State,
@@ -134,6 +136,20 @@ export class StateStore {
       bytes + events.map((e) => JSON.stringify(e) + "\n").join(""),
     );
     return result;
+  }
+  async updateGoal(task: TaskLocation, input: UpdateGoalInput, operation: string, maxChars: number, refs: Set<string>): Promise<State> {
+    if(!Check(UpdateGoalSchema,input))throw Error("INVALID_UPDATE_GOAL");
+    const state=await this.read(task),previous=state.events.find(e=>e.op_id===operation);
+    if(previous){
+      if(previous.op!=="update_goal"||previous.goal!==input.goal||!isDeepStrictEqual(previous.evidence,input.evidence))throw Error("OPERATION_INPUT_MISMATCH");
+      return state;
+    }
+    if([...input.goal].length>maxChars)throw Error("STATE_CONTENT_TOO_LONG");
+    const known=new Set([...refs,...state.facts.map(e=>e.id),...state.decisions.map(e=>e.id)]);
+    for(const ref of Object.keys(input.evidence))if(!known.has(ref))throw Error(`INVALID_EVIDENCE: ${ref}`);
+    const event:StateEvent={op_id:operation,op:"update_goal",time:now(),goal:input.goal,evidence:input.evidence};
+    const result=reduceState([...state.events,event]),bytes=(await readOptional(this.paths.state(task)))!;
+    await this.commit(task,bytes+JSON.stringify(event)+"\n");return result;
   }
   async writeView(task: TaskLocation, state: State): Promise<string> {
     const text = renderState(task.task_id, state);

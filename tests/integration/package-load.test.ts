@@ -26,7 +26,9 @@ async function assertPackageLoads(packageRoot: string, temporaryRoot: string) {
   assert.ok(extension);
   assert.equal(extension.resolvedPath, join(packageRoot, "src/extension/index.ts"));
   const phase2 = (await readFile(join(packageRoot, "src/extension/index.ts"), "utf8")).includes("registerMemweave");
-  assert.deepEqual([...extension.tools.keys()].sort(), phase2 ? ["state_append", "task_create", "task_find", "task_resume", "task_status"] : []);
+  const expectedTools=phase2?["state_append", "task_create", "task_find", "task_resume", "task_status"]:[];
+  if(phase2&&(await readFile(join(packageRoot,"src/extension/register.ts"),"utf8")).includes('"update_goal"'))expectedTools.push("update_goal","state_read");
+  assert.deepEqual([...extension.tools.keys()].sort(),expectedTools.sort());
   assert.deepEqual([...extension.handlers.keys()].sort(), phase2
     ? ["context_with_system", "session_before_compact", "session_start", "session_tree", "tool_call", "turn_end"]
     : ["context_with_system", "session_before_compact", "session_start"]);

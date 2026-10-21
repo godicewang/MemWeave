@@ -22,6 +22,10 @@ export const AppendSchema = Type.Object(
   },
   { additionalProperties: false },
 );
+export const UpdateGoalSchema = Type.Object({
+  goal:text,summary:text,keywords:Type.Array(text,{minItems:1}),evidence:EvidenceSchema,project_name:Type.Optional(text),
+},{additionalProperties:false});
+export type UpdateGoalInput = Static<typeof UpdateGoalSchema>;
 export type StateItem = Static<typeof AppendSchema>["items"][number];
 const base = { op_id: text, time: text };
 export const EventSchema = Type.Union([

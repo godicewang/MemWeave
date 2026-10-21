@@ -104,7 +104,9 @@ Pi 的 `settings.json` 与 MemWeave 的 `~/.pi/memory/config.json` 是不同配�
 
 2026-10-21 用户已批准 `PHASE_2_PROPOSAL.md`：U/A/T 定位使用 `memweave.references.v1` Pi custom 条目，index 只登记 Session 来源；绑定与六字段覆盖使用分支祖先链上的 `memweave.scope.v1`。State 为 Task 共享事件流，不随 Pi 分支回退。提交与输入边界已同步到 Task §8、State §14 和 Rule §3。
 
-Recent Window 批次元数据的唯一持久化位置仍需在阶段 5 前确认；本次批准不扩展到该决定。阶段 2 不开启 Window 裁剪。
+Recent Window 批次元数据的唯一持久化位置仍需在阶段 5 前确认；本次批准不扩展到该决定。阶段 2 不开启 Recent Window 裁剪。
+
+2026-10-21 另行批准阶段 3：State 活动窗口只计 F/D，满窗继续正常载入新增认知、允许临时超容量；当前 Goal 常驻。State 批次请求定位使用 `memweave.state.request.v1` Pi custom 元数据，实际提交仍为既有 State slide_window，不混入阶段 5 的 Recent Window 批次设计。详情见 State §15、`PHASE_3_PROPOSAL.md`。
 
 ### 已确定接线、仍需验证的工程边界
 

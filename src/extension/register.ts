@@ -11,7 +11,7 @@ import {
   StatusSchema,
   ResumeSchema,
 } from "../task/model.ts";
-import { AppendSchema } from "../state/model.ts";
+import { AppendSchema,UpdateGoalSchema } from "../state/model.ts";
 import { memoryPaths, type MemoryPaths } from "../storage/paths.ts";
 import {
   registerRequestLifecycle,
@@ -107,6 +107,8 @@ export function registerMemweave(
     AppendSchema,
     (p, ctx, id) => tasks.append(p.items, ctx, id),
   );
+  tool("update_goal","Update the current Goal only when its objective changes. Supply revised summary/keywords and evidence; project_name only when project affiliation changes. Returns State updated: vN.",UpdateGoalSchema,(p,ctx,id)=>tasks.updateGoal(p,ctx,id));
+  tool("state_read","Read the current State of an explicit task_id without switching the current Task or returning raw Session history.",StatusSchema,(p,ctx)=>tasks.readState(p.task_id,ctx));
   // Hook failures must actively stop execution: Pi otherwise catches extension exceptions.
   const guarded =
     (run: (ctx: ExtensionContext) => Promise<void>) =>
@@ -131,7 +133,7 @@ export function registerMemweave(
   );
   pi.on("tool_call", (event, ctx) => {
     if (
-      !["task_create", "task_resume", "state_append"].includes(event.toolName)
+      !["task_create", "task_resume", "state_append", "update_goal"].includes(event.toolName)
     )
       return;
     try {
