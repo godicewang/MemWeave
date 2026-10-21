@@ -20,6 +20,7 @@ import {
 } from "./model.ts";
 import { aliasOrigin, loadAliases, loadOriginals } from "./metadata.ts";
 import { normalizeMessage, textRange } from "./text.ts";
+import type { NativeMessage } from "../window/select.ts";
 
 export interface MemoryReadOutput {
   result: { items: MemoryItem[]; total_chars: number };
@@ -94,6 +95,55 @@ export class MemoryService {
       source = await originalSource(task, alias.source_ref, this.memory);
     return { task, ...source };
   }
+  /** Caller holds the current Task lock; uses the existing alias contract, never a Window map. */
+  async attachmentRefs(
+    task: Task,
+    sourceTask: string,
+    sourceRef: string,
+    message: NativeMessage,
+    ctx: ExtensionContext,
+  ) {
+    const aliases = await loadAliases(task, this.memory),
+      result: { ref: string }[] = [];
+    if (!Array.isArray(message.content)) return result;
+    for (const [index, part] of message.content.entries())
+      if (part.type === "image")
+        result.push({
+          ref: await this.allocateAlias(
+            task,
+            {
+              source_task_id: sourceTask,
+              source_ref: sourceRef,
+              part_index: index,
+            },
+            ctx,
+            aliases,
+          ),
+        });
+    return result;
+  }
+  private async allocateAlias(
+    task: Task,
+    origin: Omit<Alias, "ref">,
+    ctx: ExtensionContext,
+    aliases: Map<string, Alias>,
+  ) {
+    const existing = [...aliases.values()].find(
+      (alias) => aliasOrigin(alias) === aliasOrigin(origin),
+    );
+    if (existing) return existing.ref;
+    let next = 1;
+    for (const ref of aliases.keys())
+      next = Math.max(next, Number(ref.slice(1)) + 1);
+    if (!Number.isSafeInteger(next)) throw Error("ALIAS_COUNTER_EXHAUSTED");
+    const alias = { ...origin, ref: `R${next}` };
+    await this.memory.append(ctx, ALIAS_TYPE, {
+      task_id: task.task_id,
+      bindings: [alias],
+    });
+    aliases.set(alias.ref, alias);
+    return alias.ref;
+  }
   async evidence(task: Task, requested: Iterable<string>): Promise<string[]> {
     const refs = [...new Set(requested)].filter((ref) => ref.startsWith("R"));
     if (!refs.length) return [];
@@ -126,23 +176,8 @@ export class MemoryService {
       items: MemoryItem[] = [];
     let remaining = input.max_total_chars ?? 8000,
       imageBytes = 0;
-    const aliasFor = async (origin: Omit<Alias, "ref">) => {
-      const existing = [...aliases.values()].find(
-        (alias) => aliasOrigin(alias) === aliasOrigin(origin),
-      );
-      if (existing) return existing.ref;
-      let next = 1;
-      for (const ref of aliases.keys())
-        next = Math.max(next, Number(ref.slice(1)) + 1);
-      if (!Number.isSafeInteger(next)) throw Error("ALIAS_COUNTER_EXHAUSTED");
-      const alias = { ...origin, ref: `R${next}` };
-      await this.memory.append(ctx, ALIAS_TYPE, {
-        task_id: task.task_id,
-        bindings: [alias],
-      });
-      aliases.set(alias.ref, alias);
-      return alias.ref;
-    };
+    const aliasFor = (origin: Omit<Alias, "ref">) =>
+      this.allocateAlias(task, origin, ctx, aliases);
     for (const request of input.items) {
       ctx.signal?.throwIfAborted();
       const item: MemoryItem = {

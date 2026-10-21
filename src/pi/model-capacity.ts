@@ -1,6 +1,7 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { deriveContextLimit } from "./context-limit.ts";
+import { isDeepStrictEqual } from "node:util";
 
 export type CapacityVerifier = (model: Model<Api>, ctx: ExtensionContext) => Promise<unknown>;
 const unverified = (reason: string) => new Error(`MODEL_CAPACITY_UNVERIFIED: ${reason}`);
@@ -54,8 +55,7 @@ export const verifyProviderCapacity: CapacityVerifier = async (model, ctx) => {
 };
 
 export async function captureModelCapacity(ctx: ExtensionContext, selected: Model<Api>, verify: CapacityVerifier) {
-  const sameModel = () => ctx.model?.provider === selected.provider && ctx.model.id === selected.id &&
-    ctx.model.api === selected.api && ctx.model.baseUrl === selected.baseUrl;
+  const sameModel = () => isDeepStrictEqual(ctx.model, selected);
   if (!sameModel()) throw unverified("selected model changed during request preparation");
   const contextWindow = await verify(selected, ctx);
   ctx.signal?.throwIfAborted();

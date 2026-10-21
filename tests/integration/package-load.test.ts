@@ -31,6 +31,7 @@ async function assertPackageLoads(packageRoot: string, temporaryRoot: string) {
   if (registration.includes('"update_goal"')) expectedTools.push("update_goal", "state_read");
   if (registration.includes('"state_remain"')) expectedTools.push("modify_fact", "state_remain");
   if (registration.includes('"memory_read"')) expectedTools.push("memory_read");
+  if (registration.includes('"recent_window_set"')) expectedTools.push("recent_window_set");
   assert.deepEqual([...extension.tools.keys()].sort(), expectedTools.sort());
   assert.deepEqual([...extension.handlers.keys()].sort(), phase2
     ? ["context_with_system", "session_before_compact", "session_start", "session_tree", "tool_call", "turn_end"]

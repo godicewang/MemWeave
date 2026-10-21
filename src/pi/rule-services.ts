@@ -1,6 +1,7 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { TaskService } from "../task/service.ts";
 import { taskContext } from "./task-context.ts";
+import type { WindowService } from "./window-service.ts";
 import { readConfigSnapshot } from "../config/read.ts";
 import {
   prepareRule,
@@ -23,6 +24,7 @@ import {
 export interface RuleServiceOptions {
   paths?: MemoryPaths;
   tasks?: TaskService;
+  window?: WindowService;
   readOverrides?: (ctx: ExtensionContext) => unknown;
   verifyCapacity?: CapacityVerifier;
   afterRule?: (
@@ -42,6 +44,7 @@ export function createRuleRequestServices(
       if (!ctx.model)
         throw new Error("MODEL_CAPACITY_UNVERIFIED: no selected model");
       const selected = structuredClone(ctx.model);
+      const output = options.window?.captureOutput(selected);
       const overrides: unknown = structuredClone(
         options.readOverrides?.(ctx) ??
           options.tasks?.scope(ctx).overrides ??
@@ -58,9 +61,21 @@ export function createRuleRequestServices(
       );
       const frame: RuleFrame = Object.freeze({ config, capacity });
       const prepared = await prepareRule(messages, frame, paths, ctx.signal);
-      const complete = task
-        ? { ...prepared, messages: taskContext(prepared.messages, task) }
-        : prepared;
+      const complete =
+        task && options.window
+          ? {
+              ...prepared,
+              messages: await options.window.prepare(
+                prepared,
+                task,
+                ctx,
+                selected,
+                output,
+              ),
+            }
+          : task
+            ? { ...prepared, messages: taskContext(prepared.messages, task) }
+            : prepared;
       return options.afterRule
         ? options.afterRule(complete, ctx)
         : complete.messages;

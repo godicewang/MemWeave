@@ -27,7 +27,9 @@ import { createRuleRequestServices } from "../pi/rule-services.ts";
 import type { CapacityVerifier } from "../pi/model-capacity.ts";
 import { SCOPE_TYPE } from "../pi/session-memory.ts";
 import { MemoryReadSchema } from "../memory/model.ts";
-export interface MemweaveOptions {
+import { SetWindowSchema } from "../window/model.ts";
+import { WindowService, type WindowOptions } from "../pi/window-service.ts";
+export interface MemweaveOptions extends WindowOptions {
   paths?: MemoryPaths;
   verifyCapacity?: CapacityVerifier;
   observe?: (messages: RequestMessages) => void;
@@ -39,10 +41,15 @@ export function registerMemweave(
 ): TaskService {
   const paths = options.paths ?? memoryPaths(),
     tasks = new TaskService(paths, pi),
+    window = new WindowService(tasks, {
+      ...options,
+      thinkingLevel: () => pi.getThinkingLevel(),
+    }),
     report = options.report ?? reportRequestError;
   const services = createRuleRequestServices({
     paths,
     tasks,
+    window,
     ...(options.verifyCapacity
       ? { verifyCapacity: options.verifyCapacity }
       : {}),
@@ -88,6 +95,12 @@ export function registerMemweave(
     "Create a new Task with title, initial goal, project_name, summary and keywords; bind this Session branch. context is optional.",
     CreateSchema,
     (p, ctx, id) => tasks.create(p, ctx, id),
+  );
+  tool(
+    "recent_window_set",
+    "Set the current Session branch Recent Window event capacity turns and optional evict_turns. Positive integers, B <= N; omission preserves B and never silently clamps. Next request reselects originals; does not end the tool loop.",
+    SetWindowSchema,
+    (p, ctx, id) => window.set(p, ctx, id),
   );
   tool(
     "task_find",
@@ -186,10 +199,16 @@ export function registerMemweave(
       await tasks.memory.append(ctx, SCOPE_TYPE, tasks.scope(ctx));
     }),
   );
-  pi.on(
-    "turn_end",
-    guarded((ctx) => tasks.syncBranch(ctx)),
-  );
+  pi.on("turn_end", async (event, ctx) => {
+    try {
+      if (ctx.signal?.aborted) return;
+      await tasks.syncBranch(ctx);
+      await window.complete(event, ctx);
+    } catch (error) {
+      ctx.abort();
+      report(error, ctx);
+    }
+  });
   pi.on("tool_call", (event, ctx) => {
     if (
       ![
@@ -200,6 +219,7 @@ export function registerMemweave(
         "modify_fact",
         "state_remain",
         "memory_read",
+        "recent_window_set",
       ].includes(event.toolName)
     )
       return;

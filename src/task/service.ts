@@ -92,6 +92,11 @@ export class TaskService {
     const switches = calls.filter(
       (c) => c.name === "task_create" || c.name === "task_resume",
     );
+    const windowCalls = calls.filter((c) => c.name === "recent_window_set");
+    if (windowCalls.length > 1 || (windowCalls.length && switches.length))
+      throw Error(
+        "CONFLICTING_WINDOW_CALLS: separate window settings from Task switching and other window settings",
+      );
     if (
       switches.length > 1 ||
       (switches.length &&
@@ -566,7 +571,12 @@ export class TaskService {
     const scope = this.scope(ctx);
     await this.syncBranch(ctx);
     if (!scope.task_id)
-      return { task: null, state: null, references: new Map(), entries: [] };
+      return {
+        task: null,
+        state: null,
+        references: new Map(),
+        entries: structuredClone(ctx.sessionManager.getBranch()),
+      };
     const initial = await this.index.get(scope.task_id);
     return withLock(
       this.paths.taskLock(initial),
@@ -587,7 +597,7 @@ export class TaskService {
             renderState(task.task_id, state) +
             (batch ? renderStateReminder(batch, state) : ""),
           references,
-          entries: ctx.sessionManager.getBranch(),
+          entries: structuredClone(ctx.sessionManager.getBranch()),
         };
       },
       ctx.signal,

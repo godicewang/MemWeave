@@ -10,6 +10,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { CONFIG_SCHEMA } from "../config/schema.ts";
 import { StateBatchSchema } from "../state/window.ts";
+import { WINDOW_TYPE, WindowSchema } from "../window/model.ts";
 import { TaskIdSchema } from "../task/model.ts";
 import {
   ALIAS_TYPE,
@@ -225,6 +226,7 @@ export class SessionMemory {
           (e.customType === SCOPE_TYPE ||
             e.customType === REF_TYPE ||
             e.customType === STATE_REQUEST_TYPE ||
+            e.customType === WINDOW_TYPE ||
             e.customType === ALIAS_TYPE ||
             e.customType === ORIGINAL_TYPE),
       );
@@ -253,6 +255,7 @@ export class SessionMemory {
       (kind === SCOPE_TYPE && !Check(ScopeSchema, data)) ||
       (kind === REF_TYPE && !Check(ReferencesSchema, data)) ||
       (kind === STATE_REQUEST_TYPE && !Check(StateBatchSchema, data)) ||
+      (kind === WINDOW_TYPE && !Check(WindowSchema, data)) ||
       (kind === ALIAS_TYPE && !Check(AliasesSchema, data)) ||
       (kind === ORIGINAL_TYPE && !Check(OriginalsSchema, data))
     )

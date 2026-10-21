@@ -13,6 +13,8 @@ import type { TaskService } from "../../src/task/service.ts";
 import type { RequestMessages } from "../../src/pi/request-lifecycle.ts";
 import type { CapacityVerifier } from "../../src/pi/model-capacity.ts";
 import { nativeSession } from "./native-session.ts";
+import { imageReserve } from "../../src/pi/window-budget.ts";
+import type { WindowBudget } from "../../src/pi/window-service.ts";
 export async function taskSession(
   t: TestContext,
   options: {
@@ -34,6 +36,7 @@ export async function taskSession(
   }
   let tasks!: TaskService;
   const frames: RequestMessages[] = [],
+    budgets: WindowBudget[] = [],
     diagnostics: string[] = [];
   const h = await nativeSession(
     t,
@@ -41,6 +44,13 @@ export async function taskSession(
       (pi) => {
         tasks = registerMemweave(pi, {
           paths,
+          imageCost: (model, image) =>
+            model.provider === "memweave-test"
+              ? 2048
+              : imageReserve(model, image),
+          observeBudget: (budget) => {
+            budgets.push(budget);
+          },
           verifyCapacity:
             options.verifyCapacity ?? (async (model) => model.contextWindow),
           observe: (messages) => {
@@ -65,6 +75,7 @@ export async function taskSession(
       return tasks;
     },
     frames,
+    budgets,
     diagnostics,
   };
 }

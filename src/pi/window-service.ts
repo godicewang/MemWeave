@@ -1,0 +1,356 @@
+import type { Api, Model, ModelThinkingLevel } from "@earendil-works/pi-ai";
+import { getSystemMessageText } from "@earendil-works/pi-ai";
+import type {
+  ExtensionContext,
+  SessionEntry,
+  TurnEndEvent,
+} from "@earendil-works/pi-coding-agent";
+import { Check } from "typebox/value";
+import { isDeepStrictEqual } from "node:util";
+import type { TaskService, TaskSnapshot } from "../task/service.ts";
+import {
+  REF_TYPE,
+  ReferencesSchema,
+  SCOPE_TYPE,
+  scopeOf,
+  sourceAssistant,
+} from "./session-memory.ts";
+import {
+  WINDOW_TYPE,
+  WindowSchema,
+  SetWindowSchema,
+  type WindowMetadata,
+  type SetWindowInput,
+} from "../window/model.ts";
+import { indexEvents, selectWindow } from "../window/select.ts";
+import {
+  allocate,
+  renderMessage,
+  textCost,
+  type BudgetMessage,
+} from "../window/budget.ts";
+import { readGrants } from "../window/read-grant.ts";
+import { imageReserve, outputReserve } from "./window-budget.ts";
+import type { PreparedRule } from "../rule/prepare.ts";
+import type { RequestMessages } from "./request-lifecycle.ts";
+import { readConfigSnapshot } from "../config/read.ts";
+import { withLock } from "../storage/files.ts";
+import { DEFAULT_CONFIG } from "../config/schema.ts";
+import { windowReminder, stateInsert } from "../window/render.ts";
+export function windowMetadata(entries: SessionEntry[]): WindowMetadata | null {
+  const last = entries.findLast(
+    (e) => e.type === "custom" && e.customType === WINDOW_TYPE,
+  );
+  if (!last || last.type !== "custom") return null;
+  if (
+    !Check(WindowSchema, last.data) ||
+    last.data.evict_turns > last.data.recent_turns ||
+    (last.data.stage === "commit") !== (last.data.completed_by !== null)
+  )
+    throw Error("CORRUPT_WINDOW_METADATA");
+  const data = last.data,
+    ids = new Map(
+      entries.filter((e) => e.type === "message").map((e) => [e.id, e]),
+    );
+  if (new Set(data.pending.map((b) => b.batch_id)).size !== data.pending.length)
+    throw Error("CORRUPT_WINDOW_METADATA");
+  for (const id of [
+    data.boundary_entry_id,
+    data.request_anchor_entry_id,
+    data.completed_by,
+    ...data.pending.flatMap((b) => b.candidate_event_ids),
+  ])
+    if (id !== null && !ids.has(id))
+      throw Error("WINDOW_METADATA_NOT_ON_BRANCH");
+  const completed = data.completed_by ? ids.get(data.completed_by) : undefined;
+  if (
+    completed &&
+    (completed.type !== "message" || completed.message.role !== "assistant")
+  )
+    throw Error("CORRUPT_WINDOW_METADATA");
+  return structuredClone(last.data);
+}
+export type WindowBudget = ReturnType<typeof allocate>;
+export interface WindowOptions {
+  imageCost?: (model: Model<Api>, image: unknown) => number;
+  observeBudget?: (budget: WindowBudget) => void;
+  thinkingLevel?: () => ModelThinkingLevel;
+}
+export class WindowService {
+  readonly tasks: TaskService;
+  readonly options: WindowOptions;
+  constructor(tasks: TaskService, options: WindowOptions = {}) {
+    this.tasks = tasks;
+    this.options = options;
+  }
+  captureOutput(model: Model<Api>) {
+    const thinkingLevel = this.options.thinkingLevel?.() ?? "off";
+    return Object.freeze({
+      thinkingLevel,
+      output: outputReserve(model, thinkingLevel),
+    });
+  }
+  async prepare(
+    prepared: PreparedRule,
+    snapshot: TaskSnapshot,
+    ctx: ExtensionContext,
+    model: Model<Api>,
+    output = this.captureOutput(model),
+  ): Promise<RequestMessages> {
+    const entries = snapshot.entries,
+      events = indexEvents(entries),
+      anchor =
+        entries.findLast(
+          (e) => e.type === "message" && e.message.role !== "system",
+        )?.id ?? null;
+    const previous = windowMetadata(entries),
+      selected = selectWindow(
+        events,
+        prepared.frame.config,
+        previous,
+        ctx.sessionManager.getSessionId(),
+        anchor,
+      );
+    // Match raw and native projected identities, including supported context_edit/compaction recovery.
+    const known = new Set<string>();
+    for (const entry of entries)
+      if (entry.type === "message") known.add(JSON.stringify(entry.message));
+    for (const entry of ctx.sessionManager.buildSessionProjection().entries)
+      for (const message of entry.messages) known.add(JSON.stringify(message));
+    for (const message of prepared.messages) {
+      if (message.role === "system") continue;
+      if (!known.has(JSON.stringify(message)))
+        throw Error(
+          "UNSUPPORTED_WINDOW_CONTEXT: incoming message has no native source",
+        );
+      if (
+        message.role === "compactionSummary" &&
+        entries.some((e) => e.type === "compaction") &&
+        events.length
+      )
+        continue;
+      if (
+        message.role !== "user" &&
+        message.role !== "assistant" &&
+        message.role !== "toolResult"
+      )
+        throw Error(
+          "UNSUPPORTED_WINDOW_CONTEXT: native or third-party message needs a verified adapter",
+        );
+    }
+    const labels = new Map<string, { ref: string; task: string }>();
+    for (const entry of entries)
+      if (entry.type === "custom" && entry.customType === REF_TYPE) {
+        if (!Check(ReferencesSchema, entry.data))
+          throw Error("CORRUPT_REFERENCE_METADATA");
+        for (const binding of entry.data.bindings)
+          labels.set(binding.entry_id, {
+            ref: binding.ref,
+            task: entry.data.task_id,
+          });
+      }
+    const grant = readGrants(events, entries),
+      latestUser = selected.events.findLast(
+        (e) => e.messages[0]?.message.role === "user",
+      )?.id;
+    const items: BudgetMessage[] = [];
+    for (const event of selected.events)
+      for (const item of event.messages) {
+        const source = labels.get(item.entryId),
+          read = grant.has(item.entryId),
+          isUser = item.entryId === latestUser;
+        let head = source
+          ? `[${source.task === snapshot.task?.task_id ? source.ref : source.task + ":" + source.ref}]`
+          : "";
+        const message = structuredClone(item.message);
+        if (
+          Array.isArray(message.content) &&
+          message.content.some((p) => p.type === "image") &&
+          !read
+        ) {
+          if (!snapshot.task || !source)
+            throw Error(
+              "ATTACHMENT_TASK_REQUIRED: open a text-only Session to create/resume a Task before image input; this original remains in Session",
+            );
+          const task = snapshot.task;
+          const attachments = await withLock(
+            this.tasks.paths.taskLock(task),
+            () =>
+              this.tasks.reader.attachmentRefs(
+                task,
+                source.task,
+                source.ref,
+                message,
+                ctx,
+              ),
+            ctx.signal,
+          );
+          for (const attachment of attachments)
+            head += `${head ? "\n" : ""}[attachment ${attachment.ref}]`;
+          Object.assign(message, {
+            content: message.content.filter((p) => p.type !== "image"),
+          });
+        }
+        items.push({ message, head, exempt: isUser || read, read });
+      }
+    const pending = selected.metadata.pending;
+    const lastId = pending.at(-1)?.candidate_event_ids.at(-1),
+      lastLabel = lastId ? labels.get(lastId) : undefined;
+    const boundary = lastLabel
+      ? `${lastLabel.task === snapshot.task?.task_id ? "" : lastLabel.task + ":"}${lastLabel.ref}`
+      : "本批边界";
+    const reminder = windowReminder(pending, boundary);
+    const system = prepared.messages.find((m) => m.role === "system");
+    if (!system || system.role !== "system") throw Error("MISSING_SYSTEM");
+    const state = snapshot.state ?? "";
+    if ((this.options.thinkingLevel?.() ?? "off") !== output.thinkingLevel)
+      throw Error(
+        "OUTPUT_BUDGET_UNVERIFIED: thinking level changed during request preparation",
+      );
+    const budget = allocate({
+      limit: prepared.frame.capacity.contextLimit,
+      system:
+        textCost(getSystemMessageText(system)) +
+        textCost(JSON.stringify(system.toolsAdded ?? [])) +
+        64,
+      state: state ? textCost(state) + 64 : 0,
+      output: output.output,
+      reminder: reminder ? textCost(reminder) + 64 : 0,
+      messages: items,
+      imageCost: (image) =>
+        (this.options.imageCost ?? imageReserve)(model, image),
+    });
+    const result = stateInsert(
+      [
+        system,
+        ...items.map((item) =>
+          renderMessage(item.message, item.head, budget.Q, item.exempt),
+        ),
+      ],
+      state,
+      reminder,
+    );
+    ctx.signal?.throwIfAborted();
+    if (!previous || selected.metadata.stage === "reset" || pending.length)
+      await this.tasks.memory.append(ctx, WINDOW_TYPE, selected.metadata);
+    this.options.observeBudget?.(budget);
+    return result;
+  }
+  async complete(event: TurnEndEvent, ctx: ExtensionContext): Promise<void> {
+    if (
+      event.outcome !== "completed" ||
+      ctx.signal?.aborted ||
+      event.message.role !== "assistant"
+    )
+      return;
+    const branch = ctx.sessionManager.getBranch(),
+      before = ctx.sessionManager.getBranch(event.messageEntryId).slice(0, -1),
+      prepared = windowMetadata(before);
+    if (!prepared?.pending.length || prepared.stage !== "prepare") return;
+    const prior = before.findLast(
+      (e) => e.type === "message" && e.message.role !== "system",
+    );
+    if (prior?.id !== prepared.request_anchor_entry_id)
+      throw Error("WINDOW_REQUEST_ANCHOR_CHANGED");
+    const events = indexEvents(branch),
+      finished = events.find((e) => e.id === event.messageEntryId);
+    if (
+      !finished ||
+      finished.messages.length !== event.toolResults.length + 1 ||
+      event.toolResults.length !== event.toolResultEntryIds.length ||
+      !isDeepStrictEqual(
+        finished.messages.slice(1).map((m) => m.entryId),
+        event.toolResultEntryIds,
+      )
+    )
+      throw Error("INCOMPLETE_TOOL_EVENT");
+    let latest = windowMetadata(branch)!;
+    if (latest.completed_by === event.messageEntryId && !latest.pending.length)
+      return;
+    if (
+      !isDeepStrictEqual(latest, prepared) &&
+      latest.completed_by !== event.messageEntryId
+    )
+      throw Error("STALE_WINDOW_BATCH");
+    selectWindow(
+      events,
+      {
+        ...DEFAULT_CONFIG,
+        recent_turns: prepared.recent_turns,
+        evict_turns: prepared.evict_turns,
+      },
+      latest,
+      ctx.sessionManager.getSessionId(),
+      prepared.request_anchor_entry_id,
+    );
+    while (latest.pending.length) {
+      const first = latest.pending[0]!;
+      latest = {
+        ...latest,
+        stage: "commit",
+        boundary_entry_id: first.candidate_event_ids.at(-1)!,
+        pending: latest.pending.slice(1),
+        completed_by: event.messageEntryId,
+      };
+      await this.tasks.memory.append(ctx, WINDOW_TYPE, latest);
+    }
+  }
+  async set(
+    input: SetWindowInput,
+    ctx: ExtensionContext,
+    callId: string,
+  ): Promise<string> {
+    if (!Check(SetWindowSchema, input)) throw Error("INVALID_WINDOW_SETTINGS");
+    await this.tasks.memory.verify(ctx);
+    this.tasks.checkCalls(ctx, callId);
+    const source = sourceAssistant(ctx, callId);
+    if (
+      source.message.role !== "assistant" ||
+      !source.message.content.some(
+        (p) =>
+          p.type === "toolCall" &&
+          p.id === callId &&
+          p.name === "recent_window_set" &&
+          isDeepStrictEqual(p.arguments, input),
+      )
+    )
+      throw Error("OPERATION_INPUT_MISMATCH");
+    const branch = ctx.sessionManager.getBranch(),
+      index = branch.findIndex((e) => e.id === source.id);
+    // One settings call per native assistant makes its durable scope write an unambiguous receipt.
+    for (const entry of branch.slice(index + 1)) {
+      if (entry.type === "message" && entry.message.role !== "toolResult")
+        break;
+      if (entry.type !== "custom" || entry.customType !== SCOPE_TYPE) continue;
+      const scope = scopeOf([entry]);
+      if (
+        scope.overrides.recent_turns === input.turns &&
+        scope.overrides.evict_turns !== undefined &&
+        (input.evict_turns === undefined ||
+          scope.overrides.evict_turns === input.evict_turns)
+      )
+        return this.result(input.turns, scope.overrides.evict_turns);
+    }
+    const scope = this.tasks.scope(ctx),
+      config = await readConfigSnapshot(
+        this.tasks.paths,
+        scope.overrides,
+        ctx.signal,
+      ),
+      B = input.evict_turns ?? config.evict_turns;
+    if (B > input.turns)
+      throw Error("INVALID_WINDOW_SETTINGS: evict_turns must not exceed turns");
+    await this.tasks.memory.append(ctx, SCOPE_TYPE, {
+      ...scope,
+      overrides: {
+        ...scope.overrides,
+        recent_turns: input.turns,
+        evict_turns: B,
+      },
+    });
+    return this.result(input.turns, B);
+  }
+  private result(N: number, B: number) {
+    return `ok; turns=${N}; evict_turns=${B}; effective=next_request`;
+  }
+}

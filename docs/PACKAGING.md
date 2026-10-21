@@ -66,7 +66,7 @@ MemWeave 在 Session 启动/恢复及每次请求前检查 `pi.getSettings()` �
 
 | Pi / 路径 | Package 安装 | Rule/Window/State 组装 | 主动取消与压缩 | Session/共存 | 状态 |
 |---|---|---|---|---|---|
-| v1.3.0 普通主会话 | 本地、npm 归档实际安装、GitHub SSH 固定 commit 安装/更新/禁用/移除已通过；HTTPS 网络失败、npm registry 待测 | 正式配置/Rule 热读取、容量快照和真实 DeepSeek 工具续跑通过；正式 Window/State 待实现 | 主动取消、HTTP 无发送、关闭/重开压缩对照及手动取消已通过 | reload、新 Session、双实例、原生提示信任通过；完整业务恢复/高级共存待测 | 阶段 0–1 与部分分发验收通过，尚非完整产品兼容声明 |
+| v1.3.0 普通主会话 | 本地、npm 归档实际安装、GitHub SSH 固定 commit 安装/更新/禁用/移除已通过；HTTPS 网络失败、npm registry 待测 | 正式 Rule/Task/State/Window、半额 Q 预算、原文与图片回读及真实 DeepSeek 通过 | 主动取消、HTTP 无发送、关闭/重开压缩对照及手动取消已通过 | reload、重启、fork/tree、双实例、原生提示信任和 Window 部分提交恢复通过；最终业务升级/高级共存待阶段 6 | 阶段 0–5 与部分分发验收通过，尚非完整产品兼容声明 |
 | v1.3.0 虚拟路由 / 动态工具 / 第三方上下文变换 | 待测 | 最终模型容量、工具成本和提示覆盖需逐组合检查 | 待测 | 待测 | 不预先宣称支持 |
 | 其他 Pi 版本 | 未验证 | 未验证 | 未验证 | 未验证 | 不宣称支持 |
 

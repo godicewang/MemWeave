@@ -198,6 +198,19 @@ test("image attachments get stable R; only explicit supported-model reads return
     fauxAssistantMessage("listed"),
   ]);
   await h.session.prompt("image source", { images: [image] });
+  assert.ok(
+    h.frames
+      .at(-2)!
+      .every(
+        (m) =>
+          !(
+            "content" in m &&
+            Array.isArray(m.content) &&
+            m.content.some((p) => p.type === "image")
+          ),
+      ),
+  );
+  assert.match(JSON.stringify(h.frames.at(-2)), /attachment R1/);
   assert.ok(readResult(h).items[0].attachments, JSON.stringify(readResult(h)));
   assert.equal(readResult(h).items[0].attachments[0].ref, "R1");
   await h.session.setModel({ ...h.faux.getModel(), input: ["text"] });
@@ -226,6 +239,22 @@ test("image attachments get stable R; only explicit supported-model reads return
     );
   assert.ok(last?.type === "message" && last.message.role === "toolResult");
   assert.deepEqual(last.message.content[1], image);
+  assert.ok(h.budgets.at(-1)!.X >= 2048);
+  h.faux.setResponses([fauxAssistantMessage("later request")]);
+  await h.session.prompt("The earlier image exemption must expire");
+  assert.equal(h.budgets.at(-1)!.X, 0);
+  assert.ok(
+    h.frames
+      .at(-1)!
+      .every(
+        (m) =>
+          !(
+            "content" in m &&
+            Array.isArray(m.content) &&
+            m.content.some((p) => p.type === "image")
+          ),
+      ),
+  );
   assert.deepEqual(h.diagnostics, []);
 });
 

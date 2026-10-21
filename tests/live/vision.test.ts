@@ -10,6 +10,7 @@ import {
   fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
 import { taskSession } from "../fixtures/task-session.ts";
+import { nativeSession } from "../fixtures/native-session.ts";
 import { visionImage } from "../fixtures/vision-image.ts";
 import {
   verifyProviderCapacity,
@@ -81,14 +82,17 @@ async function credential(t: TestContext): Promise<string> {
   assert.ok(value?.type === "api_key" && typeof value.key === "string");
   return value.key;
 }
-async function configure(h: Harness, key: string) {
+async function configure(h: Pick<Harness, "runtime" | "session">, key: string) {
   await h.runtime.setRuntimeApiKey("deepseek", key);
   const model = h.runtime.getModel("deepseek", "deepseek-flash");
   assert.ok(model);
   assert.ok(model.input.includes("image"));
   await h.session.setModel(model);
 }
-function checkAnswer(h: Harness, code: string) {
+function checkAnswer(
+  h: Pick<Harness, "session" | "errors" | "diagnostics">,
+  code: string,
+) {
   const final = h.session.agent.state.messages.at(-1);
   assert.ok(final?.role === "assistant" && final.stopReason === "stop");
   const text = final.content
@@ -114,14 +118,13 @@ test(
     const key = await credential(t),
       fixture = visionImage(),
       wires: Wire[] = [];
-    const h = await taskSession(t, {
-      verifyCapacity,
-      extra: observe(wires, fixture.code),
-    });
+    // Provider capability baseline deliberately has no MemWeave Window: production defaults
+    // replace pictures with R and require an established Task before attachment input.
+    const h = await nativeSession(t, [observe(wires, fixture.code)]);
     await configure(h, key);
     h.session.setActiveToolsByName([]);
     await h.session.prompt(instruction, { images: [fixture.image] });
-    checkAnswer(h, fixture.code);
+    checkAnswer({ ...h, diagnostics: [] }, fixture.code);
     assert.equal(wires.length, 1);
     assert.equal(wires[0]!.images.length, 1);
     assert.equal(wires[0]!.images[0]!.role, "user");
@@ -152,6 +155,12 @@ test(
       fauxAssistantMessage("created"),
     ]);
     await source.session.prompt(
+      "Create the source Task before providing an attachment.",
+    );
+    source.faux.setResponses([
+      fauxAssistantMessage("source stored by reference"),
+    ]);
+    await source.session.prompt(
       "Stored picture source. No textual description is supplied.",
       { images: [fixture.image] },
     );
@@ -173,7 +182,7 @@ test(
     await configure(h, key);
     h.session.setActiveToolsByName(["memory_read"]);
     await h.session.prompt(
-      `First call memory_read with items=[{"ref":"U1","task_id":"${task.task_id}"}]. Then call memory_read explicitly on the attachment R reference it returns (do not guess it). The current Session has never seen the picture. Only after the image has actually been returned, ${instruction}`,
+      `First call memory_read with items=[{"ref":"U2","task_id":"${task.task_id}"}]. Then call memory_read explicitly on the attachment R reference it returns (do not guess it). The current Session has never seen the picture. Only after the image has actually been returned, ${instruction}`,
     );
     assert.ok(wires.length >= 3);
     assert.equal(wires[0]!.images.length, 0);
@@ -204,7 +213,11 @@ test(
     const original = source.manager
       .getEntries()
       .find(
-        (entry) => entry.type === "message" && entry.message.role === "user",
+        (entry) =>
+          entry.type === "message" &&
+          entry.message.role === "user" &&
+          Array.isArray(entry.message.content) &&
+          entry.message.content.some((p) => p.type === "image"),
       );
     assert.ok(
       original?.type === "message" &&
@@ -228,7 +241,7 @@ test(
     );
     checkAnswer(h, fixture.code);
     t.diagnostic(
-      `${wires.length} real DeepSeek inference requests; 4 Faux setup requests; wire image counts ${JSON.stringify(wires.map((wire) => wire.images.length))}; native image bytes preserved; OCR/shapes/colors correct`,
+      `${wires.length} real DeepSeek inference requests; 5 Faux setup requests; wire image counts ${JSON.stringify(wires.map((wire) => wire.images.length))}; native image bytes preserved; OCR/shapes/colors correct`,
     );
   },
 );

@@ -59,7 +59,7 @@ test("native loop: create → evidence → atomic State → next request → dis
   assert.equal(
     h.frames[0]?.filter(
       (m) =>
-        m.role === "user" &&
+        (m.role === "user" || m.role === "custom") &&
         JSON.stringify(m.content).includes("# Symbolic State"),
     ).length,
     0,
@@ -68,12 +68,12 @@ test("native loop: create → evidence → atomic State → next request → dis
     assert.equal(
       frame.filter(
         (m) =>
-          m.role === "user" &&
+          m.role === "custom" &&
           JSON.stringify(m.content).includes("# Symbolic State"),
       ).length,
       1,
     );
-    assert.equal(frame.at(-1)?.role, "user");
+    assert.equal(frame.at(-1)?.role, "custom");
   }
   assert.match(JSON.stringify(h.frames.at(-1)), /F1 User requested/);
   assert.match(JSON.stringify(h.frames[1]), /U1/);
@@ -99,7 +99,7 @@ test("native loop: create → evidence → atomic State → next request → dis
       .at(-1)
       ?.filter(
         (m) =>
-          m.role === "user" &&
+          m.role === "custom" &&
           JSON.stringify(m.content).includes("# Symbolic State"),
       ).length,
     1,
@@ -534,5 +534,9 @@ test("actual Session disk failure taints metadata; extension reload cannot legit
   const calls = h.faux.state.callCount;
   await h.session.prompt("dirty memory cannot be reused");
   assert.equal(h.faux.state.callCount, calls);
-  assert.ok(h.diagnostics.some((s) => /SESSION_STATE_DIVERGED|CORRUPT_REFERENCE_SOURCE/.test(s)));
+  assert.ok(
+    h.diagnostics.some((s) =>
+      /SESSION_STATE_DIVERGED|CORRUPT_REFERENCE_SOURCE/.test(s),
+    ),
+  );
 });
