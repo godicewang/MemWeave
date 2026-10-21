@@ -67,6 +67,7 @@ test("npm 归档只含运行资源，解包后由 Pi 加载同一入口", async 
   const sources = (await readdir(join(root, "src"), { recursive: true })).filter(path => path.endsWith(".ts")).map(path => `src/${path}`);
   assert.deepEqual(paths, [
     "README.md",
+    "USER_GUIDE.md",
     "package.json",
     "resources/rule.md",
     ...sources,

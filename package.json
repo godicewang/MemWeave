@@ -2,7 +2,7 @@
   "name": "memweave",
   "version": "0.0.0",
   "private": true,
-  "description": "Long-task memory extension for native Pi (development scaffold)",
+  "description": "Long-task memory extension for native Pi",
   "type": "module",
   "engines": {
     "node": ">=22.19.0"
@@ -18,7 +18,8 @@
   "files": [
     "src/**/*.ts",
     "resources/rule.md",
-    "README.md"
+    "README.md",
+    "USER_GUIDE.md"
   ],
   "scripts": {
     "resources:sync": "node scripts/sync-rule.mjs",

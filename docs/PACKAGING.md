@@ -15,19 +15,17 @@
 
 ## Package 入口与分发
 
-使用显式 manifest，优先让 Pi 直接加载 TypeScript 源入口，避免 Git 安装依赖开发编译步骤。示意如下，正式包名和版本在发布前确定，当前尚无可安装产品：
+使用显式 manifest，让 Pi 直接加载 TypeScript 源入口，避免 Git 安装依赖开发编译步骤。示意如下，正式包名和版本在发布前确定；当前 Git 开发快照及本地归档可安装，尚未公开发布 npm 产品：
 
 ```json
 {
   "name": "memweave",
   "keywords": ["pi-package"],
   "pi": { "extensions": ["./src/extension/index.ts"] },
-  "files": ["src/", "resources/", "README.md"],
+  "files": ["src/**/*.ts", "resources/rule.md", "README.md", "USER_GUIDE.md"],
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
-    "@earendil-works/pi-agent-core": "*",
     "@earendil-works/pi-ai": "*",
-    "@earendil-works/pi-tui": "*",
     "typebox": "*"
   }
 }
@@ -66,8 +64,11 @@ MemWeave 在 Session 启动/恢复及每次请求前检查 `pi.getSettings()` �
 
 | Pi / 路径 | Package 安装 | Rule/Window/State 组装 | 主动取消与压缩 | Session/共存 | 状态 |
 |---|---|---|---|---|---|
-| v1.3.0 普通主会话 | 本地、npm 归档实际安装、GitHub SSH 固定 commit 安装/更新/禁用/移除已通过；HTTPS 网络失败、npm registry 待测 | 正式 Rule/Task/State/Window、半额 Q 预算、原文与图片回读及真实 DeepSeek 通过 | 主动取消、HTTP 无发送、关闭/重开压缩对照及手动取消已通过 | reload、重启、fork/tree、双实例、原生提示信任和 Window 部分提交恢复通过；最终业务升级/高级共存待阶段 6 | 阶段 0–5 与部分分发验收通过，尚非完整产品兼容声明 |
-| v1.3.0 虚拟路由 / 动态工具 / 第三方上下文变换 | 待测 | 最终模型容量、工具成本和提示覆盖需逐组合检查 | 待测 | 待测 | 不预先宣称支持 |
+| v1.3.0 普通主会话＋官方 DeepSeek Flash | 本地、npm 归档、临时 registry 升级、GitHub SSH 固定 commit 安装/更新/禁用/移除通过；HTTPS 网络失败，npm 公网未发布 | 正式 Rule/Task/State/Window、半额 Q、原文/图片回读及真实模型通过 | 主动取消、HTTP 无发送、关闭/重开压缩对照及手动取消通过 | 独立进程共享 Task、重启、fork/tree、reload、旧快照数据升级、部分提交恢复与安装代码业务闭环通过 | 阶段 0–6 已验收；限制见 PHASE_6_VALIDATION.md |
+| v1.3.0 受控动态描述/隐藏声明 | 同一宿主 | 实际工具描述变化进入后续 R 预算，隐藏声明不发送，Rule 保留 | 普通保护保留 | prepareLoadout 受控组合通过 | 不外推任意 MCP/codemode |
+| v1.3.0 强制整段 system 覆盖 | 同一宿主 | Pi 的后置投影会覆盖 Rule | 不宣称能自动阻止这类覆盖 | 已保留不兼容反例 | 不兼容 |
+| v1.3.0 虚拟模型路由 | 同一宿主 | 受控测试容量无法核验 | 主动取消，物理推理为零 | 只验证拒绝，未验证可用路由 | 不支持 |
+| v1.3.0 自动整理历史/任意第三方上下文变换 | 未逐组合验收 | 未验证 | 未验证 | 未验证 | 不宣称支持 |
 | 其他 Pi 版本 | 未验证 | 未验证 | 未验证 | 未验证 | 不宣称支持 |
 
 编译通过不等于版本兼容。每个宣称支持的版本必须通过 smoke/integration tests。
@@ -76,10 +77,14 @@ MemWeave 在 Session 启动/恢复及每次请求前检查 `pi.getSettings()` �
 
 阶段 0 的历史证据见 `PHASE_0_VALIDATION.md`；阶段 1 已通过累计 45 项常规检查及 2 项独立真实 DeepSeek 测试，证据见 `PHASE_1_VALIDATION.md`。SDK 使用根导出的公开重放函数，避免 v1.3.0 扩展加载器对子路径的别名解析限制；npm 归档与当前代码 Git commit 均已重新加载验证。生产 peer 仅声明实际导入的 coding-agent、pi-ai 和 typebox，不捆绑另一份 SDK。
 
-阶段 1 的生产容量适配每次逻辑请求读取 OpenAI 兼容 `/models` 的精确 `context_window`，已验收 DeepSeek Flash；不支持的 API、缺失/不唯一容量或元数据失败均取消。HTTP 兼容形状不代表其他供应商已验收。运行配置/模板缺失时诊断，不自动创建或覆盖用户文件；首次试用准备方式见 README。
+阶段 1 的生产容量适配每次逻辑请求读取 OpenAI 兼容 `/models` 的精确 `context_window`，已验收 DeepSeek Flash；不支持的 API、缺失/不唯一容量或元数据失败均取消。HTTP 兼容形状不代表其他供应商已验收。运行配置/模板缺失时诊断，不自动创建或覆盖用户文件；首次试用准备方式见随包提供的 USER_GUIDE.md。
 
 2026-10-21 又完成 2 项独立分发测试：通过真实 GitHub SSH 验证固定 commit 安装与 ref 更新，另通过 Pi 原生 PackageManager 实际安装 npm 本地归档，并检查禁用/移除、外置文件与宿主 peer。首次 HTTPS 克隆因 HTTP/2 网络错误失败；该路径未通过。详情和复现入口 `npm run test:distribution` 见 `PHASE_6_READINESS.md`。
 
-验证使用系统临时目录并清理，私有配置保存在仓库外；本轮分发检查只使用临时认证/运行数据哨兵，不调用模型。未执行正式 npm registry 或 Git release 发布、完整业务升级/恢复。旧 SDK 应用与早期临时测试不能直接替代当前 Package 证据，加载测试、替身/本机 HTTP 和真实模型结果分别记录。
+上述是早期安装证据。2026-10-22 阶段 6 已补齐安装代码业务恢复、旧快照跨版本升级、独立进程与临时 registry；最终 126 项常规、10 项真实 DeepSeek（32 次推理）、3 项独立分发通过，见 PHASE_6_VALIDATION.md。HTTPS 复测低速超时，未改全局 Git 网络设置。
+
+Pi v1.3.0 的固定来源升级须区分：Git 更改声明 ref 后可通过原生 update 对齐；精确 npm 版本会被 update 跳过，需要显式 install 新版本，不能只改设置后宣称已升级。两种原生行为都有测试，用户操作见 USER_GUIDE.md。
+
+验证使用系统临时目录并清理，私有配置留在仓库外。本机 HTTP/临时 registry 与真实 DeepSeek 分开记录；未执行 npm 公网或 Git release 发布。开发和发布准备验收完成不等于已公开发行；当前 private/0.0.0 保留，正式版本、包名和许可等发布事项另行确定。旧 SDK 应用与早期测试不能代替当前 Package 证据。
 
 依据：[v1.3.0 Packages](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/docs/packages.md)、[Extensions](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/docs/extensions.md)、[扩展类型](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/extensions/types.ts)、[runner](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/extensions/runner.ts)、[settings](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/settings-manager.ts)、[压缩/恢复](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/agent-session.ts)。

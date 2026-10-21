@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 import { DefaultPackageManager, DefaultResourceLoader, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_CONFIG } from "../../src/config/schema.ts";
 import { memoryPaths } from "../../src/storage/paths.ts";
+import { releaseFixture, releaseWorker } from "../fixtures/release.ts";
 
 const run = promisify(execFile);
 const repository = fileURLToPath(new URL("../../", import.meta.url));
@@ -89,13 +90,22 @@ test("远程 Git：固定 commit 安装/更新、禁用/reload、卸载，保留
   assert.equal((await run("git", ["rev-parse", "HEAD"], { cwd: installed })).stdout.trim(), targetRef);
   await h.assertLoaded(installed);
   await h.assertLoaded(installed);
+  const business = await releaseFixture(t);
+  const created = await releaseWorker({ ...business.base, artifact: installed, action: "create", label: "git-installed" });
+  const recovered = await releaseWorker({ ...business.base, artifact: installed, sessionFile: created.sessionFile, taskId: created.taskId, action: "recover", label: "git-recovered" });
+  assert.equal(recovered.version, 3);
+  assert.equal(recovered.window, true);
+  const task = JSON.parse(await readFile(business.paths.index, "utf8"))[0];
+  const stateBeforeRemoval = await readFile(business.paths.state(task)), sessionBeforeRemoval = await readFile(created.sessionFile);
   await h.disableAndReload(source(targetRef), installed);
   for (const peer of hostPeers) await assert.rejects(access(join(installed, "node_modules", peer)), { code: "ENOENT" });
   assert.equal(await h.manager.removeAndPersist(source(targetRef), { local: true }), true);
   await h.settings.flush();
   await h.assertLoaded(installed, 0);
   await assert.rejects(access(installed), { code: "ENOENT" });
-  t.diagnostic(`Remote Git ${transport} install ${initialRef} -> ${targetRef}; no model requests; only declared installation paths loaded`);
+  assert.ok(stateBeforeRemoval.equals(await readFile(business.paths.state(task))));
+  assert.ok(sessionBeforeRemoval.equals(await readFile(created.sessionFile)));
+  t.diagnostic(`Remote Git ${transport} install ${initialRef} -> ${targetRef}; installed Runtime recovery in independent Pi processes; 7 local HTTP requests, no real inference`);
 });
 
 test("npm 本地归档：经原生 PackageManager 安装/禁用/卸载，不自动安装宿主 peer", async t => {

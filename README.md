@@ -2,7 +2,11 @@
 
 本仓库用于构建运行在原生 Pi 内的长程任务记忆扩展，以 Pi Package 经 npm 或 Git 分发。用户继续使用 `pi`，复用原生循环、界面与 Session。首个兼容验收目标为 Pi v1.3.0，宿主版本由用户安装决定。
 
-## 开始前
+## 安装与使用
+
+普通用户请阅读随包提供的[使用指南](USER_GUIDE.md)：安装开发快照、配置模型与压缩设置、创建 Task、恢复、升级和卸载。当前验收宿主为 Pi v1.3.0，真实模型为官方 DeepSeek Flash；尚未向 npm 公网发布。
+
+## 开发前
 
 1. 阅读 `AGENTS.md`。
 2. 阅读 `docs/INDEX.md` 和当前任务对应的 `docs/specs/`。
@@ -30,13 +34,13 @@ Rule 热读取、Window 预算和 State 注入统一使用 `context_with_system`
 
 ## 当前进度
 
-阶段 0–5 已完成。当前入口提供四个 Task 工具、五个 State 工具、`memory_read` 与 `recent_window_set`，并统一组装 Rule、Window、当前 State 和临时提醒。Task 可跨 Session 恢复，U/A/T/R 编号从 Pi 元数据继续；批量提交、归档、两类窗口恢复、原文回读、重试和并发均有测试。详情见[阶段 5 验收记录](docs/PHASE_5_VALIDATION.md)及此前各阶段记录。
+阶段 0–6 已完成。当前入口提供四个 Task 工具、五个 State 工具、`memory_read` 与 `recent_window_set`，并统一组装 Rule、Window、当前 State 和临时提醒。Task 可跨 Session 恢复，U/A/T/R 编号从 Pi 元数据继续；批量提交、归档、两类窗口恢复、原文回读、重试和并发均有测试。详情见[阶段 6 验收记录](docs/PHASE_6_VALIDATION.md)及此前各阶段记录。
 
 启用开发入口前，须明确按 Pi 原生方式关闭有效自动压缩，优先受信任项目的 `.pi/settings.json`。扩展检查 Pi v1.3.0 与压缩设置；准备失败先取消再报告，卸载不恢复设置，具体范围见 `docs/PACKAGING.md`。
 
-State 窗口只计活动 F/D，Goal 常驻；默认到 2000 时提醒管理最早 200 个、最多保留 20 个。提醒期间正常载入新增认知，允许临时超量；只在可靠提交后移除未保留候选。下一步为阶段 6 的完整恢复、兼容与发布验收；旧 SDK 应用保留在 Git 历史中。
+State 窗口只计活动 F/D，Goal 常驻；默认到 2000 时提醒管理最早 200 个、最多保留 20 个。提醒期间正常载入新增认知，允许临时超量；只在可靠提交后移除未保留候选。下一步可准备正式版本与发布，旧 SDK 应用保留在 Git 历史中。
 
-阶段 6 的部分安装验收也已完成：GitHub SSH 固定 commit 安装/更新、npm 本地归档安装、禁用/reload 和卸载通过；外置用户文件与共享压缩设置保留。HTTPS 克隆遇到网络错误，npm registry 和完整业务验收尚未完成，见[安装验收与前置状态](docs/PHASE_6_READINESS.md)。
+最终验收通过 126 项常规测试、10 项真实 DeepSeek 测试（32 次推理）和 3 项独立分发测试。覆盖独立进程并发、旧快照数据升级、安装代码的恢复与卸载保留。npm registry 使用临时本机服务，未向 npm 公网发布；GitHub SSH 通过，HTTPS 复测低速超时。强制 system 覆盖已验证不兼容，虚拟路由仅验证拒绝；受控动态工具组合通过，其他组合不外推。完整边界见[发布与兼容矩阵](docs/PACKAGING.md)。
 
 ## 运行文件
 
@@ -127,6 +131,6 @@ npm run test:live
 
 `build` 生成默认 Rule 资源并做类型检查；Pi 直接加载 TypeScript，不生成第二套应用或捆绑宿主。`resources:check` 检查生成资源是否过期；`test:unit` 与 `test:integration` 可分别执行。常规测试使用替身与本机 HTTP，在系统临时目录中创建 Session、安装、打包和解包，成功/失败时均清理，不调用真实模型 API。`test:live` 使用仓库外既有 DeepSeek 私有配置，详情见验收记录。
 
-`test:distribution` 默认使用既有 GitHub SSH 通道，Git 候选取本地 `origin/main`；可用 `MEMWEAVE_DISTRIBUTION_REF=<完整commit>` 指定已推送候选，用 `MEMWEAVE_DISTRIBUTION_TRANSPORT=https` 复测 HTTPS。该组测试独立于常规检查，npm 路径验证的是本地归档实际安装，尚未验证 registry 发布。
+`test:distribution` 默认使用既有 GitHub SSH 通道，Git 候选取本地 `origin/main`；可用 `MEMWEAVE_DISTRIBUTION_REF=<完整commit>` 指定已推送候选，用 `MEMWEAVE_DISTRIBUTION_TRANSPORT=https` 复测 HTTPS。该组测试独立于常规检查，npm 路径验证本地归档和临时 registry 的真实安装/升级，不代表 npm 公网发布已验收。
 
-当前版本为 `0.0.0`，`private: true` 用于防止开发骨架被误发布到 npm；正式包名、版本与发布验收在交付前确定。不要手改 `resources/rule.md`，应维护规范中的两份一致模板后执行 `npm run resources:sync`。密钥继续使用仓库外的私有配置。
+当前版本为 `0.0.0`，`private: true` 防止开发快照被误发布到 npm；正式包名、版本与许可等事项在公开发布前确定。不要手改 `resources/rule.md`，应维护规范中的两份一致模板后执行 `npm run resources:sync`。密钥继续使用仓库外的私有配置。

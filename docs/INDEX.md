@@ -25,7 +25,9 @@
 | `VISION_API_VALIDATION.md` | DeepSeek Flash 真实 PNG 识别、盲读 R 附件、出站图像核验及 OCR 失败记录 |
 | `PHASE_5_PROPOSAL.md` | 已批准的 Window 批次元数据、积压同次处理和恢复边界 |
 | `PHASE_5_VALIDATION.md` | 完整事件、唯一 Q、两阶段提交、重启／分支／失败、真实 DeepSeek 与视觉回归 |
-| `PHASE_6_READINESS.md` | 阶段 6 已完成的部分安装验收、失败证据与尚缺前置；不是整体完成声明 |
+| `PHASE_6_READINESS.md` | 阶段 6 早期部分安装验收的历史记录；当前状态由最终验收记录取代 |
+| `PHASE_6_VALIDATION.md` | 阶段 6 完整恢复、多进程、安装升级、真实 DeepSeek 与兼容边界 |
+| `../USER_GUIDE.md` | 随 Package 提供的安装配置、使用、恢复、升级卸载与故障说明 |
 
 2026-10-20 确认：以原生 Pi 扩展和 Pi Package 交付，首个宿主验收目标 v1.3.0。Rule 渲染与 Window/State 在同一个 `context_with_system` 请求处理中组装；失败时主动取消。用户接受共享压缩设置、压缩恢复记录、宿主版本由用户决定及扩展共存/缓存限制，具体范围见 `PACKAGING.md`。这次接入调整不改变 Task/State 工具和持久化协议，也不改变 Window 计数、Q 公式与固定 Rule 正文。
 
