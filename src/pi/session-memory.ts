@@ -9,9 +9,11 @@ import type {
   SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 import { CONFIG_SCHEMA } from "../config/schema.ts";
+import { StateBatchSchema } from "../state/window.ts";
 import { TaskIdSchema } from "../task/model.ts";
 export const SCOPE_TYPE = "memweave.scope.v1",
   REF_TYPE = "memweave.references.v1";
+export const STATE_REQUEST_TYPE = "memweave.state.request.v1";
 export const ScopeSchema = Type.Object(
   {
     task_id: Type.Union([TaskIdSchema, Type.Null()]),
@@ -73,7 +75,26 @@ interface CachedSession {
 /** Append-only native files are read from their last verified byte offset. Replacement/truncation reloads strictly. */
 export class SessionFiles {
   readonly cache = new Map<string, CachedSession>();
+  private readonly readers = new Map<string, Promise<void>>();
   async readView(file: string, sessionId: string): Promise<CachedSession> {
+    const previous = this.readers.get(file);
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.readers.set(file, current);
+    await previous;
+    try {
+      return await this.readSerialized(file, sessionId);
+    } finally {
+      release();
+      if (this.readers.get(file) === current) this.readers.delete(file);
+    }
+  }
+  private async readSerialized(
+    file: string,
+    sessionId: string,
+  ): Promise<CachedSession> {
     let info;
     try {
       info = await stat(file);
@@ -150,7 +171,9 @@ export class SessionFiles {
         view.byId.has(e.id) ||
         stagedIds.has(e.id) ||
         typeof e.timestamp !== "string" ||
-        (e.parentId !== null && (typeof e.parentId !== "string" || (!view.byId.has(e.parentId) && !stagedIds.has(e.parentId))))
+        (e.parentId !== null &&
+          (typeof e.parentId !== "string" ||
+            (!view.byId.has(e.parentId) && !stagedIds.has(e.parentId))))
       )
         throw Error(`CORRUPT_REFERENCE_SOURCE: ${sessionId}`);
       if (
@@ -193,7 +216,9 @@ export class SessionMemory {
       .filter(
         (e) =>
           e.type === "custom" &&
-          (e.customType === SCOPE_TYPE || e.customType === REF_TYPE),
+          (e.customType === SCOPE_TYPE ||
+            e.customType === REF_TYPE ||
+            e.customType === STATE_REQUEST_TYPE),
       );
     if (!own.length) return;
     const file = ctx.sessionManager.getSessionFile();
@@ -218,7 +243,8 @@ export class SessionMemory {
   ): Promise<void> {
     if (
       (kind === SCOPE_TYPE && !Check(ScopeSchema, data)) ||
-      (kind === REF_TYPE && !Check(ReferencesSchema, data))
+      (kind === REF_TYPE && !Check(ReferencesSchema, data)) ||
+      (kind === STATE_REQUEST_TYPE && !Check(StateBatchSchema, data))
     )
       throw Error("INVALID_SESSION_METADATA");
     await this.verify(ctx);

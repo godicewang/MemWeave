@@ -3,6 +3,10 @@ import { Check } from "typebox/value";
 import {
   AppendSchema,
   UpdateGoalSchema,
+  ModifyFactSchema,
+  RemainSchema,
+  type ModifyFactInput,
+  activeEntries,
   type UpdateGoalInput,
   reduceState,
   renderState,
@@ -10,6 +14,7 @@ import {
   type StateEvent,
   type StateItem,
 } from "./model.ts";
+import { StateBatchSchema, stateBatchId, type StateBatch } from "./window.ts";
 import { atomicWrite, readOptional } from "../storage/files.ts";
 import { now, stableId } from "../storage/identity.ts";
 import type { MemoryPaths, TaskLocation } from "../storage/paths.ts";
@@ -104,13 +109,9 @@ export class StateStore {
     }
     if (found.some(Boolean))
       throw Error("CORRUPT_STATE: partially committed batch");
-    const evidence = new Set([
-      ...refs,
-      ...state.facts.map((e) => e.id),
-      ...state.decisions.map((e) => e.id),
-    ]);
-    let f = state.facts.length,
-      d = state.decisions.length;
+    const evidence = new Set([...refs, ...state.entries.keys()]);
+    let f = state.factCount,
+      d = state.decisionCount;
     const events: StateEvent[] = [];
     for (const [i, item] of items.entries()) {
       if ([...item.content].length > maxChars)
@@ -137,19 +138,152 @@ export class StateStore {
     );
     return result;
   }
-  async updateGoal(task: TaskLocation, input: UpdateGoalInput, operation: string, maxChars: number, refs: Set<string>): Promise<State> {
-    if(!Check(UpdateGoalSchema,input))throw Error("INVALID_UPDATE_GOAL");
-    const state=await this.read(task),previous=state.events.find(e=>e.op_id===operation);
-    if(previous){
-      if(previous.op!=="update_goal"||previous.goal!==input.goal||!isDeepStrictEqual(previous.evidence,input.evidence))throw Error("OPERATION_INPUT_MISMATCH");
+  async updateGoal(
+    task: TaskLocation,
+    input: UpdateGoalInput,
+    operation: string,
+    maxChars: number,
+    refs: Set<string>,
+  ): Promise<State> {
+    if (!Check(UpdateGoalSchema, input)) throw Error("INVALID_UPDATE_GOAL");
+    const state = await this.read(task),
+      previous = state.events.find((e) => e.op_id === operation);
+    if (previous) {
+      if (
+        previous.op !== "update_goal" ||
+        previous.goal !== input.goal ||
+        !isDeepStrictEqual(previous.evidence, input.evidence)
+      )
+        throw Error("OPERATION_INPUT_MISMATCH");
       return state;
     }
-    if([...input.goal].length>maxChars)throw Error("STATE_CONTENT_TOO_LONG");
-    const known=new Set([...refs,...state.facts.map(e=>e.id),...state.decisions.map(e=>e.id)]);
-    for(const ref of Object.keys(input.evidence))if(!known.has(ref))throw Error(`INVALID_EVIDENCE: ${ref}`);
-    const event:StateEvent={op_id:operation,op:"update_goal",time:now(),goal:input.goal,evidence:input.evidence};
-    const result=reduceState([...state.events,event]),bytes=(await readOptional(this.paths.state(task)))!;
-    await this.commit(task,bytes+JSON.stringify(event)+"\n");return result;
+    if ([...input.goal].length > maxChars)
+      throw Error("STATE_CONTENT_TOO_LONG");
+    const known = new Set([...refs, ...state.entries.keys()]);
+    for (const ref of Object.keys(input.evidence))
+      if (!known.has(ref)) throw Error(`INVALID_EVIDENCE: ${ref}`);
+    const event: StateEvent = {
+      op_id: operation,
+      op: "update_goal",
+      time: now(),
+      goal: input.goal,
+      evidence: input.evidence,
+    };
+    const result = reduceState([...state.events, event]),
+      bytes = (await readOptional(this.paths.state(task)))!;
+    await this.commit(task, bytes + JSON.stringify(event) + "\n");
+    return result;
+  }
+  async modifyFact(
+    task: TaskLocation,
+    input: ModifyFactInput,
+    operation: string,
+    maxChars: number,
+    refs: Set<string>,
+  ): Promise<State> {
+    if (!Check(ModifyFactSchema, input)) throw Error("INVALID_MODIFY_FACT");
+    const state = await this.read(task),
+      previous = state.events.find((e) => e.op_id === operation);
+    if (previous) {
+      if (
+        previous.op !== "modify_fact" ||
+        !isDeepStrictEqual(
+          [...previous.archive].sort(),
+          [...input.archive].sort(),
+        ) ||
+        !isDeepStrictEqual(previous.append_fact, input.append_fact)
+      )
+        throw Error("OPERATION_INPUT_MISMATCH");
+      return state;
+    }
+    for (const id of input.archive) {
+      const entry = state.entries.get(id);
+      if (!entry) throw Error(`UNKNOWN_STATE_ID: ${id}`);
+      if (entry.archived) throw Error(`ALREADY_ARCHIVED: ${id}`);
+    }
+    if ([...input.append_fact.content].length > maxChars)
+      throw Error("STATE_CONTENT_TOO_LONG");
+    const known = new Set([...refs, ...state.entries.keys()]);
+    for (const ref of Object.keys(input.append_fact.evidence))
+      if (!known.has(ref)) throw Error(`INVALID_EVIDENCE: ${ref}`);
+    const event: StateEvent = {
+      op_id: operation,
+      op: "modify_fact",
+      time: now(),
+      archive: input.archive,
+      append_fact: input.append_fact,
+    };
+    const result = reduceState([...state.events, event]),
+      bytes = (await readOptional(this.paths.state(task)))!;
+    await this.commit(task, bytes + JSON.stringify(event) + "\n");
+    return result;
+  }
+  async remain(
+    task: TaskLocation,
+    batch: StateBatch,
+    eventIds: string[],
+    operation: string,
+  ): Promise<State> {
+    if (
+      !Check(RemainSchema, { event_ids: eventIds }) ||
+      !Check(StateBatchSchema, batch) ||
+      batch.task_id !== task.task_id
+    )
+      throw Error("INVALID_STATE_REMAIN");
+    const state = await this.read(task),
+      selected = new Set(eventIds);
+    const previous = state.events.find((e) => e.op_id === operation);
+    if (
+      previous &&
+      (previous.op !== "slide_window" || previous.batch_id !== batch.batch_id)
+    )
+      throw Error("OPERATION_INPUT_MISMATCH");
+    const committed = state.events.find(
+      (e) => e.op === "slide_window" && e.batch_id === batch.batch_id,
+    );
+    if (committed?.op === "slide_window") {
+      if (
+        !isDeepStrictEqual(
+          [...committed.retained_ids].sort(),
+          [...eventIds].sort(),
+        )
+      )
+        throw Error(
+          "STATE_BATCH_ALREADY_COMMITTED: different retention decision; refresh State",
+        );
+      return state;
+    }
+    if (eventIds.length > batch.keep_limit)
+      throw Error("STATE_KEEP_LIMIT_EXCEEDED");
+    if (eventIds.some((id) => !batch.candidate_ids.includes(id)))
+      throw Error("INVALID_STATE_CANDIDATE");
+    const candidates = activeEntries(state).slice(
+      0,
+      batch.candidate_ids.length,
+    );
+    if (
+      !isDeepStrictEqual(
+        candidates.map((e) => e.id),
+        batch.candidate_ids,
+      ) ||
+      candidates[0]?.position !== batch.evicted_range.from ||
+      candidates.at(-1)?.position !== batch.evicted_range.to ||
+      stateBatchId(task.task_id, state, batch.candidate_ids) !== batch.batch_id
+    )
+      throw Error("STALE_STATE_BATCH: candidates changed; refresh State");
+    const event: StateEvent = {
+      op_id: operation,
+      op: "slide_window",
+      time: now(),
+      batch_id: batch.batch_id,
+      evicted_range: batch.evicted_range,
+      retained_ids: batch.candidate_ids.filter((id) => selected.has(id)),
+      status: "committed",
+    };
+    const result = reduceState([...state.events, event]),
+      bytes = (await readOptional(this.paths.state(task)))!;
+    await this.commit(task, bytes + JSON.stringify(event) + "\n");
+    return result;
   }
   async writeView(task: TaskLocation, state: State): Promise<string> {
     const text = renderState(task.task_id, state);

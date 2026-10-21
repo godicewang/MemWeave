@@ -5,6 +5,9 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { isDeepStrictEqual } from "node:util";
 import { Check } from "typebox/value";
+import type { MemoryConfig } from "../config/schema.ts";
+import { prepareStateBatch, renderStateReminder } from "../state/window.ts";
+import { requestStateBatch } from "../pi/state-batch.ts";
 import { readConfigSnapshot } from "../config/read.ts";
 import {
   SessionMemory,
@@ -12,6 +15,7 @@ import {
   sourceAssistant,
   workspaceKey,
   SCOPE_TYPE,
+  STATE_REQUEST_TYPE,
 } from "../pi/session-memory.ts";
 import {
   messageOwners,
@@ -20,7 +24,15 @@ import {
 } from "../memory/references.ts";
 import { StateStore } from "../state/store.ts";
 import type { StateItem } from "../state/model.ts";
-import { AppendSchema, renderState, UpdateGoalSchema, type UpdateGoalInput } from "../state/model.ts";
+import {
+  AppendSchema,
+  renderState,
+  UpdateGoalSchema,
+  type UpdateGoalInput,
+  ModifyFactSchema,
+  RemainSchema,
+  type ModifyFactInput,
+} from "../state/model.ts";
 import { withLock } from "../storage/files.ts";
 import { now, stableId } from "../storage/identity.ts";
 import type { MemoryPaths } from "../storage/paths.ts";
@@ -110,9 +122,28 @@ export class TaskService {
   ): Promise<Task> {
     await this.state.writeView(task, state);
     let metadata;
-    try { metadata = await this.goalMetadata.current(task,state); }
-    catch { throw Error(`PARTIAL_COMMIT: ${task.task_id} State v${state.version} committed; Goal discovery metadata source failed`); }
-    const updated = { ...task, ...(metadata ? {summary:metadata.summary,keywords:metadata.keywords,project_name:metadata.project_name,updated_at:Date.parse(task.updated_at)<Date.parse(metadata.time)?metadata.time:task.updated_at} : {}), state_version: state.version };
+    try {
+      metadata = await this.goalMetadata.current(task, state);
+    } catch {
+      throw Error(
+        `PARTIAL_COMMIT: ${task.task_id} State v${state.version} committed; Goal discovery metadata source failed`,
+      );
+    }
+    const updated = {
+      ...task,
+      ...(metadata
+        ? {
+            summary: metadata.summary,
+            keywords: metadata.keywords,
+            project_name: metadata.project_name,
+            updated_at:
+              Date.parse(task.updated_at) < Date.parse(metadata.time)
+                ? metadata.time
+                : task.updated_at,
+          }
+        : {}),
+      state_version: state.version,
+    };
     try {
       await this.index.put(updated);
     } catch {
@@ -127,7 +158,17 @@ export class TaskService {
     await this.memory.verify(ctx);
     this.checkCalls(ctx, callId);
     const assistant = sourceAssistant(ctx, callId);
-    if(assistant.message.role!=="assistant"||!assistant.message.content.some(p=>p.type==="toolCall"&&p.id===callId&&p.name==="task_create"&&isDeepStrictEqual(p.arguments,input)))throw Error("OPERATION_INPUT_MISMATCH");
+    if (
+      assistant.message.role !== "assistant" ||
+      !assistant.message.content.some(
+        (p) =>
+          p.type === "toolCall" &&
+          p.id === callId &&
+          p.name === "task_create" &&
+          isDeepStrictEqual(p.arguments, input),
+      )
+    )
+      throw Error("OPERATION_INPUT_MISMATCH");
     const taskId = `task_${stableId(ctx.sessionManager.getSessionId(), assistant.id, callId).slice(0, 32)}`;
     const location = { task_id: taskId, workspace: workspaceKey(ctx.cwd) };
     return withLock(
@@ -166,8 +207,12 @@ export class TaskService {
             updated_at: now(),
             sessions: [],
           };
-        const initialGoal=state.events[0];
-        if(initialGoal?.op!=="update_goal"||initialGoal.goal!==input.goal)throw Error("OPERATION_INPUT_MISMATCH");
+        const initialGoal = state.events[0];
+        if (
+          initialGoal?.op !== "update_goal" ||
+          initialGoal.goal !== input.goal
+        )
+          throw Error("OPERATION_INPUT_MISMATCH");
         try {
           task = await this.register(task, ctx);
           task = await this.derivatives(task, state);
@@ -239,20 +284,114 @@ export class TaskService {
       ctx.signal,
     );
   }
-  async updateGoal(input:UpdateGoalInput,ctx:ExtensionContext,callId:string){
-    if(!Check(UpdateGoalSchema,input))throw Error("INVALID_UPDATE_GOAL");
-    await this.memory.verify(ctx);this.checkCalls(ctx,callId);const scope=this.scope(ctx);if(!scope.task_id)throw Error("NO_CURRENT_TASK");
-    const initial=await this.index.get(scope.task_id);
-    return withLock(this.paths.taskLock(initial),async()=>{
-      const task=await this.register(await this.index.get(initial.task_id),ctx),refs=await synchronizeReferences(task,ctx,this.memory);
-      const config=await readConfigSnapshot(this.paths,scope.overrides,ctx.signal);
-      const state=await this.state.updateGoal(task,input,this.operation(ctx,callId,task.task_id),config.state_event_max_chars,new Set(refs.keys()));
-      await this.derivatives({...task,updated_at:now()},state);return `State updated: v${state.version}`;
-    },ctx.signal);
+  async updateGoal(
+    input: UpdateGoalInput,
+    ctx: ExtensionContext,
+    callId: string,
+  ) {
+    if (!Check(UpdateGoalSchema, input)) throw Error("INVALID_UPDATE_GOAL");
+    await this.memory.verify(ctx);
+    this.checkCalls(ctx, callId);
+    const scope = this.scope(ctx);
+    if (!scope.task_id) throw Error("NO_CURRENT_TASK");
+    const initial = await this.index.get(scope.task_id);
+    return withLock(
+      this.paths.taskLock(initial),
+      async () => {
+        const task = await this.register(
+            await this.index.get(initial.task_id),
+            ctx,
+          ),
+          refs = await synchronizeReferences(task, ctx, this.memory);
+        const config = await readConfigSnapshot(
+          this.paths,
+          scope.overrides,
+          ctx.signal,
+        );
+        const state = await this.state.updateGoal(
+          task,
+          input,
+          this.operation(ctx, callId, task.task_id),
+          config.state_event_max_chars,
+          new Set(refs.keys()),
+        );
+        await this.derivatives({ ...task, updated_at: now() }, state);
+        return `State updated: v${state.version}`;
+      },
+      ctx.signal,
+    );
   }
-  async readState(id:string,ctx:ExtensionContext){
-    if(!Check(StatusSchema,{task_id:id}))throw Error("INVALID_STATE_READ");const task=await this.index.get(id);
-    return withLock(this.paths.taskLock(task),async()=>renderState(task.task_id,await this.state.read(task)),ctx.signal);
+  async modifyFact(
+    input: ModifyFactInput,
+    ctx: ExtensionContext,
+    callId: string,
+  ) {
+    if (!Check(ModifyFactSchema, input)) throw Error("INVALID_MODIFY_FACT");
+    await this.memory.verify(ctx);
+    this.checkCalls(ctx, callId);
+    const scope = this.scope(ctx);
+    if (!scope.task_id) throw Error("NO_CURRENT_TASK");
+    const initial = await this.index.get(scope.task_id);
+    return withLock(
+      this.paths.taskLock(initial),
+      async () => {
+        const task = await this.register(
+            await this.index.get(initial.task_id),
+            ctx,
+          ),
+          refs = await synchronizeReferences(task, ctx, this.memory),
+          config = await readConfigSnapshot(
+            this.paths,
+            scope.overrides,
+            ctx.signal,
+          );
+        const state = await this.state.modifyFact(
+          task,
+          input,
+          this.operation(ctx, callId, task.task_id),
+          config.state_event_max_chars,
+          new Set(refs.keys()),
+        );
+        await this.derivatives({ ...task, updated_at: now() }, state);
+        return `State updated: v${state.version}`;
+      },
+      ctx.signal,
+    );
+  }
+  async remain(eventIds: string[], ctx: ExtensionContext, callId: string) {
+    if (!Check(RemainSchema, { event_ids: eventIds }))
+      throw Error("INVALID_STATE_REMAIN");
+    await this.memory.verify(ctx);
+    this.checkCalls(ctx, callId);
+    const scope = this.scope(ctx);
+    if (!scope.task_id) throw Error("NO_CURRENT_TASK");
+    const initial = await this.index.get(scope.task_id),
+      batch = requestStateBatch(ctx, callId, initial.task_id);
+    return withLock(
+      this.paths.taskLock(initial),
+      async () => {
+        const task = await this.index.get(initial.task_id),
+          state = await this.state.remain(
+            task,
+            batch,
+            eventIds,
+            this.operation(ctx, callId, task.task_id),
+          );
+        await this.derivatives({ ...task, updated_at: now() }, state);
+        return `State updated: v${state.version}`;
+      },
+      ctx.signal,
+    );
+  }
+  async readState(id: string, ctx: ExtensionContext) {
+    if (!Check(StatusSchema, { task_id: id }))
+      throw Error("INVALID_STATE_READ");
+    const task = await this.index.get(id);
+    return withLock(
+      this.paths.taskLock(task),
+      async () => renderState(task.task_id, await this.state.read(task)),
+      ctx.signal,
+    );
   }
   async find(input: FindInput) {
     if (!Check(FindSchema, input)) throw Error("INVALID_TASK_FIND");
@@ -368,7 +507,10 @@ export class TaskService {
       ctx.signal,
     );
   }
-  async snapshot(ctx: ExtensionContext): Promise<TaskSnapshot> {
+  async snapshot(
+    ctx: ExtensionContext,
+    config: MemoryConfig,
+  ): Promise<TaskSnapshot> {
     await this.memory.verify(ctx);
     const scope = this.scope(ctx);
     await this.syncBranch(ctx);
@@ -384,10 +526,14 @@ export class TaskService {
           ),
           references = await synchronizeReferences(task, ctx, this.memory),
           state = await this.state.read(task);
-        const updated=await this.derivatives(task, state);
+        const updated = await this.derivatives(task, state);
+        const batch = prepareStateBatch(task.task_id, state, config);
+        if (batch) await this.memory.append(ctx, STATE_REQUEST_TYPE, batch);
         return {
           task: structuredClone(updated),
-          state: renderState(task.task_id, state),
+          state:
+            renderState(task.task_id, state) +
+            (batch ? renderStateReminder(batch, state) : ""),
           references,
           entries: ctx.sessionManager.getBranch(),
         };

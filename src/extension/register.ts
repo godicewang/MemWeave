@@ -11,7 +11,12 @@ import {
   StatusSchema,
   ResumeSchema,
 } from "../task/model.ts";
-import { AppendSchema,UpdateGoalSchema } from "../state/model.ts";
+import {
+  AppendSchema,
+  UpdateGoalSchema,
+  ModifyFactSchema,
+  RemainSchema,
+} from "../state/model.ts";
 import { memoryPaths, type MemoryPaths } from "../storage/paths.ts";
 import {
   registerRequestLifecycle,
@@ -107,8 +112,30 @@ export function registerMemweave(
     AppendSchema,
     (p, ctx, id) => tasks.append(p.items, ctx, id),
   );
-  tool("update_goal","Update the current Goal only when its objective changes. Supply revised summary/keywords and evidence; project_name only when project affiliation changes. Returns State updated: vN.",UpdateGoalSchema,(p,ctx,id)=>tasks.updateGoal(p,ctx,id));
-  tool("state_read","Read the current State of an explicit task_id without switching the current Task or returning raw Session history.",StatusSchema,(p,ctx)=>tasks.readState(p.task_id,ctx));
+  tool(
+    "update_goal",
+    "Update the current Goal only when its objective changes. Supply revised summary/keywords and evidence; project_name only when project affiliation changes. Returns State updated: vN.",
+    UpdateGoalSchema,
+    (p, ctx, id) => tasks.updateGoal(p, ctx, id),
+  );
+  tool(
+    "state_read",
+    "Read the current State of an explicit task_id without switching the current Task or returning raw Session history.",
+    StatusSchema,
+    (p, ctx) => tasks.readState(p.task_id, ctx),
+  );
+  tool(
+    "modify_fact",
+    "Atomically archive existing unarchived F/D IDs and append one corrected Fact with explained evidence. Historical evicted IDs remain valid; already archived IDs cannot be archived again.",
+    ModifyFactSchema,
+    (p, ctx, id) => tasks.modifyFact(p, ctx, id),
+  );
+  tool(
+    "state_remain",
+    "Handle only the State window batch shown in this request. event_ids selects at most the reminder limit from its candidates; [] retains none. No batch ID or Task parameter is needed.",
+    RemainSchema,
+    (p, ctx, id) => tasks.remain(p.event_ids, ctx, id),
+  );
   // Hook failures must actively stop execution: Pi otherwise catches extension exceptions.
   const guarded =
     (run: (ctx: ExtensionContext) => Promise<void>) =>
@@ -133,7 +160,14 @@ export function registerMemweave(
   );
   pi.on("tool_call", (event, ctx) => {
     if (
-      !["task_create", "task_resume", "state_append", "update_goal"].includes(event.toolName)
+      ![
+        "task_create",
+        "task_resume",
+        "state_append",
+        "update_goal",
+        "modify_fact",
+        "state_remain",
+      ].includes(event.toolName)
     )
       return;
     try {

@@ -49,7 +49,7 @@ export function createRuleRequestServices(
       );
       const config = await readConfigSnapshot(paths, overrides, ctx.signal);
       const task = options.tasks
-        ? await options.tasks.snapshot(ctx)
+        ? await options.tasks.snapshot(ctx, config)
         : undefined;
       const capacity = await captureModelCapacity(
         ctx,

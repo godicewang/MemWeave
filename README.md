@@ -30,11 +30,11 @@ Rule 热读取、Window 预算和 State 注入统一使用 `context_with_system`
 
 ## 当前进度
 
-阶段 0–2 已完成。当前入口提供 `task_create`、`task_find`、`task_resume`、`task_status` 和 `state_append`，并在每次请求末尾注入当前 Task 的 State。Task 可跨 Session 恢复，U/A/T 编号从 Pi 元数据继续；批量 State 写入、同调用重试、分支绑定和多进程写入均有测试。详情见[阶段 2 验收记录](docs/PHASE_2_VALIDATION.md)；既有 Rule/容量证据见[阶段 1 验收记录](docs/PHASE_1_VALIDATION.md)。
+阶段 0–3 已完成。当前入口提供四个 Task 工具，以及 `state_append`、`update_goal`、`modify_fact`、`state_read`、`state_remain` 五个 State 工具，并在每次请求末尾注入当前 Task 的 State。Task 可跨 Session 恢复，U/A/T 编号从 Pi 元数据继续；批量提交、归档、窗口恢复、重试和并发均有测试。详情见[阶段 3 验收记录](docs/PHASE_3_VALIDATION.md)和[阶段 2 验收记录](docs/PHASE_2_VALIDATION.md)。
 
 启用开发入口前，须明确按 Pi 原生方式关闭有效自动压缩，优先受信任项目的 `.pi/settings.json`。扩展检查 Pi v1.3.0 与压缩设置；准备失败先取消再报告，卸载不恢复设置，具体范围见 `docs/PACKAGING.md`。
 
-下一步为阶段 3：补齐 Goal 更新、事实修正、State 读取及 State 窗口管理。完整原文回读、Recent Window 裁剪和完整 token 预算仍按后续阶段实现。旧 SDK 应用保留在 Git 历史中。
+State 窗口只计活动 F/D，Goal 常驻；默认到 2000 时提醒管理最早 200 个、最多保留 20 个。提醒期间正常载入新增认知，允许临时超量；只在可靠提交后移除未保留候选。下一步为阶段 4 的完整原文回读；Recent Window 裁剪和完整 token 预算仍属阶段 5。旧 SDK 应用保留在 Git 历史中。
 
 阶段 6 的部分安装验收也已完成：GitHub SSH 固定 commit 安装/更新、npm 本地归档安装、禁用/reload 和卸载通过；外置用户文件与共享压缩设置保留。HTTPS 克隆遇到网络错误，npm registry 和完整业务验收尚未完成，见[安装验收与前置状态](docs/PHASE_6_READINESS.md)。
 
