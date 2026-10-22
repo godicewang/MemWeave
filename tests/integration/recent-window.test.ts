@@ -263,7 +263,7 @@ test("fixed costs exceeding half context abort before the provider even when ful
     new RegExp("x{60000}"),
   );
 });
-test("memory_read full range gets X exactly once; later requests truncate the original result without changing Session", async (t) => {
+test("memory_read full range survives tool continuation and expires after ten newer messages without changing Session", async (t) => {
   const h = await taskSession(t, { verifyCapacity: async () => 80_000 });
   await writeFile(h.paths.rule, "minimal rule {{recent_turns}}");
   h.faux.setResponses([
@@ -280,13 +280,13 @@ test("memory_read full range gets X exactly once; later requests truncate the or
   assert.deepEqual(h.diagnostics, []);
   const withX = h.budgets.findIndex((b) => b.X > 0);
   assert.ok(withX >= 0);
-  assert.equal(h.budgets[withX + 1]!.X, 0);
+  assert.ok(h.budgets[withX + 1]!.X > 0);
   const find = (index: number) =>
     h.frames[index]!.find(
       (m) => m.role === "toolResult" && m.toolName === "memory_read",
     );
   assert.match(JSON.stringify(find(withX)), /e{8000}/);
-  assert.match(JSON.stringify(find(withX + 1)), /TRUNCATED/);
+  assert.match(JSON.stringify(find(withX + 1)), /e{8000}/);
   const source = h.manager
     .getBranch()
     .find(
@@ -297,6 +297,26 @@ test("memory_read full range gets X exactly once; later requests truncate the or
     );
   assert.match(JSON.stringify(source), /e{8000}/);
   assert.doesNotMatch(JSON.stringify(source), /TRUNCATED/);
+  const branch = h.manager.getBranch(),
+    position = branch.findIndex((e) => e.id === source!.id);
+  const following = branch
+    .slice(position + 1)
+    .filter(
+      (e) =>
+        e.type === "message" &&
+        ["user", "assistant", "toolResult"].includes(e.message.role),
+    ).length;
+  for (let i = following; i < 9; i++)
+    h.manager.appendMessage({
+      role: "user",
+      content: `new message ${i}`,
+      timestamp: i,
+    });
+  h.faux.setResponses([fauxAssistantMessage("expired")]);
+  await h.session.prompt("The tenth newer message expires the read");
+  assert.equal(h.budgets.at(-1)!.X, 0);
+  assert.match(JSON.stringify(find(h.frames.length - 1)), /TRUNCATED/);
+  assert.deepEqual(h.diagnostics, []);
 });
 test("Window fork and tree inherit only ancestor boundaries; expansion restores original omitted messages", async (t) => {
   const h = await taskSession(t);

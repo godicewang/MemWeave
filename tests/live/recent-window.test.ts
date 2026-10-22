@@ -144,7 +144,7 @@ test(
       /Recent Window 移出提醒|# Symbolic State/,
     );
     t.diagnostic(
-      `${h.frames.length - start} real DeepSeek inference requests; 2 Faux setup requests; half-context 524288, one-shot read X, persisted State and Window boundaries verified`,
+      `${h.frames.length - start} real DeepSeek inference requests; 2 Faux setup requests; half-context 524288, bounded read lifetime X, persisted State and Window boundaries verified`,
     );
   },
 );

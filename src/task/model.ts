@@ -26,13 +26,23 @@ export const StatusSchema = Type.Object(
   { task_id: TaskIdSchema },
   { additionalProperties: false },
 );
-export const ResumeSchema = Type.Union([
-  StatusSchema,
-  Type.Object(
-    { mode: Type.Literal("latest_paused") },
-    { additionalProperties: false },
-  ),
-]);
+export const ResumeSchema = Type.Union(
+  [
+    StatusSchema,
+    Type.Object(
+      { mode: Type.Literal("latest_paused") },
+      { additionalProperties: false },
+    ),
+  ],
+  {
+    type: "object",
+    properties: {
+      task_id: TaskIdSchema,
+      mode: Type.Literal("latest_paused"),
+    },
+    additionalProperties: false,
+  },
+);
 export const TaskSchema = Type.Object(
   {
     task_id: TaskIdSchema,

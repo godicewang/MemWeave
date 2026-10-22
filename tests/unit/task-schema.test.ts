@@ -28,6 +28,9 @@ test("approved Task input boundaries reject missing, ambiguous, empty or extra f
   assert.ok(Check(FindSchema, { query: "查找之前的任务" }));
   assert.equal(Check(FindSchema, { query: "query", limit: 0 }), false);
   assert.equal(Check(StatusSchema, {}), false);
+  const wireSchema = JSON.parse(JSON.stringify(ResumeSchema));
+  assert.equal(wireSchema.type, "object");
+  assert.ok(wireSchema.properties);
   assert.ok(Check(ResumeSchema, { task_id: "task_test" }));
   assert.ok(Check(ResumeSchema, { mode: "latest_paused" }));
   assert.equal(
@@ -35,6 +38,8 @@ test("approved Task input boundaries reject missing, ambiguous, empty or extra f
     false,
   );
   assert.equal(Check(ResumeSchema, { query: "previous task" }), false);
+  assert.equal(Check(ResumeSchema, {}), false);
+  assert.equal(Check(ResumeSchema, { mode: "other" }), false);
 });
 
 test("State schema requires a nonempty batch, content, allowed types and explained evidence", () => {

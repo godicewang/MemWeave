@@ -28,6 +28,7 @@ import type { CapacityVerifier } from "../pi/model-capacity.ts";
 import { SCOPE_TYPE } from "../pi/session-memory.ts";
 import { MemoryReadSchema } from "../memory/model.ts";
 import { SetWindowSchema } from "../window/model.ts";
+import { StateReadSchema, historyReadRanges } from "../state/read.ts";
 import { WindowService, type WindowOptions } from "../pi/window-service.ts";
 export interface MemweaveOptions extends WindowOptions {
   paths?: MemoryPaths;
@@ -132,12 +133,31 @@ export function registerMemweave(
     UpdateGoalSchema,
     (p, ctx, id) => tasks.updateGoal(p, ctx, id),
   );
-  tool(
-    "state_read",
-    "Read the current State of an explicit task_id without switching the current Task or returning raw Session history.",
-    StatusSchema,
-    (p, ctx) => tasks.readState(p.task_id, ctx),
-  );
+  pi.registerTool({
+    name: "state_read",
+    label: "state_read",
+    description:
+      "Read State for task_id without switching Tasks. Omit event_ids for the current State. Supply 1-50 known F/D IDs for active, evicted or archived original entries and evidence; max_total_chars applies only to historical queries, defaults to 8000, at most 50000, counting body and evidence. Per-item status/truncation is explicit. Does not search or return Session history.",
+    parameters: StateReadSchema,
+    async execute(_id, input, signal, _update, ctx) {
+      signal?.throwIfAborted();
+      const value = await tasks.readState(input, ctx);
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: typeof value === "string" ? value : JSON.stringify(value),
+          },
+        ],
+        details:
+          typeof value === "string"
+            ? {}
+            : {
+                memweave_read: { version: 1, ranges: historyReadRanges(value) },
+              },
+      };
+    },
+  });
   tool(
     "modify_fact",
     "Atomically archive existing unarchived F/D IDs and append one corrected Fact with explained evidence. Historical evicted IDs remain valid; already archived IDs cannot be archived again.",

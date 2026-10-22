@@ -39,6 +39,11 @@ import type { MemoryPaths } from "../storage/paths.ts";
 import { GoalMetadataResolver } from "./goal-metadata.ts";
 import { MemoryService } from "../memory/service.ts";
 import { MemoryReadSchema, type MemoryReadInput } from "../memory/model.ts";
+import {
+  StateReadSchema,
+  readHistoricalState,
+  type StateReadInput,
+} from "../state/read.ts";
 import { TaskIndex } from "./index-store.ts";
 import {
   CreateSchema,
@@ -414,13 +419,18 @@ export class TaskService {
       ctx.signal,
     );
   }
-  async readState(id: string, ctx: ExtensionContext) {
-    if (!Check(StatusSchema, { task_id: id }))
-      throw Error("INVALID_STATE_READ");
-    const task = await this.index.get(id);
+  async readState(input: StateReadInput | string, ctx: ExtensionContext) {
+    const query = typeof input === "string" ? { task_id: input } : input;
+    if (!Check(StateReadSchema, query)) throw Error("INVALID_STATE_READ");
+    const task = await this.index.get(query.task_id);
     return withLock(
       this.paths.taskLock(task),
-      async () => renderState(task.task_id, await this.state.read(task)),
+      async () => {
+        const state = await this.state.read(task);
+        return "event_ids" in query
+          ? readHistoricalState(task.task_id, state, query)
+          : renderState(task.task_id, state);
+      },
       ctx.signal,
     );
   }

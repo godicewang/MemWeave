@@ -241,7 +241,35 @@ test("image attachments get stable R; only explicit supported-model reads return
   assert.deepEqual(last.message.content[1], image);
   assert.ok(h.budgets.at(-1)!.X >= 2048);
   h.faux.setResponses([fauxAssistantMessage("later request")]);
-  await h.session.prompt("The earlier image exemption must expire");
+  await h.session.prompt("The earlier image exemption is still alive");
+  assert.ok(h.budgets.at(-1)!.X >= 2048);
+  assert.ok(
+    h.frames
+      .at(-1)!
+      .some(
+        (m) =>
+          "content" in m &&
+          Array.isArray(m.content) &&
+          m.content.some((p) => p.type === "image"),
+      ),
+  );
+  const branch = h.manager.getBranch(),
+    position = branch.findIndex((e) => e.id === last.id);
+  const following = branch
+    .slice(position + 1)
+    .filter(
+      (e) =>
+        e.type === "message" &&
+        ["user", "assistant", "toolResult"].includes(e.message.role),
+    ).length;
+  for (let i = following; i < 9; i++)
+    h.manager.appendMessage({
+      role: "user",
+      content: `new message ${i}`,
+      timestamp: i,
+    });
+  h.faux.setResponses([fauxAssistantMessage("expired")]);
+  await h.session.prompt("The tenth newer message expires the image exemption");
   assert.equal(h.budgets.at(-1)!.X, 0);
   assert.ok(
     h.frames

@@ -52,7 +52,7 @@ Task 保存目标和当前认知，Pi Session 保存原始交互。你可直接�
 | 新工作 | `task_create` 创建并绑定 Task，初始化 Goal |
 | 查找旧任务 | `task_find` 模糊查找；查询本身不切换 Task |
 | 继续旧任务 | `task_resume` 用明确 task_id，恢复认知并绑定当前 Session/分支 |
-| 查看认知 | `state_read` 读取明确 Task，`task_status` 查看状态；都不切换 Task |
+| 查看认知 | `state_read` 读取明确 Task；可用 event_ids 查询已知历史 F/D，`task_status` 查看状态；都不切换 Task |
 | 保存认知 | `state_append` 保存 Fact/Decision，`update_goal` 更新目标，`modify_fact` 归档旧认知并写入修正 |
 | 查证原文 | `memory_read` 读取已知 U/A/T/R；不会搜索或切换 Task |
 | 调整近期范围 | `recent_window_set` 设置当前分支 N/B；省略 B 保留原值，非法组合拒绝 |
@@ -71,9 +71,19 @@ Task 保存目标和当前认知，Pi Session 保存原始交互。你可直接�
 { "items": [{ "ref": "U3", "offset": 0, "limit": 1000 }], "max_total_chars": 5000 }
 ```
 
-跨 Task 的 U/A/T 必须同时提供来源 `task_id`，成功时返回当前 Task 可复用的 R。每项独立报告来源、范围、原件完整性和截断状态。完整回读仅对紧接着的请求及其网络重试享有一次性呈现；随后恢复普通窗口预算。
+跨 Task 的 U/A/T 必须同时提供来源 `task_id`，成功时返回当前 Task 可复用的 R。每项独立报告来源、范围、原件完整性和截断状态。
 
-图片默认显示附件 R，模型显式读取后才完整发送一次。**先用文字创建或恢复 Task，再发送图片。** 未绑定 Task 的图片会取消请求，原件仍在 Session；可另开文字 Session 建立 Task。图片不支持字符切片，单次返回合计不超过 10 MiB；当前仅核验官方 DeepSeek Flash 图片预算，每张保守预留 2048 tokens。识别可能出错，不承诺 OCR 准确率，也无法恢复 Pi 保存前缩放或省略的原图。
+完整回读结果在其后新增不足 10 条真实消息时保持完整呈现；用户、assistant、每条工具结果各计一条，不计结果本身、system、State 或提醒。第 10 条到来后恢复普通窗口预算；不是 10 轮对话。插话按新用户消息计数，不立即取消保护；重启/分支依据原始记录恢复年龄。结果若已被 Recent Window 正常移出，不会额外常驻；完整呈现仍受半额预算，放不下时取消请求。期限内重复呈现会增加输入量。
+
+追溯已知历史认知用 `state_read`，例如：
+
+```json
+{"task_id":"task_known","event_ids":["F1","D2"],"max_total_chars":8000}
+```
+
+一次 1–50 项，默认 8000、最多 50000 字符，按 Unicode 码点合计正文与证据引用/解释。返回原正文、证据、归档/活动状态；未知 ID 或预算不足逐项说明，不能把截断内容当成完整依据。历史查询的完整结果享有同样的 10 条消息期限。旧的 `{task_id}` 调用仍返回当前 State，不能单独加 max_total_chars；查询不会恢复 Task 或改变认知。
+
+图片默认显示附件 R，模型显式读取后才在上述生命周期内完整发送，可能在多个请求中重复发送，期限后恢复附件引用。**先用文字创建或恢复 Task，再发送图片。** 未绑定 Task 的图片会取消请求，原件仍在 Session；可另开文字 Session 建立 Task。图片不支持字符切片，单次返回合计不超过 10 MiB；当前仅核验官方 DeepSeek Flash 图片预算，每张保守预留 2048 tokens。识别可能出错，不承诺 OCR 准确率，也无法恢复 Pi 保存前缩放或省略的原图。
 
 原生 Bash 的必要完整输出按需保存到 `~/.pi/memory/blobs/`；历史上已丢失的输出只能返回可得片段。不要删除仍被引用的原件。
 
@@ -90,6 +100,8 @@ Task 保存目标和当前认知，Pi Session 保存原始交互。你可直接�
 升级前备份运行数据和 Session。固定 Git commit 的声明不会因 `pi update --extensions` 自动跳到新提交；按 Pi 原生 Package 配置将来源更新为新 commit，再执行该命令并重启或 reload。也可用 `pi install '<新来源>' --local` 按原生方式更新同一包。`pi list` 确认只保留一个有效 MemWeave 来源，避免重复加载。不要用无参数 `pi update` 来代替包更新，它还可能更新宿主 Pi。
 
 本项目已验收阶段 4 快照创建的数据升级到当前 Runtime；这不是任意旧版本迁移或新格式向旧版本降级的保证。需要回滚时保留原始备份，并先核对数据格式兼容性。
+
+本次默认 Rule 增加了历史 F/D 查询和 10 条消息的回读期限说明。升级 Package 不会覆盖 `~/.pi/memory/rule.md`；请先备份，再对照包内 `resources/rule.md` 合并这两处协议说明，保留自己的定制内容。
 
 将来采用 npm 固定版本时，需要 `pi install npm:<包名>@<新版本> --local` 显式安装新版本；Pi v1.3.0 的 update 会跳过精确 npm 版本，即使手动改了声明也不会据此重装。已通过临时 registry 验证这一差异，尚未向 npm 公网发布。
 
