@@ -53,6 +53,8 @@ resources/rule.md           # 从独立 Rule 模板生成并校验，支持 Git 
 
 阶段 4 的 memory_read 从原始 Session 条目回读，逐项校验来源、字符范围与预算。R 定位和必要 Bash 完整输出定位分别保存为 memweave.aliases.v1 / memweave.originals.v1，格式见 Task §9；不改 U/A/T 元数据。blobs 按 SHA-256 寻址并以流式复制、哈希核验和有限范围读取控制内存；Session 已有图片直接按内容块定位。Task 锁保护跨进程别名序列，R evidence 回到最终来源核验；读取不切换 Task、不改变认知版本。完整回读范围在原生工具 details 中标记，阶段 5 再接统一 X 预算。
 
+2026-10-23 用户确认：完整回读的展示豁免持续到其后新增第 10 条真实消息，按 user/assistant/每条 toolResult 逐条计数；从当前 Pi 分支推导年龄，不新增持久化倒计时，不改变窗口范围或半额预算。state_read 增加按已知 F/D 查询历史认知的受控模式，1–50 项、默认 8000/上限 50000 字符；旧当前 State 查询保持，历史数据仍只来自 state.json，不将 F/D 塞入 memory_read，也不增加自有存储。详见 State §17、Recent Window §5.2。
+
 ## 3. 核心数据流
 
 ```text
