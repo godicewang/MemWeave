@@ -27,6 +27,7 @@
 | `PHASE_5_VALIDATION.md` | 完整事件、唯一 Q、两阶段提交、重启／分支／失败、真实 DeepSeek 与视觉回归 |
 | `PHASE_6_READINESS.md` | 阶段 6 早期部分安装验收的历史记录；当前状态由最终验收记录取代 |
 | `PHASE_6_VALIDATION.md` | 阶段 6 完整恢复、多进程、安装升级、真实 DeepSeek 与兼容边界 |
+| `CONFIGURATION_PROPOSAL.md` | 已批准的两层配置、策略覆盖、旧配置/模板兼容与权限边界 |
 | `SOURCE_VERIFICATION.md` | 已批准的有界来源定位缓存、直接比较、按需原生投影及验收 |
 | `CONTEXT_BUDGET_DESIGN.md` | 已确认 60% 预算、500 条 State、自动窗口与提交准入契约 |
 | `CONTEXT_BUDGET_VALIDATION.md` | Token 校准、实际输出、State 准入、恢复与分发验收 |
@@ -56,3 +57,5 @@
 2026-10-23 后续确认：上下文预算调整已经授权，取代上文“预算未获本轮实施确认”。Agent 60%；State 500/100、12.5%；Window 37.5%；系统工具 15%；自动 N/B 与显式配置优先。见 CONTEXT_BUDGET_DESIGN.md、State §18、Recent Window §14 和更新后的固定 Rule。全历史来源缓存优化仍未授权，不并入本轮。
 
 2026-10-24 用户授权独立实施来源核验优化，取代上文“缓存优化仍未授权”的状态；范围与上限见 Recent Window §15 和 SOURCE_VERIFICATION.md，不并入或改写已完成预算方案。
+
+2026-10-24 用户确认配置集中管理：包内 defaults.json 保存默认值，运行时 config.json 保存部分覆盖，允许缺失文件；原六字段分支覆盖优先。开放策略及上限见 CONFIGURATION_PROPOSAL.md，取代早期“只允许六字段、四个 State 必填、预算比例不开放”的限制；默认数值与核心记忆语义不变。

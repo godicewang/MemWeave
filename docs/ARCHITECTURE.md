@@ -147,3 +147,5 @@ manifest 使用公开的 `pi.extensions`，优先指向可直接加载的 `src/e
 本次预算适配使用匹配的 DeepSeek V4.1 tokenizer；仅在公开 before_provider_request 对齐输出上限。统一上下文处理器仍是唯一业务组装入口。末尾 State 附计费的预算快照；State 的 token 管理与提交准入见 CONTEXT_BUDGET_DESIGN.md，不增加持久化协议。
 
 2026-10-24 来源核验：src/pi/source-verification.ts 保存有界原生位置提示（最多 8192 项、约 16 MiB），命中也比较本次快照中的完整消息；miss 批量补查，必要时才读取 Pi 原生投影。Session/分支/reload 清空，不保存正文、投影、通过结论或磁盘缓存。预算与各模块持久化协议不变，见 SOURCE_VERIFICATION.md。
+
+2026-10-24 配置开放：包内 src/config/defaults.json、可选运行时 config.json、原六字段分支覆盖依次生效；新策略不扩展 scope 格式，Agent 仍只调整 N/B。所有请求模块使用同一配置快照，策略和模板兼容见 CONFIGURATION_PROPOSAL.md。

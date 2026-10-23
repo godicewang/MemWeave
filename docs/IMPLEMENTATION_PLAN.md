@@ -174,3 +174,7 @@
 ## 2026-10-24 来源核验优化（实现与功能验收完成）
 
 按用户批准 SOURCE_VERIFICATION.md 实施：先同步直接相关规范，测试复制/篡改/碰撞/缓存上限/分支/投影与取消，再接线并验收性能和真实流程。不改 Window/State/预算/恢复契约，不引入磁盘缓存。本地 161/161、相关真实 DeepSeek 7/7、npm/registry 分发及性能/GC 试验通过；实现提交 84889c9 的 GitHub SSH 固定 ref 安装/升级、独立进程恢复、禁用/reload 与卸载也已通过，证据见 SOURCE_VERIFICATION.md。
+
+## 2026-10-24 配置集中管理（实现中）
+
+用户确认 CONFIGURATION_PROPOSAL.md：先同步规范，再完成默认 JSON/部分覆盖、策略传递、模板兼容与资源分发。默认行为保持，新增策略不写入 scope，不增 Agent 工具；完成类型/功能/真实 DeepSeek 与安装验收后更新记录。
