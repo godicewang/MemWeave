@@ -1,3 +1,4 @@
+import { CONFIG_LIMITS } from "../config/defaults.ts";
 import { Type, type Static } from "typebox";
 import { TaskIdSchema } from "../task/model.ts";
 
@@ -19,7 +20,7 @@ export const MemoryReadSchema = Type.Object(
       { minItems: 1 },
     ),
     max_total_chars: Type.Optional(
-      Type.Integer({ minimum: 1, maximum: 50000 }),
+      Type.Integer({ minimum: 1, maximum: CONFIG_LIMITS.read_chars }),
     ),
   },
   { additionalProperties: false },

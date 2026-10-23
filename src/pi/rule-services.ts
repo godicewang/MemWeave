@@ -1,10 +1,12 @@
+import { mergeConfig } from "../config/schema.ts";
+import { settingsFor } from "../config/defaults.ts";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { isDeepStrictEqual } from "node:util";
 import { counterForModel } from "../window/tokens.ts";
 import type { TaskService } from "../task/service.ts";
 import { taskContext } from "./task-context.ts";
 import type { WindowService } from "./window-service.ts";
-import { readConfigSnapshot } from "../config/read.ts";
+import { readConfigInput } from "../config/read.ts";
 import {
   prepareRule,
   type PreparedRule,
@@ -46,17 +48,15 @@ export function createRuleRequestServices(
     const overrides = structuredClone(
       options.readOverrides?.(ctx) ?? options.tasks?.scope(ctx).overrides ?? {},
     );
+    const input = await readConfigInput(paths, ctx.signal);
+    const settings = settingsFor(input);
     const capacity = await captureModelCapacity(
       ctx,
       selected,
       options.verifyCapacity ?? verifyProviderCapacity,
+      settings,
     );
-    const config = await readConfigSnapshot(
-      paths,
-      overrides,
-      ctx.signal,
-      capacity.contextLimit,
-    );
+    const config = mergeConfig(input, overrides, capacity.contextLimit);
     const counter = await counterForModel(selected, capacity.modelName);
     const frame = {
       selected,
@@ -89,6 +89,7 @@ export function createRuleRequestServices(
         selected,
         capacity.contextLimit,
         capacity.maxOutputTokens,
+        settingsFor(config),
       );
       const task = options.tasks
         ? await options.tasks.snapshot(ctx, config, captured)

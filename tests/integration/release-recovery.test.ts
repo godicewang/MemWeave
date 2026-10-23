@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { readFile, rm } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import test from "node:test";
 import {
@@ -17,6 +18,9 @@ test(
   async (t) => {
     const h = await releaseFixture(t),
       old = await sourceArtifact(h.root, "9868254");
+    // A real old installation starts with its own template; upgrade must preserve it.
+    const legacyRule = await readFile(join(old, "resources/rule.md"));
+    await writeFile(h.paths.rule, legacyRule);
     const a = await releaseWorker({
       ...h.base,
       artifact: old,
@@ -47,6 +51,7 @@ test(
     assert.equal(b.version, 3);
     assert.equal(b.window, true);
     assert.equal(b.settings, 4);
+    assert.ok(legacyRule.equals(await readFile(h.paths.rule)));
     const state = await readFile(h.paths.state(task));
     assert.ok(state.subarray(0, before.length).equals(before));
     assert.match(

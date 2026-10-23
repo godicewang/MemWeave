@@ -1,3 +1,4 @@
+import { settingsFor, percentOf } from "../config/defaults.ts";
 import type {
   ExtensionAPI,
   ExtensionContext,
@@ -96,7 +97,7 @@ export class TaskService {
       if (!this.resolveBudget) throw Error("STATE_BUDGET_UNVERIFIED");
       const frame = await this.resolveBudget(ctx);
       ctx.signal?.throwIfAborted();
-      stateAdmission(frame.counter, budgetPlan(frame.limit).state)(
+      stateAdmission(frame.counter, budgetPlan(frame.limit, settingsFor(frame.config)).state)(
         task,
         next,
         previous,
@@ -437,12 +438,14 @@ export class TaskService {
     const query = typeof input === "string" ? { task_id: input } : input;
     if (!Check(StateReadSchema, query)) throw Error("INVALID_STATE_READ");
     const task = await this.index.get(query.task_id);
+    const defaultChars = "event_ids" in query
+      ? settingsFor(await this.configuration(ctx)).read.default_total_chars : undefined;
     return withLock(
       this.paths.taskLock(task),
       async () => {
         const state = await this.state.read(task);
         return "event_ids" in query
-          ? readHistoricalState(task.task_id, state, query)
+          ? readHistoricalState(task.task_id, state, query, defaultChars)
           : renderState(task.task_id, state);
       },
       ctx.signal,
@@ -468,7 +471,8 @@ export class TaskService {
         );
         const refs = await synchronizeReferences(task, ctx, this.memory);
         await this.reader.capture(task, refs, ctx);
-        return this.reader.read(task, input, ctx);
+        const config = await this.configuration(ctx);
+        return this.reader.read(task, input, ctx, settingsFor(config).read.default_total_chars);
       },
       ctx.signal,
     );
@@ -622,7 +626,7 @@ export class TaskService {
           state,
           config,
           budget !== undefined &&
-            tokens! >= Math.floor(budgetPlan(budget.limit).state * 0.8),
+            tokens! >= percentOf(budgetPlan(budget.limit, settingsFor(config)).state, settingsFor(config).state_policy.token_warning_percent),
         );
         if (batch) await this.memory.append(ctx, STATE_REQUEST_TYPE, batch);
         return {

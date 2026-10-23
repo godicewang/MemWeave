@@ -129,6 +129,10 @@ test("production HTTP output cap matches reserved O across retries, explicit ove
     bodies.push(JSON.parse(text));
     if (retry) {
       retry = false;
+      // The retry must keep the old frame even if the global file changes meanwhile.
+      await writeFile(h.paths.config, JSON.stringify({ context_budget: {
+        model_percent: 50, parts_percent: { output: 5, window: 42.5 },
+      } }));
       res.writeHead(503, {
         "content-type": "application/json",
         "retry-after": "0",
@@ -183,6 +187,11 @@ test("production HTTP output cap matches reserved O across retries, explicit ove
   assert.equal(h.budgets.length, 1);
   assert.equal(h.budgets[0]!.O, 62914);
   assert.match(JSON.stringify(bodies[0]!.messages), /本次预算快照/);
+  await h.session.prompt("Use changed policies only on the next logical request");
+  assert.equal(h.budgets.at(-1)!.limit, 524288);
+  assert.equal(h.budgets.at(-1)!.O, 26214);
+  assert.equal(bodies.at(-1)!.max_tokens ?? bodies.at(-1)!.max_completion_tokens, 26214);
+  assert.match(JSON.stringify(bodies.at(-1)!.messages), /的 50%/);
   await h.session.setModel({
     ...model,
     samplingParams: { max_completion_tokens: 90000 },

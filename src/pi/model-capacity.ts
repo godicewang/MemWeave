@@ -1,3 +1,4 @@
+import { DEFAULT_SETTINGS, type PolicySettings } from "../config/defaults.ts";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { deriveContextLimit } from "./context-limit.ts";
@@ -6,6 +7,7 @@ import { isDeepStrictEqual } from "node:util";
 export type CapacityVerifier = (
   model: Model<Api>,
   ctx: ExtensionContext,
+  settings?: PolicySettings,
 ) => Promise<unknown>;
 const unverified = (reason: string) =>
   new Error(`MODEL_CAPACITY_UNVERIFIED: ${reason}`);
@@ -31,7 +33,7 @@ export function parseModelCapacity(metadata: unknown, modelId: string): number {
 }
 
 /** Metadata lookup only. Pi still owns all inference requests, credentials and retries. */
-export const verifyProviderCapacity: CapacityVerifier = async (model, ctx) => {
+export const verifyProviderCapacity: CapacityVerifier = async (model, ctx, settings = DEFAULT_SETTINGS) => {
   ctx.signal?.throwIfAborted();
   if (model.api !== "openai-completions")
     throw unverified("no verified capacity adapter for this API");
@@ -58,7 +60,7 @@ export const verifyProviderCapacity: CapacityVerifier = async (model, ctx) => {
         else if (value !== undefined) headers.set(key, value);
       }
     }
-    const timeout = AbortSignal.timeout(15_000);
+    const timeout = AbortSignal.timeout(settings.model_metadata_timeout_ms);
     const response = await fetch(url, {
       headers,
       redirect: "error",
@@ -103,11 +105,12 @@ export async function captureModelCapacity(
   ctx: ExtensionContext,
   selected: Model<Api>,
   verify: CapacityVerifier,
+  settings: PolicySettings = DEFAULT_SETTINGS,
 ) {
   const sameModel = () => isDeepStrictEqual(ctx.model, selected);
   if (!sameModel())
     throw unverified("selected model changed during request preparation");
-  const verified = await verify(selected, ctx);
+  const verified = await verify(selected, ctx, settings);
   const metadata =
     typeof verified === "object" && verified !== null
       ? (verified as {
@@ -120,7 +123,7 @@ export async function captureModelCapacity(
   ctx.signal?.throwIfAborted();
   if (!sameModel())
     throw unverified("selected model changed during request preparation");
-  const contextLimit = deriveContextLimit(contextWindow);
+  const contextLimit = deriveContextLimit(contextWindow, settings);
   return Object.freeze({
     provider: selected.provider,
     modelId: selected.id,

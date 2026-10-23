@@ -24,7 +24,7 @@ export const STATE_REQUEST_TYPE = "memweave.state.request.v1";
 export const ScopeSchema = Type.Object(
   {
     task_id: Type.Union([TaskIdSchema, Type.Null()]),
-    overrides: Type.Partial(CONFIG_SCHEMA),
+    overrides: Type.Partial(CONFIG_SCHEMA, { additionalProperties: false }),
   },
   { additionalProperties: false },
 );

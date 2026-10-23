@@ -155,7 +155,7 @@ export function registerMemweave(
     name: "state_read",
     label: "state_read",
     description:
-      "Read State for task_id without switching Tasks. Omit event_ids for the current State. Supply 1-50 known F/D IDs for active, evicted or archived original entries and evidence; max_total_chars applies only to historical queries, defaults to 8000, at most 50000, counting body and evidence. Per-item status/truncation is explicit. Does not search or return Session history.",
+      "Read State for task_id without switching Tasks. Omit event_ids for the current State. Supply 1-50 known F/D IDs for active, evicted or archived original entries and evidence; max_total_chars applies only to historical queries, uses the configured default shown in the request snapshot (bundle default 8000), at most 50000, counting body and evidence. Per-item status/truncation is explicit. Does not search or return Session history.",
     parameters: StateReadSchema,
     async execute(_id, input, signal, _update, ctx) {
       signal?.throwIfAborted();
@@ -192,7 +192,7 @@ export function registerMemweave(
     name: "memory_read",
     label: "memory_read",
     description:
-      "Read known U/A/T/R originals in order, never search or switch Task. items[].task_id reads an explicit other Task U/A/T and returns a reusable current-Task R. offset/limit use Unicode code points. max_total_chars defaults to 8000, at most 50000. Failures/completeness are per item. Read attachment R explicitly for supported images, never use character ranges on images.",
+      "Read known U/A/T/R originals in order, never search or switch Task. items[].task_id reads an explicit other Task U/A/T and returns a reusable current-Task R. offset/limit use Unicode code points. max_total_chars uses the configured default shown in the request snapshot (bundle default 8000), at most 50000. Failures/completeness are per item. Read attachment R explicitly for supported images, never use character ranges on images.",
     parameters: MemoryReadSchema,
     async execute(id, input, signal, _update, ctx) {
       signal?.throwIfAborted();

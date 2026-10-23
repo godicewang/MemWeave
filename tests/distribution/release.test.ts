@@ -21,6 +21,7 @@ import {
 test("temporary npm registry: installed release upgrade recovers real Task/State/Session and removal preserves them", async (t) => {
   const f = await releaseFixture(t);
   const old = await sourceArtifact(f.root, "9868254");
+  await writeFile(f.paths.rule, await readFile(join(old, "resources/rule.md")));
   const artifacts = new Map<string, Buffer>([
     [
       "0.0.0-before",

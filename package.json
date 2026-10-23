@@ -20,7 +20,8 @@
     "resources/rule.md",
     "README.md",
     "USER_GUIDE.md",
-    "resources/tokenizer/*"
+    "resources/tokenizer/*",
+    "src/config/defaults.json"
   ],
   "scripts": {
     "resources:sync": "node scripts/sync-rule.mjs",

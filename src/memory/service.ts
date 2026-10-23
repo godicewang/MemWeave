@@ -1,3 +1,4 @@
+import { DEFAULT_SETTINGS, CONFIG_LIMITS } from "../config/defaults.ts";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { ImageContent } from "@earendil-works/pi-ai";
 import { Check } from "typebox/value";
@@ -169,12 +170,13 @@ export class MemoryService {
     task: Task,
     input: MemoryReadInput,
     ctx: ExtensionContext,
+    defaultChars = DEFAULT_SETTINGS.read.default_total_chars,
   ): Promise<MemoryReadOutput> {
     if (!Check(MemoryReadSchema, input)) throw Error("INVALID_MEMORY_READ");
     const aliases = await loadAliases(task, this.memory),
       images: ImageContent[] = [],
       items: MemoryItem[] = [];
-    let remaining = input.max_total_chars ?? 8000,
+    let remaining = input.max_total_chars ?? defaultChars,
       imageBytes = 0;
     const aliasFor = (origin: Omit<Alias, "ref">) =>
       this.allocateAlias(task, origin, ctx, aliases);
@@ -226,9 +228,9 @@ export class MemoryService {
             throw Error("UNSUPPORTED_ORIGINAL_MEDIA");
           const original = originalImage(
             content[alias.part_index],
-            10 * 1024 * 1024 - imageBytes,
+            CONFIG_LIMITS.image_bytes - imageBytes,
           );
-          if (imageBytes + original.bytes > 10 * 1024 * 1024)
+          if (imageBytes + original.bytes > CONFIG_LIMITS.image_bytes)
             throw Error("IMAGE_BUDGET_EXCEEDED");
           images.push(original.image);
           imageBytes += original.bytes;
@@ -326,7 +328,7 @@ export class MemoryService {
     return {
       result: {
         items,
-        total_chars: (input.max_total_chars ?? 8000) - remaining,
+        total_chars: (input.max_total_chars ?? defaultChars) - remaining,
       },
       images,
     };

@@ -1,3 +1,4 @@
+import { DEFAULT_SETTINGS, type PolicySettings } from "../config/defaults.ts";
 import {
   clampThinkingLevel,
   type Api,
@@ -12,6 +13,7 @@ export function outputReserve(
   level: ModelThinkingLevel = "off",
   contextLimit?: number,
   providerCap?: number,
+  settings: PolicySettings = DEFAULT_SETTINGS,
 ): number {
   let output = model.maxTokens;
   const params = {
@@ -43,7 +45,7 @@ export function outputReserve(
       output = Math.min(
         output,
         providerCap ?? output,
-        Math.max(1, budgetPlan(contextLimit).output),
+        Math.max(1, budgetPlan(contextLimit, settings).output),
       );
     if (
       (providerCap !== undefined && output > providerCap) ||

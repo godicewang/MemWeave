@@ -1,9 +1,10 @@
+import { CONFIG_LIMITS } from "../config/defaults.ts";
 import type { ImageContent } from "@earendil-works/pi-ai";
 
 /** Validate encoding/container signatures without changing the native bytes or resizing them. */
 export function originalImage(
   value: unknown,
-  maxBytes = 10 * 1024 * 1024,
+  maxBytes = CONFIG_LIMITS.image_bytes,
 ): { image: ImageContent; bytes: number } {
   const image = value as Partial<ImageContent>;
   if (

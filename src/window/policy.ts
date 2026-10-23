@@ -1,16 +1,17 @@
+import { DEFAULT_SETTINGS, percentOf, type PolicySettings } from "../config/defaults.ts";
 /** Percentages are planning allocations; only safety/output and State admission are hard reservations. */
-export function budgetPlan(limit: number) {
+export function budgetPlan(limit: number, settings: PolicySettings = DEFAULT_SETTINGS) {
   if (!Number.isSafeInteger(limit) || limit < 1)
     throw Error("MODEL_CAPACITY_UNVERIFIED");
-  const part = (n: number) => Number((BigInt(limit) * BigInt(n)) / 1000n);
+  const part = (key: keyof PolicySettings["context_budget"]["parts_percent"]) => percentOf(limit, settings.context_budget.parts_percent[key]);
   const rest = {
-    state: part(125),
-    output: part(100),
-    system: part(150),
-    user: part(50),
-    read: part(100),
-    protocol: part(50),
-    safety: part(50),
+    state: part("state"),
+    output: part("output"),
+    system: part("system"),
+    user: part("user"),
+    read: part("read"),
+    protocol: part("protocol"),
+    safety: part("safety"),
   };
   return Object.freeze({
     ...rest,

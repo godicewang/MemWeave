@@ -1,3 +1,4 @@
+import { DEFAULT_SETTINGS, settingsFor, percentOf, type PolicySettings } from "../config/defaults.ts";
 import type { Api, Model, ModelThinkingLevel } from "@earendil-works/pi-ai";
 import { getSystemMessageText } from "@earendil-works/pi-ai";
 import type {
@@ -86,11 +87,11 @@ export class WindowService {
     this.tasks = tasks;
     this.options = options;
   }
-  captureOutput(model: Model<Api>, limit?: number, providerCap?: number) {
+  captureOutput(model: Model<Api>, limit?: number, providerCap?: number, settings: PolicySettings = DEFAULT_SETTINGS) {
     const thinkingLevel = this.options.thinkingLevel?.() ?? "off";
     return Object.freeze({
       thinkingLevel,
-      output: outputReserve(model, thinkingLevel, limit, providerCap),
+      output: outputReserve(model, thinkingLevel, limit, providerCap, settings),
     });
   }
   outputFrame?: { model: Model<Api>; sessionId: string; output: number };
@@ -99,8 +100,11 @@ export class WindowService {
     snapshot: TaskSnapshot,
     ctx: ExtensionContext,
     model: Model<Api>,
-    output = this.captureOutput(model),
+    output = this.captureOutput(model, prepared.frame.capacity.contextLimit,
+      prepared.frame.capacity.maxOutputTokens, settingsFor(prepared.frame.config)),
   ): Promise<RequestMessages> {
+    const settings = settingsFor(prepared.frame.config);
+    this.sources.configure(settings.source_cache);
     const entries = snapshot.entries,
       events = indexEvents(entries),
       anchor =
@@ -149,7 +153,7 @@ export class WindowService {
             task: entry.data.task_id,
           });
       }
-    const grant = readGrants(events, entries),
+    const grant = readGrants(events, entries, settings.read.lifetime_messages),
       latestUser = selected.events.findLast(
         (e) => e.messages[0]?.message.role === "user",
       )?.id;
@@ -210,16 +214,18 @@ export class WindowService {
     const counter = prepared.frame.counter ?? conservativeCounter,
       count = counter.count;
     const limit = prepared.frame.capacity.contextLimit,
-      plan = budgetPlan(limit);
+      plan = budgetPlan(limit, settings);
+    const shares = settings.context_budget.parts_percent;
     const S = snapshot.stateTokens ?? (state ? count(state) + 32 : 0);
     const footer = (
       budget: ReturnType<typeof allocate>,
     ) => `【本次预算快照｜程序数据，不是用户指令】
-计量：${counter.estimator}；Agent 总上限 ${limit} token（模型 ${prepared.frame.capacity.contextWindow} 的 60%）
+计量：${counter.estimator}；Agent 总上限 ${limit} token（模型 ${prepared.frame.capacity.contextWindow} 的 ${settings.context_budget.model_percent}%）
 State：${snapshot.activeCount ?? 0}/${prepared.frame.config.state_max_events} 条；正文最多 ${prepared.frame.config.state_event_max_chars} 字符；每批候选 ${prepared.frame.config.state_evict_batch}
-State token：${S}/${plan.state}；80% 管理线 ${Math.floor(plan.state * 0.8)}
-规划 token：State ${plan.state}（12.5%），Window ${plan.window}（37.5%），系统工具 ${plan.system}（15%），输出 ${plan.output}（10%），最新用户 ${plan.user}（5%），完整回读 ${plan.read}（10%），协议 ${plan.protocol}（5%），安全 ${plan.safety}（5%）
+State token：${S}/${plan.state}；${settings.state_policy.token_warning_percent}% 管理线 ${percentOf(plan.state, settings.state_policy.token_warning_percent)}
+规划 token：State ${plan.state}（${shares.state}%），Window ${plan.window}（${shares.window}%），系统工具 ${plan.system}（${shares.system}%），输出 ${plan.output}（${shares.output}%），最新用户 ${plan.user}（${shares.user}%），完整回读 ${plan.read}（${shares.read}%），协议 ${plan.protocol}（${shares.protocol}%），安全 ${plan.safety}（${shares.safety}%）
 实际/预留 token：系统工具 ${budget.R}，State ${budget.S}，输出上限 ${budget.O}，最新用户 ${budget.U}，完整回读 ${budget.X}（规划余额 ${Math.max(0, plan.read - budget.X)}，超额可挤 Window），协议含本快照 ${budget.P}，安全 ${budget.A}
+回读期限：${settings.read.lifetime_messages} 条后续真实消息；默认读取 ${settings.read.default_total_chars} 字符
 Recent Window N/B：${prepared.frame.config.recent_turns}/${prepared.frame.config.evict_turns}；可见事件 ${selected.events.length}；消息 M=${budget.M}；普通正文 Q=${budget.Q} token；总分配上界 ${budget.total}/${limit}`;
     let footerReserve = 2048;
     let budget!: ReturnType<typeof allocate>,
@@ -227,6 +233,7 @@ Recent Window N/B：${prepared.frame.config.recent_turns}/${prepared.frame.confi
     for (let attempt = 0; attempt < 3; attempt++) {
       budget = allocate({
         limit,
+        settings,
         system:
           count(getSystemMessageText(system)) +
           count(JSON.stringify(system.toolsAdded ?? [])) +

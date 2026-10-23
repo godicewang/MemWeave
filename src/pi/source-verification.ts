@@ -4,11 +4,12 @@ import type {
   SessionProjection,
 } from "@earendil-works/pi-coding-agent";
 import type { RequestMessages } from "./request-lifecycle.ts";
+import { CONFIG_LIMITS, DEFAULT_SETTINGS } from "../config/defaults.ts";
 
 type Message = RequestMessages[number];
 export const SOURCE_CACHE_LIMITS = Object.freeze({
-  maxEntries: 8192,
-  maxBytes: 16 * 1024 * 1024,
+  maxEntries: CONFIG_LIMITS.cache_entries,
+  maxBytes: CONFIG_LIMITS.cache_bytes,
   keyChars: 256,
   idChars: 128,
 });
@@ -66,8 +67,8 @@ function matching<T>(
 
 /** Per-WindowService hint cache. No message objects, SessionManager, projection or pass results are retained. */
 export class SourceVerifier {
-  readonly #maxEntries: number;
-  readonly #maxBytes: number;
+  #maxEntries: number;
+  #maxBytes: number;
   readonly #locations = new Map<string, Locator>(); // In LRU order, oldest first.
   readonly #keys = new Map<string, Set<string>>();
   #bytes = 0;
@@ -75,8 +76,8 @@ export class SourceVerifier {
   #last: { id: string; index: number } | undefined;
 
   constructor(limits: { maxEntries?: number; maxBytes?: number } = {}) {
-    const entries = limits.maxEntries ?? SOURCE_CACHE_LIMITS.maxEntries;
-    const bytes = limits.maxBytes ?? SOURCE_CACHE_LIMITS.maxBytes;
+    const entries = limits.maxEntries ?? DEFAULT_SETTINGS.source_cache.max_entries;
+    const bytes = limits.maxBytes ?? DEFAULT_SETTINGS.source_cache.max_bytes;
     if (
       !Number.isSafeInteger(entries) ||
       entries < 0 ||
@@ -88,6 +89,15 @@ export class SourceVerifier {
       throw Error("INVALID_SOURCE_CACHE_LIMIT");
     this.#maxEntries = entries;
     this.#maxBytes = bytes;
+  }
+  configure(limits: { max_entries: number; max_bytes: number }): void {
+    if (limits.max_entries === this.#maxEntries && limits.max_bytes === this.#maxBytes) return;
+    if (!Number.isSafeInteger(limits.max_entries) || limits.max_entries < 0 || limits.max_entries > SOURCE_CACHE_LIMITS.maxEntries ||
+        !Number.isSafeInteger(limits.max_bytes) || limits.max_bytes < 0 || limits.max_bytes > SOURCE_CACHE_LIMITS.maxBytes)
+      throw Error("INVALID_SOURCE_CACHE_LIMIT");
+    this.reset();
+    this.#maxEntries = limits.max_entries;
+    this.#maxBytes = limits.max_bytes;
   }
   get stats() {
     return Object.freeze({

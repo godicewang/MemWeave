@@ -65,7 +65,6 @@ test("非法配置/模板或缺失文件会主动取消，不沿用旧规则或�
     ["rule", "<pi_long_task_rule>bad</pi_long_task_rule>", /INVALID_RULE/],
     ["rule", null, /RULE_READ_FAILED/], ["config", "{", /INVALID_CONFIG/],
     ["config", JSON.stringify({ ...DEFAULT_CONFIG, recent_turns: 2 }), /INVALID_CONFIG/],
-    ["config", null, /CONFIG_READ_FAILED/],
   ];
   for (const [target, bad, expected] of cases) {
     await writeFile(h.paths.rule, goodRule); await writeFile(h.paths.config, goodConfig);

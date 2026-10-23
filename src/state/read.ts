@@ -1,3 +1,4 @@
+import { DEFAULT_SETTINGS, CONFIG_LIMITS } from "../config/defaults.ts";
 import { Type, type Static } from "typebox";
 import { Check } from "typebox/value";
 import { StatusSchema, TaskIdSchema } from "../task/model.ts";
@@ -7,9 +8,9 @@ const count = () =>
 const HistoryInputSchema = Type.Object(
   {
     task_id: TaskIdSchema,
-    event_ids: Type.Array(StateIdSchema, { minItems: 1, maxItems: 50 }),
+    event_ids: Type.Array(StateIdSchema, { minItems: 1, maxItems: CONFIG_LIMITS.state_read_items }),
     max_total_chars: Type.Optional(
-      Type.Integer({ minimum: 1, maximum: 50000 }),
+      Type.Integer({ minimum: 1, maximum: CONFIG_LIMITS.read_chars }),
     ),
   },
   { additionalProperties: false },
@@ -54,8 +55,8 @@ const HistoryReadSchema = Type.Object(
       minimum: 1,
       maximum: Number.MAX_SAFE_INTEGER,
     }),
-    items: Type.Array(HistoryItemSchema, { minItems: 1, maxItems: 50 }),
-    total_chars: Type.Integer({ minimum: 0, maximum: 50000 }),
+    items: Type.Array(HistoryItemSchema, { minItems: 1, maxItems: CONFIG_LIMITS.state_read_items }),
+    total_chars: Type.Integer({ minimum: 0, maximum: CONFIG_LIMITS.read_chars }),
   },
   { additionalProperties: false },
 );
@@ -89,10 +90,11 @@ export function readHistoricalState(
   taskId: string,
   state: State,
   input: Omit<HistoryInput, "task_id">,
+  defaultChars = DEFAULT_SETTINGS.read.default_total_chars,
 ): HistoricalStateRead {
   if (!Check(StateReadSchema, { ...input, task_id: taskId }))
     throw Error("INVALID_STATE_READ");
-  const budget = input.max_total_chars ?? 8000;
+  const budget = input.max_total_chars ?? defaultChars;
   let remaining = budget;
   const items: HistoricalStateRead["items"] = input.event_ids.map((id) => {
     const entry = state.entries.get(id);

@@ -91,6 +91,7 @@ test("远程 Git：固定 commit 安装/更新、禁用/reload、卸载，保留
   await h.assertLoaded(installed);
   await h.assertLoaded(installed);
   const business = await releaseFixture(t);
+  await writeFile(business.paths.rule, await readFile(join(installed, "resources/rule.md")));
   const created = await releaseWorker({ ...business.base, artifact: installed, action: "create", label: "git-installed" });
   const recovered = await releaseWorker({ ...business.base, artifact: installed, sessionFile: created.sessionFile, taskId: created.taskId, action: "recover", label: "git-recovered" });
   assert.equal(recovered.version, 3);

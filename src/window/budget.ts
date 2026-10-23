@@ -1,10 +1,11 @@
+import type { PolicySettings } from "../config/defaults.ts";
 import type { NativeMessage } from "./select.ts";
 import { conservativeCounter, type TokenCounter } from "./tokens.ts";
 import { budgetPlan } from "./policy.ts";
 export const textCost = conservativeCounter.count;
 export const budgetError = () =>
   Error(
-    "CONTEXT_BUDGET_EXCEEDED: necessary input/output exceeds 60% context; reduce input/read range or use a larger model to organize State",
+    "CONTEXT_BUDGET_EXCEEDED: necessary input/output exceeds configured context budget; reduce input/read range or use a larger model to organize State",
   );
 const tag = "\n[TRUNCATED]";
 const protectedText = (p: object) => "textSignature" in p;
@@ -61,9 +62,10 @@ export function allocate(input: {
   messages: BudgetMessage[];
   imageCost: (image: unknown) => number;
   counter?: TokenCounter;
+  settings?: PolicySettings;
 }) {
   const counter = input.counter ?? conservativeCounter,
-    plan = budgetPlan(input.limit);
+    plan = budgetPlan(input.limit, input.settings);
   const M = input.messages.length,
     R = input.system,
     S = input.state,

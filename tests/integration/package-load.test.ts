@@ -74,6 +74,7 @@ test("npm 归档只含运行资源，解包后由 Pi 加载同一入口", async 
     "README.md",
     "USER_GUIDE.md",
     "package.json",
+    "src/config/defaults.json",
     "resources/rule.md",
     ...(await readdir(join(root, "resources/tokenizer"))).map(name => `resources/tokenizer/${name}`),
     ...sources,

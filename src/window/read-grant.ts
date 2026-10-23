@@ -3,17 +3,18 @@ import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import { MemoryReadSchema } from "../memory/model.ts";
 import { StateReadSchema, historyReadRanges } from "../state/read.ts";
 import type { InteractionEvent } from "./select.ts";
-const READ_LIFETIME_MESSAGES = 10;
+import { DEFAULT_SETTINGS } from "../config/defaults.ts";
 /** Raw branch messages determine age; injected context and retries cannot advance it. */
 export function readGrants(
   events: InteractionEvent[],
   entries: SessionEntry[],
+  lifetimeMessages = DEFAULT_SETTINGS.read.lifetime_messages,
 ): Set<string> {
   const granted = new Set<string>(),
     recent = new Set<string>();
   for (
     let i = entries.length - 1;
-    i >= 0 && recent.size < READ_LIFETIME_MESSAGES;
+    i >= 0 && recent.size < lifetimeMessages;
     i--
   ) {
     const entry = entries[i]!;

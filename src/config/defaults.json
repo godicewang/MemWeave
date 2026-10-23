@@ -1,0 +1,39 @@
+{
+  "state_max_events": 500,
+  "state_event_max_chars": 100,
+  "state_evict_batch": 100,
+  "state_keep_limit": 20,
+  "context_budget": {
+    "model_percent": 60,
+    "parts_percent": {
+      "state": 12.5,
+      "window": 37.5,
+      "output": 10,
+      "system": 15,
+      "user": 5,
+      "read": 10,
+      "protocol": 5,
+      "safety": 5
+    }
+  },
+  "window_auto": {
+    "min_events": 20,
+    "max_events": 200,
+    "event_step": 10,
+    "messages_per_event": 2,
+    "tokens_per_message": 256,
+    "evict_percent": 20
+  },
+  "state_policy": {
+    "token_warning_percent": 80
+  },
+  "read": {
+    "lifetime_messages": 10,
+    "default_total_chars": 8000
+  },
+  "source_cache": {
+    "max_entries": 8192,
+    "max_bytes": 16777216
+  },
+  "model_metadata_timeout_ms": 15000
+}

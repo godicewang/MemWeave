@@ -30,7 +30,7 @@ test("拒绝空模板、表达式、未知/未闭合/嵌套占位符和保留标
     "<pi_long_task_rule>", "</pi_long_task_rule>", "<pi_long_task_rule invalid>"]) {
     assert.throws(() => renderRule(template, DEFAULT_CONFIG), /INVALID_RULE/);
   }
-  assert.throws(() => renderRule("{{recent_turns}}", {}), /INVALID_CONFIG/);
+  assert.throws(() => renderRule("{{recent_turns}}", {}), /MODEL_CAPACITY_UNVERIFIED/);
 });
 
 test("请求级插入/替换仅更新自有 addendum 范围，原始消息不变", () => {

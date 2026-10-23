@@ -138,3 +138,5 @@ npm run test:live
 当前版本为 `0.0.0`，`private: true` 防止开发快照被误发布到 npm；正式包名、版本与许可等事项在公开发布前确定。不要手改 `resources/rule.md`，应维护规范中的两份一致模板后执行 `npm run resources:sync`。密钥继续使用仓库外的私有配置。
 
 2026-10-23 预算调整：Agent 使用模型总容量的 60%，State 默认 500 条/每批候选 100/正文 100 字符。State 12.5%、Window 37.5%、系统工具 15%、输出 10%、最新输入 5%、完整回读 10%、协议 5%、安全 5%。config.json 省略 N/B 才按模型自动计算，已有显式数值不覆盖。输出上限落实到请求；末尾 State 附实际预算快照。State 达到 token 管理线会提前提醒，超准入预算的增长在提交前拒绝。详见开发仓库 docs/CONTEXT_BUDGET_DESIGN.md。
+
+配置分两层：开发默认值集中在 `src/config/defaults.json`，用户只在可选 `~/.pi/memory/config.json` 填写覆盖项；已有分支 N/B 覆盖继续优先。参数、限制与旧 Rule 迁移见 [用户指南](USER_GUIDE.md#配置参数)。

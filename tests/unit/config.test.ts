@@ -20,8 +20,8 @@ test("配置契约有六个明确默认值，返回不可变快照", () => {
   assert.ok(Object.isFrozen(parsed));
 });
 
-test("拒绝缺失/多余字段、非对象与非法数字，不能静默修复 N/B", () => {
-  for (const bad of [null, [], "200", {}, { ...DEFAULT_CONFIG, unknown: 1 },
+test("拒绝多余字段、非对象与非法数字；缺省字段继承默认值，不能静默修复 N/B", () => {
+  for (const bad of [null, [], "200", { ...DEFAULT_CONFIG, unknown: 1 },
     { ...DEFAULT_CONFIG, recent_turns: 10 }, { ...DEFAULT_CONFIG, evict_turns: 201 }]) {
     assert.throws(() => parseConfig(bad), /INVALID_CONFIG/);
   }
@@ -61,5 +61,5 @@ test("配置读取一次；热改下轮生效，不回写文件或沿用错误�
     return true;
   });
   await rm(paths.config);
-  await assert.rejects(readConfigSnapshot(paths), /CONFIG_READ_FAILED/);
+  assert.equal((await readConfigSnapshot(paths, {}, undefined, 78643)).state_max_events, 500);
 });
