@@ -49,3 +49,5 @@
 ## 发布资源边界
 
 `AGENTS.md`、`docs/specs/`、`ARCHITECTURE.md`、`IMPLEMENTATION_PLAN.md` 是开发知识库，不是普通 Pi Package 的运行资源。npm 归档使用发布白名单；Git checkout 可含开发资料，但 `pi` manifest 只加载扩展入口及必要资源。固定 Rule 资源从 `specs/1.2.rule_v1_3_final_updated.md` 生成，不能把整个规范目录注入模型。独立的基线与评测阶段已删除，功能、恢复、安装与真实模型验证仍保留。
+
+2026-10-23 后续确认：上下文预算调整已经授权，取代上文“预算未获本轮实施确认”。Agent 60%；State 500/100、12.5%；Window 37.5%；系统工具 15%；自动 N/B 与显式配置优先。见 CONTEXT_BUDGET_DESIGN.md、State §18、Recent Window §14 和更新后的固定 Rule。全历史来源缓存优化仍未授权，不并入本轮。

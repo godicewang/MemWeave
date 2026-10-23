@@ -22,7 +22,7 @@
 
 源代码仓库、Pi Session 和 `~/.pi/memory/` 运行时数据必须分开存放。
 
-已确认的默认设计：Agent 总预算为实际调用模型最大上下文的一半（按 token 向下取整，含输出预留）；Recent Window 容量为 200 个事件、每批移出 40 个；State 容量为 2000 个事件、每批管理 200 个，沿用最多保留 20 个的规则。配置、Rule、Task、State、原文回读及 Recent Window 已实现。
+已确认的默认设计：Agent 总预算为实际调用模型最大上下文的 60%（按 token 向下取整，含输出预留）；Recent Window 容量为 200 个事件、每批移出 40 个；State 容量为 500 个事件、每批管理 100 个，沿用最多保留 20 个的规则。配置、Rule、Task、State、原文回读及 Recent Window 已实现。
 
 ## 开发与发布分离
 
@@ -38,7 +38,7 @@ Rule 热读取、Window 预算和 State 注入统一使用 `context_with_system`
 
 启用开发入口前，须明确按 Pi 原生方式关闭有效自动压缩，优先受信任项目的 `.pi/settings.json`。扩展检查 Pi v1.3.0 与压缩设置；准备失败先取消再报告，卸载不恢复设置，具体范围见 `docs/PACKAGING.md`。
 
-State 窗口只计活动 F/D，Goal 常驻；默认到 2000 时提醒管理最早 200 个、最多保留 20 个。提醒期间正常载入新增认知，允许临时超量；只在可靠提交后移除未保留候选。审计发现预算超限恢复与全历史重复处理仍需讨论改进，正式发布前应明确这些边界；旧 SDK 应用保留在 Git 历史中。
+State 窗口只计活动 F/D，Goal 常驻；默认到 500 或 token 管理线时提醒管理最早 100 个、最多保留 20 个。提醒期间正常载入新增认知，允许临时超量；只在可靠提交后移除未保留候选。审计发现预算超限恢复与全历史重复处理仍需讨论改进，正式发布前应明确这些边界；旧 SDK 应用保留在 Git 历史中。
 
 2026-10-23 审计后的历史 State 查询与 10 条消息回读生命周期已实现；137 项常规测试通过。真实 DeepSeek 新增查询通过；整组视觉测试曾出现一位 OCR 误识别，单独复测通过。变更、失败记录与未修复问题见[审计后改进验收](docs/AUDIT_FOLLOWUP_VALIDATION.md)。
 
@@ -50,18 +50,16 @@ State 窗口只计活动 F/D，Goal 常驻；默认到 2000 时提醒管理最�
 
 ```json
 {
-  "recent_turns": 200,
-  "evict_turns": 40,
-  "state_max_events": 2000,
+  "state_max_events": 500,
   "state_event_max_chars": 100,
-  "state_evict_batch": 200,
+  "state_evict_batch": 100,
   "state_keep_limit": 20
 }
 ```
 
 六个字段均为必填正整数，`evict_turns` 不能超过 `recent_turns`；不接受额外字段。模板只展开这六个白名单变量，不处理用户提示中的占位符。修改配置或模板在下次逻辑请求（含工具续跑）生效，供应商内部网络重试沿用原快照；文件缺失或非法时停止本次推理。
 
-当前容量适配通过 Pi 公开接口解析所选模型的认证与端点，每次逻辑请求读取 OpenAI 兼容 `/models` 的精确 `context_window`，不缓存、不改宿主模型目录。已真实验收 DeepSeek Flash：1,048,576 → 524,288；未提供精确容量的供应商/API 会明确诊断并取消，不能据 peer 通配符推断兼容。请求预算包含系统和工具、完整 State、最大输出、协议与安全预留、最新用户和本次完整回读，再用唯一 Q 分配普通文字；固定内容放不下时主动取消。文字目前采用保守 UTF-8 字节估算和协议余量，可能早于真实 tokenizer 拒绝请求。
+当前容量适配通过 Pi 公开接口解析所选模型的认证与端点，每次逻辑请求读取 OpenAI 兼容 `/models` 的精确 `context_window`，不缓存、不改宿主模型目录。已真实验收 DeepSeek Flash：1,048,576 → 629,145；未提供精确容量的供应商/API 会明确诊断并取消，不能据 peer 通配符推断兼容。请求预算包含系统和工具、完整 State、最大输出、协议与安全预留、最新用户和本次完整回读，再用唯一 Q 分配普通文字；固定内容放不下时主动取消。官方 DeepSeek Flash 使用匹配的 V4.1 tokenizer，协议另留保守余量；未匹配的组合明确标记保守估算。
 
 Task 创建后，程序在同一 memory 目录维护 `index.json` 和 `<cwd_key>/tasks/<task_id>/state.json`（JSONL 认知事件）及可重建的 `state.md`。引用与分支绑定写入 Pi 原生 custom 元数据；没有第二套聊天文件。State 与临时引用头只加入模型请求，原始消息正文不改写。
 
@@ -85,7 +83,7 @@ offset/limit 按 Unicode 码点计算，默认总正文预算为 8000、最大 5
 
 DeepSeek `deepseek-flash` 已通过真实 PNG 输入与跨 Task R 图片回读测试，覆盖随机数字、简单形状和颜色；仍可能误识别，不承诺 OCR 准确率或未经测试的图片格式。详细证据与失败记录见[视觉 API 验收](docs/VISION_API_VALIDATION.md)。
 
-原生 Bash 有完整临时输出时，程序在下一次推理前按哈希保存到 `blobs/`；这些原件与 R 定位需要保留，不随卸载删除。没有原件的历史截断输出只报告可得片段，不冒充全文。普通消息与 Session 已有图片不另外复制。完整回读结果在其后尚不足 10 条真实消息时计入 X，达到 10 条后恢复普通截断和附件引用；user、assistant、每条工具结果各计 1 条，注入内容不计。年龄从当前分支推导，重启不重置；保护不改变窗口范围，也不突破半额预算。
+原生 Bash 有完整临时输出时，程序在下一次推理前按哈希保存到 `blobs/`；这些原件与 R 定位需要保留，不随卸载删除。没有原件的历史截断输出只报告可得片段，不冒充全文。普通消息与 Session 已有图片不另外复制。完整回读结果在其后尚不足 10 条真实消息时计入 X，达到 10 条后恢复普通截断和附件引用；user、assistant、每条工具结果各计 1 条，注入内容不计。年龄从当前分支推导，重启不重置；保护不改变窗口范围，也不突破60% 总预算。
 
 已知 F/D 的历史正文与证据使用 `state_read({"task_id":"task_known","event_ids":["F1","D2"],"max_total_chars":8000})` 查询，支持已归档/移出条目，最多 50 项，默认 8000/上限 50000 字符（正文和证据合计）；逐项报告状态和截断，不切换 Task。不传 event_ids 仍返回当前 State，memory_read 不接受 F/D。
 
@@ -110,7 +108,7 @@ src/
 ├── state/                  Symbolic State
 ├── window/                 Recent Window
 ├── memory/                 引用与原文回读
-├── pi/                     请求生命周期、兼容诊断与上下文半额上限
+├── pi/                     请求生命周期、兼容诊断与上下文60% 总上限
 └── storage/                路径与存储基础能力
 resources/rule.md           从独立模板生成，提交以支持 Git 安装
 scripts/                    开发构建脚本
@@ -138,3 +136,5 @@ npm run test:live
 `test:distribution` 默认使用既有 GitHub SSH 通道，Git 候选取本地 `origin/main`；可用 `MEMWEAVE_DISTRIBUTION_REF=<完整commit>` 指定已推送候选，用 `MEMWEAVE_DISTRIBUTION_TRANSPORT=https` 复测 HTTPS。该组测试独立于常规检查，npm 路径验证本地归档和临时 registry 的真实安装/升级，不代表 npm 公网发布已验收。
 
 当前版本为 `0.0.0`，`private: true` 防止开发快照被误发布到 npm；正式包名、版本与许可等事项在公开发布前确定。不要手改 `resources/rule.md`，应维护规范中的两份一致模板后执行 `npm run resources:sync`。密钥继续使用仓库外的私有配置。
+
+2026-10-23 预算调整：Agent 使用模型总容量的 60%，State 默认 500 条/每批候选 100/正文 100 字符。State 12.5%、Window 37.5%、系统工具 15%、输出 10%、最新输入 5%、完整回读 10%、协议 5%、安全 5%。config.json 省略 N/B 才按模型自动计算，已有显式数值不覆盖。输出上限落实到请求；末尾 State 附实际预算快照。State 达到 token 管理线会提前提醒，超准入预算的增长在提交前拒绝。详见开发仓库 docs/CONTEXT_BUDGET_DESIGN.md。

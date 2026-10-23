@@ -53,7 +53,7 @@ resources/rule.md           # 从独立 Rule 模板生成并校验，支持 Git 
 
 阶段 4 的 memory_read 从原始 Session 条目回读，逐项校验来源、字符范围与预算。R 定位和必要 Bash 完整输出定位分别保存为 memweave.aliases.v1 / memweave.originals.v1，格式见 Task §9；不改 U/A/T 元数据。blobs 按 SHA-256 寻址并以流式复制、哈希核验和有限范围读取控制内存；Session 已有图片直接按内容块定位。Task 锁保护跨进程别名序列，R evidence 回到最终来源核验；读取不切换 Task、不改变认知版本。完整回读范围在原生工具 details 中标记，阶段 5 再接统一 X 预算。
 
-2026-10-23 用户确认：完整回读的展示豁免持续到其后新增第 10 条真实消息，按 user/assistant/每条 toolResult 逐条计数；从当前 Pi 分支推导年龄，不新增持久化倒计时，不改变窗口范围或半额预算。state_read 增加按已知 F/D 查询历史认知的受控模式，1–50 项、默认 8000/上限 50000 字符；旧当前 State 查询保持，历史数据仍只来自 state.json，不将 F/D 塞入 memory_read，也不增加自有存储。详见 State §17、Recent Window §5.2。
+2026-10-23 用户确认：完整回读的展示豁免持续到其后新增第 10 条真实消息，按 user/assistant/每条 toolResult 逐条计数；从当前 Pi 分支推导年龄，不新增持久化倒计时，不改变窗口范围或60% 总预算。state_read 增加按已知 F/D 查询历史认知的受控模式，1–50 项、默认 8000/上限 50000 字符；旧当前 State 查询保持，历史数据仍只来自 state.json，不将 F/D 塞入 memory_read，也不增加自有存储。详见 State §17、Recent Window §5.2。
 
 ## 3. 核心数据流
 
@@ -76,7 +76,7 @@ Agent Tool Calls
 
 每次正常主会话模型请求，在同一个 `context_with_system` 处理中读取 Rule、固定 Task/配置/State 快照，先渲染 Rule，再执行上述 Window/State 流程。预算使用实际渲染的有效 system 和工具声明，保留原生消息协议。程序生成的 Rule、State/Window 提醒只存在于请求视图，不写入 Pi Session。
 
-请求快照同时固定实际模型容量 C_model 与 Agent 上限 `C = floor(C_model / 2)`；全部输入、输出预留、协议开销和安全余量共同受 C 约束，Q 的结构不变。容量核验收敛于 `src/pi/`，不改 Pi 全局目录；模型切换后重新计算，网络重试沿用原快照。Recent Window 默认 200/40，State 默认 2000/100/200/20，字段含义以 Rule §3、State §7、Recent Window §5.1 为准；事件容量不能替代 token 校验。
+请求快照同时固定实际模型容量 C_model 与 Agent 上限 `C = floor(C_model * 3 / 5)`；全部输入、输出预留、协议开销和安全余量共同受 C 约束，Q 的结构不变。容量核验收敛于 `src/pi/`，不改 Pi 全局目录；模型切换后重新计算，网络重试沿用原快照。Recent Window 默认 200/40，State 默认 500/100/200/20，字段含义以 Rule §3、State §7、Recent Window §5.1 为准；事件容量不能替代 token 校验。
 
 ```text
 Pi 原生准备 → 普通 context 处理 → Pi 恢复 system/工具状态
@@ -118,7 +118,7 @@ Pi 的 `settings.json` 与 MemWeave 的 `~/.pi/memory/config.json` 是不同配�
 
 - **Rule 热加载**：阶段 1 已用正式模块验证工具续跑、模板更新、原生 SYSTEM/APPEND/AGENTS、主动取消和 reload；后续接入 Task/State/Window 时持续回归。
 - **并行工具提交**：验证同一 assistant 同时调用 `state_remain` 和 `state_append` 时的实际提交时序，保留独立提交/幂等契约，不假设串行。
-- **真实请求成本**：普通模型先验收精确容量与半额上限；覆盖 Pi 静态模型目录和供应商容量不一致的诊断。虚拟路由、MCP/codemode 的动态声明及后置上下文变换逐组合检查实际模型容量与工具成本。无法满足既定预算时报告限制，不静默改变 Q。
+- **真实请求成本**：普通模型先验收精确容量与60% 总上限；覆盖 Pi 静态模型目录和供应商容量不一致的诊断。虚拟路由、MCP/codemode 的动态声明及后置上下文变换逐组合检查实际模型容量与工具成本。无法满足既定预算时报告限制，不静默改变 Q。
 
 
 ## 6. 发布与安装边界（仅适配层，不改变核心方案）
