@@ -36,6 +36,7 @@ import { conservativeCounter } from "../window/tokens.ts";
 import { budgetPlan } from "../window/policy.ts";
 import { withLock } from "../storage/files.ts";
 import { DEFAULT_CONFIG } from "../config/schema.ts";
+import { SourceVerifier } from "./source-verification.ts";
 import { windowReminder, stateInsert } from "../window/render.ts";
 export function windowMetadata(entries: SessionEntry[]): WindowMetadata | null {
   const last = entries.findLast(
@@ -77,6 +78,8 @@ export interface WindowOptions {
   thinkingLevel?: () => ModelThinkingLevel;
 }
 export class WindowService {
+  private readonly sources = new SourceVerifier();
+  resetSources(): void { this.sources.reset(); }
   readonly tasks: TaskService;
   readonly options: WindowOptions;
   constructor(tasks: TaskService, options: WindowOptions = {}) {
@@ -112,18 +115,14 @@ export class WindowService {
         ctx.sessionManager.getSessionId(),
         anchor,
       );
-    // Match raw and native projected identities, including supported context_edit/compaction recovery.
-    const known = new Set<string>();
-    for (const entry of entries)
-      if (entry.type === "message") known.add(JSON.stringify(entry.message));
-    for (const entry of ctx.sessionManager.buildSessionProjection().entries)
-      for (const message of entry.messages) known.add(JSON.stringify(message));
-    for (const message of prepared.messages) {
+    const { matched } = this.sources.match(
+      prepared.messages, entries, ctx.sessionManager.getSessionId(),
+      () => ctx.sessionManager.buildSessionProjection(), ctx.signal,
+    );
+    for (const [index, message] of prepared.messages.entries()) {
       if (message.role === "system") continue;
-      if (!known.has(JSON.stringify(message)))
-        throw Error(
-          "UNSUPPORTED_WINDOW_CONTEXT: incoming message has no native source",
-        );
+      if (!matched[index])
+        throw Error("UNSUPPORTED_WINDOW_CONTEXT: incoming message has no native source");
       if (
         message.role === "compactionSummary" &&
         entries.some((e) => e.type === "compaction") &&

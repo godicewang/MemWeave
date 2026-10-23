@@ -231,12 +231,13 @@ export function registerMemweave(
         report(error, ctx);
       }
     };
-  pi.on(
-    "session_tree",
-    guarded(async (ctx) => {
-      await tasks.memory.append(ctx, SCOPE_TYPE, tasks.scope(ctx));
-    }),
-  );
+  const onTree = guarded(async (ctx) => {
+    await tasks.memory.append(ctx, SCOPE_TYPE, tasks.scope(ctx));
+  });
+  pi.on("session_tree", (event, ctx) => {
+    window.resetSources();
+    return onTree(event, ctx);
+  });
   pi.on("turn_end", async (event, ctx) => {
     try {
       if (ctx.signal?.aborted) return;

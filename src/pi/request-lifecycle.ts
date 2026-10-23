@@ -4,6 +4,8 @@ export type RequestMessages = ContextWithSystemEvent["messages"];
 
 /** Internal seam for the later Rule/Task/Window modules; no persisted frame or new model tool. */
 export interface RequestServices {
+  /** Clear optional in-memory request helpers on native Session startup/reload/replacement. */
+  reset?(): void;
   prepare(messages: RequestMessages, ctx: ExtensionContext): Promise<RequestMessages>;
   report(error: unknown, ctx: ExtensionContext): void;
 }
@@ -28,7 +30,7 @@ export function registerRequestLifecycle(pi: ExtensionAPI, services?: RequestSer
   };
   const subscriptions = [
     pi.on("session_start", (_event, ctx) => {
-      try { check(); } catch (error) { report(error, ctx); }
+      try { services?.reset?.(); check(); } catch (error) { report(error, ctx); }
     }),
     pi.on("session_before_compact", () => ({ cancel: true })),
     pi.on("context_with_system", async (event, ctx) => {

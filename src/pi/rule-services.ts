@@ -79,6 +79,7 @@ export function createRuleRequestServices(
         : capture(ctx);
     };
   return {
+    reset: () => options.window?.resetSources(),
     report: reportRequestError,
     async prepare(messages, ctx) {
       ctx.signal?.throwIfAborted();

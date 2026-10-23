@@ -145,3 +145,5 @@ manifest 使用公开的 `pi.extensions`，优先指向可直接加载的 `src/e
 宿主依赖采用官方 peer 约定，开发依赖锁用于复现测试，不控制用户宿主。安装、更新、移除和 TUI 由 Pi 负责；本项目不另建安装器或 TUI。共享配置、恢复记录、宿主版本和扩展共存四项副作用见 `PACKAGING.md`。
 
 本次预算适配使用匹配的 DeepSeek V4.1 tokenizer；仅在公开 before_provider_request 对齐输出上限。统一上下文处理器仍是唯一业务组装入口。末尾 State 附计费的预算快照；State 的 token 管理与提交准入见 CONTEXT_BUDGET_DESIGN.md，不增加持久化协议。
+
+2026-10-24 来源核验：src/pi/source-verification.ts 保存有界原生位置提示（最多 8192 项、约 16 MiB），命中也比较本次快照中的完整消息；miss 批量补查，必要时才读取 Pi 原生投影。Session/分支/reload 清空，不保存正文、投影、通过结论或磁盘缓存。预算与各模块持久化协议不变，见 SOURCE_VERIFICATION.md。
