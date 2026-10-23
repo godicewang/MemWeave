@@ -18,6 +18,7 @@ import { StateBatchSchema, stateBatchId, type StateBatch } from "./window.ts";
 import { atomicWrite, readOptional } from "../storage/files.ts";
 import { now, stableId } from "../storage/identity.ts";
 import type { MemoryPaths, TaskLocation } from "../storage/paths.ts";
+import type { StateGuard } from "./budget.ts";
 type EvidenceReferences = Set<string> | (() => Promise<Set<string>>);
 const resolveReferences = (refs: EvidenceReferences) =>
   typeof refs === "function" ? refs() : Promise.resolve(refs);
@@ -56,6 +57,7 @@ export class StateStore {
     task: TaskLocation,
     goal: string,
     operation: string,
+    guard?: StateGuard,
   ): Promise<State> {
     const old = await readOptional(this.paths.state(task));
     if (old !== undefined) {
@@ -72,6 +74,7 @@ export class StateStore {
       evidence: {},
     };
     const state = reduceState([event]);
+    await guard?.(task, state);
     await this.commit(task, JSON.stringify(event) + "\n");
     return state;
   }
@@ -81,6 +84,7 @@ export class StateStore {
     operation: string,
     maxChars: number,
     refs: EvidenceReferences,
+    guard?: StateGuard,
   ): Promise<State> {
     if (!Check(AppendSchema, { items })) throw Error("INVALID_STATE_APPEND");
     const state = await this.read(task),
@@ -138,6 +142,7 @@ export class StateStore {
     }
     const bytes = (await readOptional(this.paths.state(task)))!;
     const result = reduceState([...state.events, ...events]);
+    await guard?.(task, result, state);
     await this.commit(
       task,
       bytes + events.map((e) => JSON.stringify(e) + "\n").join(""),
@@ -150,6 +155,7 @@ export class StateStore {
     operation: string,
     maxChars: number,
     refs: EvidenceReferences,
+    guard?: StateGuard,
   ): Promise<State> {
     if (!Check(UpdateGoalSchema, input)) throw Error("INVALID_UPDATE_GOAL");
     const state = await this.read(task),
@@ -180,6 +186,7 @@ export class StateStore {
     };
     const result = reduceState([...state.events, event]),
       bytes = (await readOptional(this.paths.state(task)))!;
+    await guard?.(task, result, state);
     await this.commit(task, bytes + JSON.stringify(event) + "\n");
     return result;
   }
@@ -189,6 +196,7 @@ export class StateStore {
     operation: string,
     maxChars: number,
     refs: EvidenceReferences,
+    guard?: StateGuard,
   ): Promise<State> {
     if (!Check(ModifyFactSchema, input)) throw Error("INVALID_MODIFY_FACT");
     const state = await this.read(task),
@@ -227,6 +235,7 @@ export class StateStore {
     };
     const result = reduceState([...state.events, event]),
       bytes = (await readOptional(this.paths.state(task)))!;
+    await guard?.(task, result, state);
     await this.commit(task, bytes + JSON.stringify(event) + "\n");
     return result;
   }

@@ -56,7 +56,7 @@ test("原生循环的首次与工具续跑使用新快照；提示和工具保�
   }
   assert.equal(probe.frames.length, 2);
   assert.ok(probe.frames[1]!.systemCost > probe.frames[0]!.systemCost);
-  assert.equal(probe.frames[0]!.limit, 524_288);
+  assert.equal(probe.frames[0]!.limit, 629_145);
   const sessionText = await readFile(h.manager.getSessionFile()!, "utf8");
   assert.doesNotMatch(sessionText, /HOT_RULE|STATE_PROBE|REMINDER_PROBE/);
   assert.match(sessionText, /PROBE_TOOL_OK/);

@@ -15,6 +15,7 @@ import {
   releaseFixture,
   releaseWorker,
   sourceArtifact,
+  repository,
 } from "../fixtures/release.ts";
 
 test("temporary npm registry: installed release upgrade recovers real Task/State/Session and removal preserves them", async (t) => {
@@ -27,14 +28,65 @@ test("temporary npm registry: installed release upgrade recovers real Task/State
     ],
     ["0.0.0", await readFile(await packArtifact(f.root))],
   ]);
+  const dependencyRoot = join(f.root, "dependency");
+  await mkdir(dependencyRoot);
+  const dependencyBytes = await readFile(
+    await packArtifact(
+      dependencyRoot,
+      join(repository, "node_modules/@huggingface/tokenizers"),
+    ),
+  );
+  const dependencyManifest = JSON.parse(
+    await readFile(
+      join(repository, "node_modules/@huggingface/tokenizers/package.json"),
+      "utf8",
+    ),
+  );
+  const manifests = new Map([
+    [
+      "0.0.0-before",
+      JSON.parse(await readFile(join(old, "package.json"), "utf8")),
+    ],
+    [
+      "0.0.0",
+      JSON.parse(await readFile(join(repository, "package.json"), "utf8")),
+    ],
+  ]);
   let origin = "";
   const served = new Set<string>();
   const server = createServer((request, response) => {
+    if (decodeURIComponent(request.url ?? "") === "/@huggingface/tokenizers") {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          name: dependencyManifest.name,
+          "dist-tags": { latest: dependencyManifest.version },
+          versions: {
+            [dependencyManifest.version]: {
+              ...dependencyManifest,
+              dist: {
+                tarball: `${origin}/tokenizers.tgz`,
+                integrity: `sha512-${createHash("sha512").update(dependencyBytes).digest("base64")}`,
+              },
+            },
+          },
+        }),
+      );
+      return;
+    }
+    if (request.url === "/tokenizers.tgz") {
+      served.add("tokenizer");
+      response.writeHead(200, { "content-type": "application/octet-stream" });
+      response.end(dependencyBytes);
+      return;
+    }
+
     if (request.url === "/memweave") {
       const versions = Object.fromEntries(
         [...artifacts].map(([version, bytes]) => [
           version,
           {
+            ...manifests.get(version),
             name: "memweave",
             version,
             dist: {
@@ -215,7 +267,7 @@ test("temporary npm registry: installed release upgrade recovers real Task/State
     assert.ok(value.equals(await readFile(path)));
   assert.equal(await readFile(auth, "utf8"), authValue);
   assert.equal(settings.getCompactionEnabled(), false);
-  assert.deepEqual([...served].sort(), ["0.0.0", "0.0.0-before"]);
+  assert.deepEqual([...served].sort(), ["0.0.0", "0.0.0-before", "tokenizer"]);
   t.diagnostic(
     "Local registry protocol only, not npmjs.org: two installed versions; independent Pi processes; 7 local HTTP model requests; no real inference",
   );

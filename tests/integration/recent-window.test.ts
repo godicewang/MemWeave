@@ -532,7 +532,7 @@ test("State is never trimmed to fit: a large full State cancels a small model bu
     h.paths.config,
     JSON.stringify({ ...DEFAULT_CONFIG, recent_turns: 1, evict_turns: 1 }),
   );
-  capacity = 20_000;
+  capacity = 12_000;
   h.session.setActiveToolsByName([]);
   const count = h.faux.state.callCount;
   await h.session.prompt("retain the full State");

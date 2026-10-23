@@ -17,6 +17,11 @@ async function assertPackageLoads(packageRoot: string, temporaryRoot: string) {
   await mkdir(workspace, { recursive: true });
   await mkdir(agentDir, { recursive: true });
 
+  const manifest = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
+  if (manifest.dependencies?.["@huggingface/tokenizers"]) {
+    const npm = process.env.npm_execpath!;
+    await run(process.execPath, [npm, "install", "--prefix", temporaryRoot, "--cache", join(temporaryRoot, "npm-cache"), "--ignore-scripts", "--no-audit", "--no-fund", "--package-lock=false", `@huggingface/tokenizers@${manifest.dependencies["@huggingface/tokenizers"]}`]);
+  }
   const result = await discoverAndLoadExtensions([packageRoot], workspace, agentDir);
 
   assert.deepEqual(result.errors, []);
@@ -34,7 +39,7 @@ async function assertPackageLoads(packageRoot: string, temporaryRoot: string) {
   if (registration.includes('"recent_window_set"')) expectedTools.push("recent_window_set");
   assert.deepEqual([...extension.tools.keys()].sort(), expectedTools.sort());
   assert.deepEqual([...extension.handlers.keys()].sort(), phase2
-    ? ["context_with_system", "session_before_compact", "session_start", "session_tree", "tool_call", "turn_end"]
+    ? [...(registration.includes("alignOutput") ? ["before_provider_request"] : []), "context_with_system", "session_before_compact", "session_start", "session_tree", "tool_call", "turn_end"]
     : ["context_with_system", "session_before_compact", "session_start"]);
   for (const handlers of extension.handlers.values()) assert.equal(handlers.length, 1);
   assert.deepEqual(await readdir(workspace), []);
@@ -70,6 +75,7 @@ test("npm 归档只含运行资源，解包后由 Pi 加载同一入口", async 
     "USER_GUIDE.md",
     "package.json",
     "resources/rule.md",
+    ...(await readdir(join(root, "resources/tokenizer"))).map(name => `resources/tokenizer/${name}`),
     ...sources,
   ].sort());
 

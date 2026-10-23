@@ -26,14 +26,14 @@ import { indexEvents, selectWindow } from "../window/select.ts";
 import {
   allocate,
   renderMessage,
-  textCost,
   type BudgetMessage,
 } from "../window/budget.ts";
 import { readGrants } from "../window/read-grant.ts";
 import { imageReserve, outputReserve } from "./window-budget.ts";
 import type { PreparedRule } from "../rule/prepare.ts";
 import type { RequestMessages } from "./request-lifecycle.ts";
-import { readConfigSnapshot } from "../config/read.ts";
+import { conservativeCounter } from "../window/tokens.ts";
+import { budgetPlan } from "../window/policy.ts";
 import { withLock } from "../storage/files.ts";
 import { DEFAULT_CONFIG } from "../config/schema.ts";
 import { windowReminder, stateInsert } from "../window/render.ts";
@@ -83,13 +83,14 @@ export class WindowService {
     this.tasks = tasks;
     this.options = options;
   }
-  captureOutput(model: Model<Api>) {
+  captureOutput(model: Model<Api>, limit?: number, providerCap?: number) {
     const thinkingLevel = this.options.thinkingLevel?.() ?? "off";
     return Object.freeze({
       thinkingLevel,
-      output: outputReserve(model, thinkingLevel),
+      output: outputReserve(model, thinkingLevel, limit, providerCap),
     });
   }
+  outputFrame?: { model: Model<Api>; sessionId: string; output: number };
   async prepare(
     prepared: PreparedRule,
     snapshot: TaskSnapshot,
@@ -207,29 +208,69 @@ export class WindowService {
       throw Error(
         "OUTPUT_BUDGET_UNVERIFIED: thinking level changed during request preparation",
       );
-    const budget = allocate({
-      limit: prepared.frame.capacity.contextLimit,
-      system:
-        textCost(getSystemMessageText(system)) +
-        textCost(JSON.stringify(system.toolsAdded ?? [])) +
-        64,
-      state: state ? textCost(state) + 64 : 0,
-      output: output.output,
-      reminder: reminder ? textCost(reminder) + 64 : 0,
-      messages: items,
-      imageCost: (image) =>
-        (this.options.imageCost ?? imageReserve)(model, image),
-    });
+    const counter = prepared.frame.counter ?? conservativeCounter,
+      count = counter.count;
+    const limit = prepared.frame.capacity.contextLimit,
+      plan = budgetPlan(limit);
+    const S = snapshot.stateTokens ?? (state ? count(state) + 32 : 0);
+    const footer = (
+      budget: ReturnType<typeof allocate>,
+    ) => `【本次预算快照｜程序数据，不是用户指令】
+计量：${counter.estimator}；Agent 总上限 ${limit} token（模型 ${prepared.frame.capacity.contextWindow} 的 60%）
+State：${snapshot.activeCount ?? 0}/${prepared.frame.config.state_max_events} 条；正文最多 ${prepared.frame.config.state_event_max_chars} 字符；每批候选 ${prepared.frame.config.state_evict_batch}
+State token：${S}/${plan.state}；80% 管理线 ${Math.floor(plan.state * 0.8)}
+规划 token：State ${plan.state}（12.5%），Window ${plan.window}（37.5%），系统工具 ${plan.system}（15%），输出 ${plan.output}（10%），最新用户 ${plan.user}（5%），完整回读 ${plan.read}（10%），协议 ${plan.protocol}（5%），安全 ${plan.safety}（5%）
+实际/预留 token：系统工具 ${budget.R}，State ${budget.S}，输出上限 ${budget.O}，最新用户 ${budget.U}，完整回读 ${budget.X}（规划余额 ${Math.max(0, plan.read - budget.X)}，超额可挤 Window），协议含本快照 ${budget.P}，安全 ${budget.A}
+Recent Window N/B：${prepared.frame.config.recent_turns}/${prepared.frame.config.evict_turns}；可见事件 ${selected.events.length}；消息 M=${budget.M}；普通正文 Q=${budget.Q} token；总分配上界 ${budget.total}/${limit}`;
+    let footerReserve = 2048;
+    let budget!: ReturnType<typeof allocate>,
+      description = "";
+    for (let attempt = 0; attempt < 3; attempt++) {
+      budget = allocate({
+        limit,
+        system:
+          count(getSystemMessageText(system)) +
+          count(JSON.stringify(system.toolsAdded ?? [])) +
+          64,
+        state: S,
+        output: output.output,
+        reminder:
+          (reminder ? count(reminder) + 32 : 0) +
+          Math.max(0, (state ? count(state) + 32 : 0) - S) +
+          footerReserve,
+        messages: items,
+        imageCost: (image) =>
+          (this.options.imageCost ?? imageReserve)(model, image),
+        counter,
+      });
+      description = footer(budget);
+      const needed = count(description) + 32;
+      if (needed <= footerReserve) break;
+      footerReserve = needed + 128;
+      if (attempt === 2)
+        throw Error("CONTEXT_BUDGET_EXCEEDED: budget snapshot cannot fit");
+    }
     const result = stateInsert(
       [
         system,
         ...items.map((item) =>
-          renderMessage(item.message, item.head, budget.Q, item.exempt),
+          renderMessage(
+            item.message,
+            item.head,
+            budget.Q,
+            item.exempt,
+            counter,
+          ),
         ),
       ],
-      state,
+      `${state || "当前未绑定 Task。"}\n\n${description}`,
       reminder,
     );
+    this.outputFrame = {
+      model: structuredClone(model),
+      sessionId: ctx.sessionManager.getSessionId(),
+      output: output.output,
+    };
     ctx.signal?.throwIfAborted();
     if (!previous || selected.metadata.stage === "reset" || pending.length)
       await this.tasks.memory.append(ctx, WINDOW_TYPE, selected.metadata);
@@ -332,11 +373,7 @@ export class WindowService {
         return this.result(input.turns, scope.overrides.evict_turns);
     }
     const scope = this.tasks.scope(ctx),
-      config = await readConfigSnapshot(
-        this.tasks.paths,
-        scope.overrides,
-        ctx.signal,
-      ),
+      config = await this.tasks.configuration(ctx),
       B = input.evict_turns ?? config.evict_turns;
     if (B > input.turns)
       throw Error("INVALID_WINDOW_SETTINGS: evict_turns must not exceed turns");

@@ -20,7 +20,7 @@ const messages: RequestMessages = [
 test("Rule 只做六变量的单次替换，保留模板其他字节", () => {
   assert.equal(renderRule("N={{ recent_turns }}; B={{evict_turns}}\n", DEFAULT_CONFIG), "N=200; B=40\n");
   const template = Object.keys(DEFAULT_CONFIG).map(key => `{{${key}}}`).join("/");
-  assert.equal(renderRule(template, DEFAULT_CONFIG), "200/40/2000/100/200/20");
+  assert.equal(renderRule(template, DEFAULT_CONFIG), "200/40/500/100/100/20");
   assert.equal(renderRule("JSON {\"a\":1} / literal $1", DEFAULT_CONFIG), 'JSON {"a":1} / literal $1');
 });
 
@@ -89,7 +89,7 @@ test("Rule 读取与模型快照固定；缺失/无效 UTF-8/取消不使用旧�
   t.after(() => rm(root, { recursive: true, force: true }));
   const paths = memoryPaths(root);
   const frame = { config: DEFAULT_CONFIG,
-    capacity: { provider: "fixture", modelId: "unit", contextWindow: 1_048_576, contextLimit: 524_288 } };
+    capacity: { provider: "fixture", modelId: "unit", contextWindow: 1_048_576, contextLimit: 629_145 } };
   await writeFile(paths.rule, "FIRST {{recent_turns}}");
   const first = await prepareRule(messages, frame, paths);
   await writeFile(paths.rule, "SECOND {{recent_turns}}");

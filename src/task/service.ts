@@ -8,7 +8,9 @@ import { Check } from "typebox/value";
 import type { MemoryConfig } from "../config/schema.ts";
 import { prepareStateBatch, renderStateReminder } from "../state/window.ts";
 import { requestStateBatch } from "../pi/state-batch.ts";
-import { readConfigSnapshot } from "../config/read.ts";
+import { stateAdmission, stateSize, type StateGuard } from "../state/budget.ts";
+import type { TokenCounter } from "../window/tokens.ts";
+import { budgetPlan } from "../window/policy.ts";
 import {
   SessionMemory,
   scopeOf,
@@ -56,7 +58,14 @@ import {
   type ResumeInput,
 } from "./model.ts";
 
+export interface TaskBudget {
+  readonly config: MemoryConfig;
+  readonly counter: TokenCounter;
+  readonly limit: number;
+}
 export interface TaskSnapshot {
+  stateTokens?: number;
+  activeCount?: number;
   task: Task | null;
   state: string | null;
   references: Map<string, LocatedReference>;
@@ -76,6 +85,23 @@ export class TaskService {
     this.memory = new SessionMemory(pi);
     this.goalMetadata = new GoalMetadataResolver(this.memory);
     this.reader = new MemoryService(paths, this.index, this.memory);
+  }
+  resolveBudget?: (ctx: ExtensionContext) => Promise<TaskBudget>;
+  async configuration(ctx: ExtensionContext) {
+    if (!this.resolveBudget) throw Error("STATE_BUDGET_UNVERIFIED");
+    return (await this.resolveBudget(ctx)).config;
+  }
+  private admission(ctx: ExtensionContext): StateGuard {
+    return async (task, next, previous) => {
+      if (!this.resolveBudget) throw Error("STATE_BUDGET_UNVERIFIED");
+      const frame = await this.resolveBudget(ctx);
+      ctx.signal?.throwIfAborted();
+      stateAdmission(frame.counter, budgetPlan(frame.limit).state)(
+        task,
+        next,
+        previous,
+      );
+    };
   }
   scope(ctx: ExtensionContext) {
     this.memory.check();
@@ -190,17 +216,14 @@ export class TaskService {
       this.paths.taskLock(location),
       async () => {
         const scope = this.scope(ctx),
-          config = await readConfigSnapshot(
-            this.paths,
-            scope.overrides,
-            ctx.signal,
-          );
+          config = await this.configuration(ctx);
         if ([...input.goal].length > config.state_event_max_chars)
           throw Error("STATE_CONTENT_TOO_LONG: initial Goal");
         const state = await this.state.initialize(
           location,
           input.goal,
           this.operation(ctx, callId, taskId),
+          this.admission(ctx),
         );
         let task: Task | undefined;
         try {
@@ -281,11 +304,7 @@ export class TaskService {
             ctx,
           ),
           refs = await synchronizeReferences(task, ctx, this.memory);
-        const config = await readConfigSnapshot(
-          this.paths,
-          scope.overrides,
-          ctx.signal,
-        );
+        const config = await this.configuration(ctx);
         const state = await this.state.append(
           task,
           items,
@@ -299,6 +318,7 @@ export class TaskService {
                 items.flatMap((item) => Object.keys(item.evidence)),
               )),
             ]),
+          this.admission(ctx),
         );
         await this.derivatives({ ...task, updated_at: now() }, state);
         return `State updated: v${state.version}`;
@@ -325,11 +345,7 @@ export class TaskService {
             ctx,
           ),
           refs = await synchronizeReferences(task, ctx, this.memory);
-        const config = await readConfigSnapshot(
-          this.paths,
-          scope.overrides,
-          ctx.signal,
-        );
+        const config = await this.configuration(ctx);
         const state = await this.state.updateGoal(
           task,
           input,
@@ -343,6 +359,7 @@ export class TaskService {
                 Object.keys(input.evidence),
               )),
             ]),
+          this.admission(ctx),
         );
         await this.derivatives({ ...task, updated_at: now() }, state);
         return `State updated: v${state.version}`;
@@ -369,11 +386,7 @@ export class TaskService {
             ctx,
           ),
           refs = await synchronizeReferences(task, ctx, this.memory),
-          config = await readConfigSnapshot(
-            this.paths,
-            scope.overrides,
-            ctx.signal,
-          );
+          config = await this.configuration(ctx);
         const state = await this.state.modifyFact(
           task,
           input,
@@ -387,6 +400,7 @@ export class TaskService {
                 Object.keys(input.append_fact.evidence),
               )),
             ]),
+          this.admission(ctx),
         );
         await this.derivatives({ ...task, updated_at: now() }, state);
         return `State updated: v${state.version}`;
@@ -576,6 +590,7 @@ export class TaskService {
   async snapshot(
     ctx: ExtensionContext,
     config: MemoryConfig,
+    budget?: TaskBudget,
   ): Promise<TaskSnapshot> {
     await this.memory.verify(ctx);
     const scope = this.scope(ctx);
@@ -599,10 +614,21 @@ export class TaskService {
           state = await this.state.read(task);
         await this.reader.capture(task, references, ctx);
         const updated = await this.derivatives(task, state);
-        const batch = prepareStateBatch(task.task_id, state, config);
+        const tokens = budget
+          ? stateSize(task.task_id, state, budget.counter)
+          : undefined;
+        const batch = prepareStateBatch(
+          task.task_id,
+          state,
+          config,
+          budget !== undefined &&
+            tokens! >= Math.floor(budgetPlan(budget.limit).state * 0.8),
+        );
         if (batch) await this.memory.append(ctx, STATE_REQUEST_TYPE, batch);
         return {
           task: structuredClone(updated),
+          ...(tokens !== undefined ? { stateTokens: tokens } : {}),
+          activeCount: state.facts.length + state.decisions.length,
           state:
             renderState(task.task_id, state) +
             (batch ? renderStateReminder(batch, state) : ""),

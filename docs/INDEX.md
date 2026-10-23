@@ -27,6 +27,8 @@
 | `PHASE_5_VALIDATION.md` | 完整事件、唯一 Q、两阶段提交、重启／分支／失败、真实 DeepSeek 与视觉回归 |
 | `PHASE_6_READINESS.md` | 阶段 6 早期部分安装验收的历史记录；当前状态由最终验收记录取代 |
 | `PHASE_6_VALIDATION.md` | 阶段 6 完整恢复、多进程、安装升级、真实 DeepSeek 与兼容边界 |
+| `CONTEXT_BUDGET_DESIGN.md` | 已确认 60% 预算、500 条 State、自动窗口与提交准入契约 |
+| `CONTEXT_BUDGET_VALIDATION.md` | Token 校准、实际输出、State 准入、恢复与分发验收 |
 | `AUDIT_FOLLOWUP_VALIDATION.md` | 历史 State 查询、10 条消息回读期限、真实 API Schema 修正及审计遗留问题 |
 | `../USER_GUIDE.md` | 随 Package 提供的安装配置、使用、恢复、升级卸载与故障说明 |
 

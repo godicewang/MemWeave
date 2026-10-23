@@ -1,13 +1,13 @@
 import type { NativeMessage } from "./select.ts";
-export const textCost = (text: string) => Buffer.byteLength(text, "utf8");
+import { conservativeCounter, type TokenCounter } from "./tokens.ts";
+import { budgetPlan } from "./policy.ts";
+export const textCost = conservativeCounter.count;
 export const budgetError = () =>
   Error(
-    "CONTEXT_BUDGET_EXCEEDED: fixed costs or minimum presentation exceed half context",
+    "CONTEXT_BUDGET_EXCEEDED: necessary input/output exceeds 60% context; reduce input/read range or use a larger model to organize State",
   );
 const tag = "\n[TRUNCATED]";
-function protectedText(p: object) {
-  return "textSignature" in p;
-}
+const protectedText = (p: object) => "textSignature" in p;
 export function ordinaryText(message: NativeMessage): string {
   return typeof message.content === "string"
     ? message.content
@@ -21,6 +21,37 @@ export interface BudgetMessage {
   exempt: boolean;
   read?: boolean;
 }
+/** Counts transmitted structural content, not local Session/usage/timestamp/details metadata. */
+export function protocolCost(
+  message: NativeMessage,
+  counter: TokenCounter,
+): number {
+  let result = 32 + counter.count(message.role);
+  if (message.role === "toolResult")
+    result +=
+      counter.count(message.toolName) + counter.count(message.toolCallId);
+  if (Array.isArray(message.content))
+    for (const p of message.content) {
+      if (p.type === "toolCall")
+        result +=
+          16 +
+          counter.count(p.name) +
+          counter.count(p.id) +
+          counter.count(JSON.stringify(p.arguments)) +
+          counter.count(p.thoughtSignature ?? "") +
+          counter.count(p.namespace ?? "");
+      else if (p.type === "thinking")
+        result +=
+          16 +
+          counter.count(p.thinking) +
+          counter.count(p.thinkingSignature ?? "");
+      else if (p.type === "text" && protectedText(p))
+        result +=
+          16 + counter.count(p.text) + counter.count(p.textSignature ?? "");
+      else result += 8; // Native block boundaries; image cost is charged separately.
+    }
+  return result;
+}
 export function allocate(input: {
   limit: number;
   system: number;
@@ -29,64 +60,59 @@ export function allocate(input: {
   reminder: number;
   messages: BudgetMessage[];
   imageCost: (image: unknown) => number;
+  counter?: TokenCounter;
 }) {
+  const counter = input.counter ?? conservativeCounter,
+    plan = budgetPlan(input.limit);
   const M = input.messages.length,
     R = input.system,
     S = input.state,
-    O = input.output;
-  let H = 4096 + input.reminder,
+    O = input.output,
+    A = plan.safety;
+  let P = input.reminder,
     U = 0,
     X = 0;
   for (const item of input.messages) {
-    const message = item.message;
-    const text = textCost(
-      (item.head ? item.head + "\n" : "") + ordinaryText(message),
-    );
+    const m = item.message,
+      text = counter.count(
+        (item.head ? item.head + "\n" : "") + ordinaryText(m),
+      );
     let images = 0;
-    const copy = {
-      ...message,
-      content:
-        typeof message.content === "string"
-          ? ""
-          : message.content
-              .filter((p) => {
-                if (p.type === "image") {
-                  images += input.imageCost(p);
-                  return false;
-                }
-                return true;
-              })
-              .map((p) =>
-                p.type === "text" && !protectedText(p) ? { ...p, text: "" } : p,
-              ),
-    };
-    const envelope = 64 + textCost(JSON.stringify(copy));
+    if (Array.isArray(m.content))
+      for (const part of m.content)
+        if (part.type === "image") images += input.imageCost(part);
+    const envelope = protocolCost(m, counter);
     if (item.read) X += text + images + envelope;
     else if (item.exempt) U += text + images + envelope;
     else {
-      H += envelope;
+      P += envelope;
       if (images) throw Error("UNREFERENCED_WINDOW_IMAGE");
     }
   }
-  const fixed = R + S + O + H + U + X;
+  const H = P + A,
+    fixed = R + S + O + H + U + X;
   if (
     !Number.isSafeInteger(fixed) ||
-    !Number.isSafeInteger(input.limit) ||
-    fixed > input.limit
+    fixed > input.limit ||
+    [R, S, O, P, A, U, X].some((n) => !Number.isSafeInteger(n) || n < 0)
   )
     throw budgetError();
   const Q = M ? Math.floor((input.limit - fixed) / M) : 0;
   for (const item of input.messages)
     if (!item.exempt) {
-      const head = textCost(item.head ? item.head + "\n" : ""),
-        body = ordinaryText(item.message);
-      if (Q < head + (textCost(body) > Q - head ? textCost(tag) : 0))
+      const lead = item.head ? item.head + "\n" : "";
+      if (
+        counter.count(lead + ordinaryText(item.message)) > Q &&
+        counter.count(lead + tag) > Q
+      )
         throw budgetError();
     }
   return Object.freeze({
     R,
     S,
     O,
+    P,
+    A,
     H,
     U,
     X,
@@ -94,43 +120,54 @@ export function allocate(input: {
     Q,
     total: fixed + M * Q,
     limit: input.limit,
-    estimator: "utf8-bytes-with-protocol-margin",
+    plan,
+    estimator: counter.estimator,
   });
 }
-function prefix(text: string, bytes: number) {
-  let result = "";
-  for (const point of text) {
-    const n = textCost(point);
-    if (n > bytes) break;
-    result += point;
-    bytes -= n;
+/** Search at code-point boundaries and verify the result; BPE prefix counts need not be monotone. */
+function fit(
+  text: string,
+  lead: string,
+  tail: string,
+  Q: number,
+  counter: TokenCounter,
+): string {
+  if (counter.count(lead + tail) > Q) throw budgetError();
+  const points = Array.from(text);
+  let low = 0,
+    high = points.length;
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2);
+    if (counter.count(lead + points.slice(0, mid).join("") + tail) <= Q)
+      low = mid;
+    else high = mid - 1;
   }
-  return result;
+  let value = points.slice(0, low).join("");
+  while (counter.count(lead + value + tail) > Q && low > 0)
+    value = points.slice(0, --low).join("");
+  if (counter.count(lead + value + tail) > Q) throw budgetError();
+  return value;
 }
 export function renderMessage<T extends NativeMessage>(
   message: T,
   head: string,
   Q: number,
   exempt: boolean,
+  counter: TokenCounter = conservativeCounter,
 ): T {
   const lead = head ? head + "\n" : "",
-    body = ordinaryText(message);
-  const truncated = !exempt && textCost(lead + body) > Q;
-  const available = exempt
-    ? Infinity
-    : Q - textCost(lead) - (truncated ? textCost(tag) : 0);
-  if (available < 0) throw budgetError();
+    body = ordinaryText(message),
+    truncated = !exempt && counter.count(lead + body) > Q;
+  const shown = truncated ? fit(body, lead, tag, Q, counter) : body;
   const copy = structuredClone(message);
   if (typeof copy.content === "string")
-    copy.content =
-      lead + (exempt ? body : prefix(body, available)) + (truncated ? tag : "");
+    copy.content = lead + shown + (truncated ? tag : "");
   else {
-    let remaining = available;
+    let remaining = shown.length;
     const content = copy.content.map((p) => {
       if (p.type !== "text" || protectedText(p)) return p;
-      const text = exempt ? p.text : prefix(p.text, remaining);
-      remaining =
-        !exempt && text.length < p.text.length ? 0 : remaining - textCost(text);
+      const text = p.text.slice(0, remaining);
+      remaining -= text.length;
       return { ...p, text };
     });
     if (lead) content.unshift({ type: "text", text: lead });

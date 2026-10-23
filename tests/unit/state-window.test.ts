@@ -31,17 +31,17 @@ const items = (count: number, prefix = "fact") =>
     evidence: { U1: "user" },
   }));
 
-test("default State window counts only active F/D: 2000 trigger, 200 candidates, 20 keep, overflow remains visible", async (t) => {
+test("default State window counts only active F/D: 500 trigger, 100 candidates, 20 keep, overflow remains visible", async (t) => {
   const { paths, task, store } = await fixture(t);
   await withLock(paths.taskLock(task), async () => {
     let state = await store.append(
       task,
-      items(1999),
+      items(499),
       "first",
       100,
       new Set(["U1"]),
     );
-    assert.equal(state.version, 2000);
+    assert.equal(state.version, 500);
     assert.equal(prepareStateBatch(task.task_id, state, DEFAULT_CONFIG), null);
     state = await store.append(
       task,
@@ -52,16 +52,16 @@ test("default State window counts only active F/D: 2000 trigger, 200 candidates,
     );
     const batch = prepareStateBatch(task.task_id, state, DEFAULT_CONFIG);
     assert.ok(batch);
-    assert.equal(batch.candidate_ids.length, 200);
+    assert.equal(batch.candidate_ids.length, 100);
     assert.equal(batch.keep_limit, 20);
-    assert.deepEqual(batch.evicted_range, { from: 2, to: 201 });
+    assert.deepEqual(batch.evicted_range, { from: 2, to: 101 });
     const old = await readFile(paths.state(task), "utf8");
     await assert.rejects(
       store.remain(task, batch, batch.candidate_ids.slice(0, 21), "too-many"),
       /KEEP_LIMIT/,
     );
     await assert.rejects(
-      store.remain(task, batch, ["F201"], "bad-range"),
+      store.remain(task, batch, ["F101"], "bad-range"),
       /CANDIDATE/,
     );
     assert.equal(await readFile(paths.state(task), "utf8"), old);
@@ -72,17 +72,17 @@ test("default State window counts only active F/D: 2000 trigger, 200 candidates,
       100,
       new Set(["U1"]),
     );
-    assert.equal(state.facts.length, 2005);
-    assert.match(renderState(task.task_id, state), /F2005/);
+    assert.equal(state.facts.length, 505);
+    assert.match(renderState(task.task_id, state), /F505/);
     assert.equal(
       prepareStateBatch(task.task_id, state, DEFAULT_CONFIG)?.batch_id,
       batch.batch_id,
     );
     const keep = batch.candidate_ids.slice(0, 20);
     state = await store.remain(task, batch, keep, "slide");
-    assert.equal(state.facts.length, 1825);
+    assert.equal(state.facts.length, 425);
     assert.equal(state.facts[0]?.id, "F1");
-    assert.equal(state.facts[20]?.id, "F201");
+    assert.equal(state.facts[20]?.id, "F101");
     assert.equal(state.goal, "goal");
     assert.ok((await readFile(paths.state(task), "utf8")).startsWith(old));
     const version = state.version;

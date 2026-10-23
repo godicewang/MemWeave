@@ -102,7 +102,27 @@ export async function unpackArtifact(root: string, archive: string) {
   const destination = join(root, "unpacked");
   await mkdir(destination);
   await run("tar", ["-xzf", archive, "-C", destination]);
-  return join(destination, "package");
+  const artifact = join(destination, "package");
+  const manifest = JSON.parse(
+    await readFile(join(artifact, "package.json"), "utf8"),
+  );
+  if (manifest.dependencies?.["@huggingface/tokenizers"]) {
+    const npm = process.env.npm_execpath!;
+    await run(process.execPath, [
+      npm,
+      "install",
+      "--prefix",
+      destination,
+      "--cache",
+      join(root, "npm-cache"),
+      "--ignore-scripts",
+      "--no-audit",
+      "--no-fund",
+      "--package-lock=false",
+      `@huggingface/tokenizers@${manifest.dependencies["@huggingface/tokenizers"]}`,
+    ]);
+  }
+  return artifact;
 }
 export async function releaseWorker(
   input: ReleaseCase,

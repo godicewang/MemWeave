@@ -76,7 +76,7 @@ Agent Tool Calls
 
 每次正常主会话模型请求，在同一个 `context_with_system` 处理中读取 Rule、固定 Task/配置/State 快照，先渲染 Rule，再执行上述 Window/State 流程。预算使用实际渲染的有效 system 和工具声明，保留原生消息协议。程序生成的 Rule、State/Window 提醒只存在于请求视图，不写入 Pi Session。
 
-请求快照同时固定实际模型容量 C_model 与 Agent 上限 `C = floor(C_model * 3 / 5)`；全部输入、输出预留、协议开销和安全余量共同受 C 约束，Q 的结构不变。容量核验收敛于 `src/pi/`，不改 Pi 全局目录；模型切换后重新计算，网络重试沿用原快照。Recent Window 默认 200/40，State 默认 500/100/200/20，字段含义以 Rule §3、State §7、Recent Window §5.1 为准；事件容量不能替代 token 校验。
+请求快照同时固定实际模型容量 C_model 与 Agent 上限 `C = floor(C_model * 3 / 5)`；全部输入、输出预留、协议开销和安全余量共同受 C 约束，Q 的结构不变。容量核验收敛于 `src/pi/`，不改 Pi 全局目录；模型切换后重新计算，网络重试沿用原快照。Recent Window 缺省按模型自动计算 N/B（1M 档 200/40），显式配置优先，State 默认 500/100/100/20，字段含义以 Rule §3、State §7、Recent Window §5.1 为准；事件容量不能替代 token 校验。
 
 ```text
 Pi 原生准备 → 普通 context 处理 → Pi 恢复 system/工具状态
@@ -143,3 +143,5 @@ pi-long-task-agent/                 # 唯一 Git 源
 manifest 使用公开的 `pi.extensions`，优先指向可直接加载的 `src/extension/index.ts`。npm 归档白名单排除开发资料；Git 安装可克隆出这些资料，但只按 manifest 加载运行入口，不改变 cwd 或把包内 AGENTS 加入用户上下文。两种渠道不要求用户自行编译，实际产物仍须阶段 0 验收。
 
 宿主依赖采用官方 peer 约定，开发依赖锁用于复现测试，不控制用户宿主。安装、更新、移除和 TUI 由 Pi 负责；本项目不另建安装器或 TUI。共享配置、恢复记录、宿主版本和扩展共存四项副作用见 `PACKAGING.md`。
+
+本次预算适配使用匹配的 DeepSeek V4.1 tokenizer；仅在公开 before_provider_request 对齐输出上限。统一上下文处理器仍是唯一业务组装入口。末尾 State 附计费的预算快照；State 的 token 管理与提交准入见 CONTEXT_BUDGET_DESIGN.md，不增加持久化协议。

@@ -133,7 +133,7 @@ test("one Q shared across Unicode text blocks preserves arguments and signatures
     /CONTEXT_BUDGET_EXCEEDED/,
   );
 });
-test("half-context budget includes output, State, latest user, read exemptions and every message in M", () => {
+test("60%-context budget includes output, State, latest user, read exemptions and every message in M", () => {
   const messages = [
     {
       message: { role: "user" as const, content: "latest", timestamp: 1 },
@@ -153,12 +153,7 @@ test("half-context budget includes output, State, latest user, read exemptions a
     },
   });
   assert.equal(value.M, 1);
-  assert.equal(
-    value.U,
-    11 +
-      64 +
-      textCost(JSON.stringify({ role: "user", content: "", timestamp: 1 })),
-  );
+  assert.equal(value.U, 11 + 32 + textCost("user"));
   assert.equal(value.X, 0);
   assert.ok(value.Q > 0);
   assert.ok(value.total <= 10000);

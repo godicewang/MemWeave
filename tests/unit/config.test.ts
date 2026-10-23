@@ -9,8 +9,8 @@ import { memoryPaths } from "../../src/storage/paths.ts";
 
 test("配置契约有六个明确默认值，返回不可变快照", () => {
   assert.deepEqual(DEFAULT_CONFIG, {
-    recent_turns: 200, evict_turns: 40, state_max_events: 2000,
-    state_event_max_chars: 100, state_evict_batch: 200, state_keep_limit: 20,
+    recent_turns: 200, evict_turns: 40, state_max_events: 500,
+    state_event_max_chars: 100, state_evict_batch: 100, state_keep_limit: 20,
   });
   assert.ok(Object.isFrozen(DEFAULT_CONFIG));
   const input = { ...DEFAULT_CONFIG };

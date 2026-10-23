@@ -73,7 +73,7 @@ MemWeave 在 Session 启动/恢复及每次请求前检查 `pi.getSettings()` �
 
 编译通过不等于版本兼容。每个宣称支持的版本必须通过 smoke/integration tests。
 
-模型兼容验收还须核验实际容量：Agent 总预算为精确模型容量的 60%（含输出预留），不能仅依赖“1M”等展示名称或过期的宿主目录值。模型切换、容量冲突诊断及最终请求成本按 Recent Window §5.1 验收；不通过时不得静默使用完整模型容量。默认 Recent Window 200/40、State 500/100 的加载与窗口行为在功能测试中覆盖，不因 npm/Git 渠道而改变。
+模型兼容验收还须核验实际容量：Agent 总预算为精确模型容量的 60%（含输出预留），不能仅依赖“1M”等展示名称或过期的宿主目录值。模型切换、容量冲突诊断及最终请求成本按 Recent Window §5.1 验收；不通过时不得静默使用完整模型容量。Recent Window 缺省按模型计算（1M 档 200/40）、State 默认 500/100 的加载与窗口行为在功能测试中覆盖，不因 npm/Git 渠道而改变。
 
 阶段 0 的历史证据见 `PHASE_0_VALIDATION.md`；阶段 1 已通过累计 45 项常规检查及 2 项独立真实 DeepSeek 测试，证据见 `PHASE_1_VALIDATION.md`。SDK 使用根导出的公开重放函数，避免 v1.3.0 扩展加载器对子路径的别名解析限制；npm 归档与当前代码 Git commit 均已重新加载验证。生产 peer 仅声明实际导入的 coding-agent、pi-ai 和 typebox，不捆绑另一份 SDK。
 
@@ -88,3 +88,5 @@ Pi v1.3.0 的固定来源升级须区分：Git 更改声明 ref 后可通过原�
 验证使用系统临时目录并清理，私有配置留在仓库外。本机 HTTP/临时 registry 与真实 DeepSeek 分开记录；未执行 npm 公网或 Git release 发布。开发和发布准备验收完成不等于已公开发行；当前 private/0.0.0 保留，正式版本、包名和许可等发布事项另行确定。旧 SDK 应用与早期测试不能代替当前 Package 证据。
 
 依据：[v1.3.0 Packages](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/docs/packages.md)、[Extensions](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/docs/extensions.md)、[扩展类型](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/extensions/types.ts)、[runner](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/extensions/runner.ts)、[settings](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/settings-manager.ts)、[压缩/恢复](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/agent-session.ts)。
+
+2026-10-23 新预算切片：随包携带 DeepSeek V4.1 tokenizer 数据、原始许可和固定版本纯 JS 运行依赖 @huggingface/tokenizers@0.2.0。不捆绑 Pi/TypeBox peer，不要求用户安装 Python/Rust；安装需正常解析 npm 运行依赖。真实模型与分发记录见 CONTEXT_BUDGET_VALIDATION.md；不扩大第三方后置覆盖/虚拟路由的兼容承诺。

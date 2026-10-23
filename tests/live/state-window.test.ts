@@ -111,7 +111,7 @@ test(
       ),
     );
     t.diagnostic(
-      `${h.frames.length} real inference requests; all State tools through native Pi; test capacity 10/2, default 2000/200 separately covered by unit tests`,
+      `${h.frames.length} real inference requests; all State tools through native Pi; test capacity 10/2, default 500/100 separately covered by unit tests`,
     );
   },
 );

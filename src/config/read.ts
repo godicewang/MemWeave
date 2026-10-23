@@ -2,7 +2,12 @@ import { readFile } from "node:fs/promises";
 import type { MemoryPaths } from "../storage/paths.ts";
 import { mergeConfig, type MemoryConfig } from "./schema.ts";
 
-export async function readConfigSnapshot(paths: MemoryPaths, overrides: unknown = {}, signal?: AbortSignal): Promise<MemoryConfig> {
+export async function readConfigSnapshot(
+  paths: MemoryPaths,
+  overrides: unknown = {},
+  signal?: AbortSignal,
+  contextLimit?: number,
+): Promise<MemoryConfig> {
   signal?.throwIfAborted();
   let bytes: Buffer;
   try {
@@ -15,8 +20,10 @@ export async function readConfigSnapshot(paths: MemoryPaths, overrides: unknown 
   try {
     data = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
   } catch {
-    throw new Error("INVALID_CONFIG: config.json must contain valid UTF-8 JSON");
+    throw new Error(
+      "INVALID_CONFIG: config.json must contain valid UTF-8 JSON",
+    );
   }
   signal?.throwIfAborted();
-  return mergeConfig(data, overrides);
+  return mergeConfig(data, overrides, contextLimit);
 }

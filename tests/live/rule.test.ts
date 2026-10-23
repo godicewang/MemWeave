@@ -45,7 +45,7 @@ test("真实 DeepSeek：生产配置/Rule/容量适配与工具续跑，非法�
     assert.match(payload, /NATIVE_SYSTEM/); assert.match(payload, /NATIVE_APPEND \{\{untouched\}\}/);
     assert.match(payload, new RegExp(`PHASE1_TEST_STATE ${index === 0 ? 200 : 240}`));
     assert.equal(payload.split("<pi_long_task_rule>").length - 1, 1);
-    assert.equal(h.frames[index]?.frame.capacity.contextLimit, Math.floor(h.frames[index]!.frame.capacity.contextWindow / 2));
+    assert.equal(h.frames[index]?.frame.capacity.contextLimit, Math.floor(h.frames[index]!.frame.capacity.contextWindow * 3 / 5));
   }
   const last = h.session.agent.state.messages.at(-1);
   assert.ok(last?.role === "assistant" && last.stopReason === "stop");

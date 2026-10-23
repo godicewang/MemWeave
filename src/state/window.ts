@@ -48,9 +48,14 @@ export function prepareStateBatch(
   taskId: string,
   state: State,
   config: MemoryConfig,
+  tokenWarning = false,
 ): StateBatch | null {
   const active = activeEntries(state);
-  if (active.length < config.state_max_events) return null;
+  if (
+    !active.length ||
+    (active.length < config.state_max_events && !tokenWarning)
+  )
+    return null;
   const candidates = active.slice(0, config.state_evict_batch),
     candidate_ids = candidates.map((e) => e.id);
   return {
@@ -79,5 +84,5 @@ export function renderStateReminder(batch: StateBatch, state: State): string {
       ? `Decision 至 ${decisions.at(-1)}（含）`
       : "本批无 Decision",
   ].join("；");
-  return `\n【State 窗口管理｜临时提醒】\n当前活动条目 ${activeEntries(state).length}，窗口上限 ${batch.state_max_events}。本批为最早 ${batch.candidate_ids.length} 个活动条目：${bounds}。这里只包括当前活动 State 中的上述范围。请调用 state_remain，最多保留 ${batch.keep_limit} 个本批候选；无须保留时提交 event_ids=[]。新增认知继续正常载入，滑动可靠提交前不移除本批内容。\n`;
+  return `\n【State 窗口管理｜临时提醒】\n当前活动条目 ${activeEntries(state).length}，条数上限 ${batch.state_max_events}，条数或 token 管理线已触发。本批为最早 ${batch.candidate_ids.length} 个活动条目：${bounds}。这里只包括当前活动 State 中的上述范围。请调用 state_remain，最多保留 ${batch.keep_limit} 个本批候选；无须保留时提交 event_ids=[]。在 token 预算允许时新增认知继续正常载入，滑动可靠提交前不移除本批内容。\n`;
 }

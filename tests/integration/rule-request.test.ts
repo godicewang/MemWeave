@@ -34,7 +34,7 @@ test("正式 Rule 接线：首次及工具续跑热读取，同一快照传递�
   assert.deepEqual(h.diagnostics, []);
   assert.equal(h.frames[0]?.frame.config.recent_turns, 200);
   assert.equal(h.frames[1]?.frame.config.recent_turns, 8);
-  assert.equal(h.frames[0]?.frame.capacity.contextLimit, 524_288);
+  assert.equal(h.frames[0]?.frame.capacity.contextLimit, 629_145);
   for (const [index, messages] of requests.entries()) {
     const system = messages[0]; assert.ok(system?.role === "system");
     const text = getSystemMessageText(system);
@@ -132,12 +132,12 @@ test("容量缺失不发请求，模型切换重新派生且不修改宿主目�
   assert.match(h.diagnostics[0] ?? "", /MODEL_CAPACITY_UNVERIFIED/);
   capacity = 101;
   await h.session.prompt("verified odd capacity");
-  assert.equal(h.frames.at(-1)?.frame.capacity.contextLimit, 50);
+  assert.equal(h.frames.at(-1)?.frame.capacity.contextLimit, 60);
   const before = h.faux.getModel().contextWindow;
   capacity = 1_000_000;
   await h.session.setModel({ ...h.faux.getModel(), id: "second-model" });
   await h.session.prompt("model switch");
   assert.equal(h.frames.at(-1)?.frame.capacity.modelId, "second-model");
-  assert.equal(h.frames.at(-1)?.frame.capacity.contextLimit, 500_000);
+  assert.equal(h.frames.at(-1)?.frame.capacity.contextLimit, 600_000);
   assert.equal(h.faux.getModel().contextWindow, before);
 });

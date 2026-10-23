@@ -121,7 +121,7 @@ test(
     );
     assert.ok(h.budgets.slice(start).some((b) => b.X > 0));
     for (const b of h.budgets.slice(start)) {
-      assert.equal(b.limit, 524288);
+      assert.equal(b.limit, 629145);
       assert.ok(b.total <= b.limit);
     }
     assert.ok(wireOutputs.length >= h.frames.length - start);
@@ -135,7 +135,7 @@ test(
         const usage = entry.message.usage;
         assert.ok(usage.totalTokens > 0);
         assert.ok(
-          usage.totalTokens - usage.output + h.budgets[start]!.O <= 524288,
+          usage.totalTokens - usage.output + h.budgets[start]!.O <= 629145,
         );
       }
     assert.ok(windowMetadata(h.manager.getBranch())!.boundary_entry_id);
@@ -144,7 +144,7 @@ test(
       /Recent Window 移出提醒|# Symbolic State/,
     );
     t.diagnostic(
-      `${h.frames.length - start} real DeepSeek inference requests; 2 Faux setup requests; half-context 524288, bounded read lifetime X, persisted State and Window boundaries verified`,
+      `${h.frames.length - start} real DeepSeek inference requests; 2 Faux setup requests; 60%-context 629145, bounded read lifetime X, persisted State and Window boundaries verified`,
     );
   },
 );

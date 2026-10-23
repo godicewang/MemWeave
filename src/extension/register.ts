@@ -2,6 +2,8 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+import { isDeepStrictEqual } from "node:util";
+import { alignOutput } from "../pi/window-budget.ts";
 import { type TSchema, type Static } from "typebox";
 import { Check } from "typebox/value";
 import { TaskService } from "../task/service.ts";
@@ -60,6 +62,22 @@ export function registerMemweave(
     },
   });
   registerRequestLifecycle(pi, { ...services, report });
+  pi.on("before_provider_request", (event, ctx) => {
+    try {
+      const frame = window.outputFrame;
+      if (
+        !frame ||
+        frame.sessionId !== ctx.sessionManager.getSessionId() ||
+        !isDeepStrictEqual(frame.model, ctx.model)
+      )
+        throw Error("OUTPUT_BUDGET_UNVERIFIED: request snapshot changed");
+      return alignOutput(event.payload, frame.model, frame.output);
+    } catch (error) {
+      ctx.abort();
+      report(error, ctx);
+      return undefined;
+    }
+  });
   function tool<S extends TSchema>(
     name: string,
     description: string,

@@ -58,7 +58,7 @@ test("生产容量适配核验精确元数据；配置/模板错误时实际推�
   await h.session.prompt("normal");
   assert.equal(h.bodies.length, 1); assert.equal(h.metadataCalls(), 1);
   assert.equal(h.frames[0]?.frame.capacity.contextWindow, 1_048_576);
-  assert.equal(h.frames[0]?.frame.capacity.contextLimit, 524_288);
+  assert.equal(h.frames[0]?.frame.capacity.contextLimit, 629_145);
   assert.equal(h.model.contextWindow, 1_000_000, "host catalog must remain untouched");
   for (const template of ["", "{{unknown}}", "{{recent_turns + 1}}", "{{recent_turns"]) {
     await writeFile(h.paths.rule, template);
@@ -70,7 +70,7 @@ test("生产容量适配核验精确元数据；配置/模板错误时实际推�
   await writeFile(h.paths.config, JSON.stringify({ ...DEFAULT_CONFIG, evict_turns: 201 }));
   const metadataCalls = h.metadataCalls();
   await h.session.prompt("cancel invalid config");
-  assert.equal(h.bodies.length, 1); assert.equal(h.metadataCalls(), metadataCalls);
+  assert.equal(h.bodies.length, 1); assert.equal(h.metadataCalls(), metadataCalls + 1);
 });
 
 test("供应商容量缺失/冲突/HTTP 错误不回退目录，诊断不包含响应秘密", async t => {
@@ -94,10 +94,10 @@ test("原生供应商网络重试不重读配置/Rule/容量，下一逻辑请�
   assert.equal(h.bodies.length, 2); assert.equal(h.metadataCalls(), 1); assert.equal(h.frames.length, 1);
   assert.deepEqual(h.bodies[0]?.messages, h.bodies[1]?.messages);
   assert.equal(h.frames[0]?.frame.config.recent_turns, 200);
-  assert.equal(h.frames[0]?.frame.capacity.contextLimit, 524_288);
+  assert.equal(h.frames[0]?.frame.capacity.contextLimit, 629_145);
   await h.session.prompt("next logical request");
   assert.equal(h.bodies.length, 3); assert.equal(h.metadataCalls(), 2); assert.equal(h.frames.length, 2);
   assert.equal(h.frames[1]?.frame.config.recent_turns, 240);
-  assert.equal(h.frames[1]?.frame.capacity.contextLimit, 500_000);
+  assert.equal(h.frames[1]?.frame.capacity.contextLimit, 600_000);
   assert.match(JSON.stringify(h.bodies[2]), /HTTP_HOT_RULE 240/);
 });

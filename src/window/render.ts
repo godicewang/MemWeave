@@ -15,19 +15,19 @@ export function stateInsert(
   reminder: string,
 ): RequestMessages {
   const result = [...messages];
-  if (state)
-    result.push({
-      role: "custom",
-      customType: "memweave.state",
-      content: state,
-      display: false,
-      timestamp: 0,
-    });
   if (reminder)
     result.push({
       role: "custom",
       customType: "memweave.window.reminder",
       content: reminder,
+      display: false,
+      timestamp: 0,
+    });
+  if (state)
+    result.push({
+      role: "custom",
+      customType: "memweave.state",
+      content: state,
       display: false,
       timestamp: 0,
     });
