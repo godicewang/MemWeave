@@ -169,4 +169,4 @@
 
 ## 2026-10-23 预算调整切片（实现与功能验收完成）
 
-按已确认 CONTEXT_BUDGET_DESIGN.md：先同步契约，再测试与实现配置/分词器/输出/State 准入/末尾快照，最后执行单测、Pi 集成、真实 DeepSeek 与分发检查。保持阶段 0–6 和已有恢复格式，不增评测阶段或来源缓存改造。本地 144/144、真实预算与 tokenizer 校准、npm/registry 分发通过；首次 OCR 失败与复测已记录。新提交推送后的 Git 固定 commit 安装待补，详细证据见 CONTEXT_BUDGET_VALIDATION.md。
+按已确认 CONTEXT_BUDGET_DESIGN.md：先同步契约，再测试与实现配置/分词器/输出/State 准入/末尾快照，最后执行单测、Pi 集成、真实 DeepSeek 与分发检查。保持阶段 0–6 和已有恢复格式，不增评测阶段或来源缓存改造。本地 144/144、真实预算与 tokenizer 校准、npm/registry 分发通过；首次 OCR 失败与复测已记录。实现提交 05e94dd 的 GitHub SSH 固定 commit 安装/升级/恢复/卸载已补验通过，详细证据见 CONTEXT_BUDGET_VALIDATION.md。
