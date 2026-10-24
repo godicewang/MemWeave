@@ -6,23 +6,18 @@ MemWeave 是运行在原生 [Pi](https://github.com/earendil-works/pi) 中的长
 
 当前测试版：`@godice/memweave@0.1.0`。**推荐通过 npm 安装。**
 
-需要 **Node.js ≥ 22.19.0**，推荐 Node.js 24 LTS；已支持 **Pi 1.3.0 和 1.4.0**，推荐安装 1.4.0，其他 Pi 版本尚未验证。
+需要 **Node.js ≥ 22.19.0**；已支持 **Pi 1.3.0 和 1.4.0**，推荐安装 1.4.0，其他 Pi 版本尚未验证。
 
 ### 1. 安装 Node.js
 
-已有符合要求的 Node.js 可跳过。macOS、Linux 或 Windows WSL 可通过 [nvm](https://github.com/nvm-sh/nvm) 安装：
+已有符合要求的 Node.js 可跳过。macOS 推荐通过 [Homebrew](https://brew.sh/) 安装；已有 Homebrew 时运行：
 
 ```sh
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.8/install.sh | bash
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-nvm install 24
-nvm use 24
+brew install node
 node --version
-npm --version
 ```
 
-Windows 原生环境可使用 [Node.js 官方安装程序](https://nodejs.org/en/download)安装 24 LTS。
+尚未安装 Homebrew，可按其官网指引安装。其他系统可参考 [Node.js 官方安装说明](https://nodejs.org/en/download)。
 
 ### 2. 安装 Pi
 
