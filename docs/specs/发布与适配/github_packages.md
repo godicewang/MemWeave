@@ -23,3 +23,5 @@
 检查实际可见性；GitHub Packages 的默认可见性与 npm 不同，不以 `--access public` 或公开仓库推断包已公开。公开时只公开已有 npm 公共产物，并核验 Package 页面。GitHub npm registry 的安装认证要求按官方机制处理，不能承诺匿名安装；普通用户继续推荐 npmjs.org 安装。
 
 依据：[GitHub npm registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry)、[Package 权限与可见性](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility)。
+
+2026-10-24 实际发布与 registry 回读、下载校验均通过，Package 页面公开可见；详见 [首发验收记录](../../GITHUB_PACKAGES_VALIDATION.md)。网页的 Latest 展示不改变测试版定义。
