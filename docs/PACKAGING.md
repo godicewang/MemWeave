@@ -35,11 +35,11 @@
 
 ## Package 入口与分发
 
-使用显式 manifest，让 Pi 直接加载 TypeScript 源入口，避免 Git 安装依赖开发编译步骤。npm 包名为 `memweave`，首次版本为 `0.1.0`；只有用户主动要求才发布，默认连续增加补丁号并发布到 `next`，明确要求稳定版才使用 `latest`，完整规则见 [npm 发布规范](specs/发布与适配/npm.md)。示意如下；当前 Git 开发快照及本地归档可安装，尚未公开发布 npm 产品：
+使用显式 manifest，让 Pi 直接加载 TypeScript 源入口，避免 Git 安装依赖开发编译步骤。npm 包名为 `@godice/memweave`，首次版本为 `0.1.0`；原名称被他人占用，用户已明确确认 scoped 名称。只有用户主动要求才发布，默认连续增加补丁号并发布到 `next`，明确要求稳定版才使用 `latest`，完整规则见 [npm 发布规范](specs/发布与适配/npm.md)。当前首次发布验收见 [Pi 1.4.0 记录](PI_1_4_VALIDATION.md)，manifest 示意如下：
 
 ```json
 {
-  "name": "memweave",
+  "name": "@godice/memweave",
   "keywords": ["pi-package"],
   "pi": { "extensions": ["./src/extension/index.ts"] },
   "files": ["src/**/*.ts", "resources/rule.md", "README.md", "USER_GUIDE.md"],
@@ -51,7 +51,7 @@
 }
 ```
 
-只声明实际导入的宿主 peer，按官方约定使用 `"*"`，不把这些包加入运行 `dependencies` 或捆绑第二份 SDK；开发依赖则精确使用 v1.3.0 并提交锁文件。peer 范围不代表所有宿主兼容；运行能力检查和矩阵决定支持范围。其他真实运行依赖正常声明，不依赖未声明的跨 Package 模块实例共享。
+只声明实际导入的宿主 peer，按官方约定使用 `"*"`，不把这些包加入运行 `dependencies` 或捆绑第二份 SDK；当前开发依赖精确使用 v1.4.0 并提交锁文件，保留经过验证的 v1.3.0。peer 范围不代表所有宿主兼容；运行能力检查和矩阵决定支持范围。其他真实运行依赖正常声明，不依赖未声明的跨 Package 模块实例共享。
 
 npm 与 Git 均使用 `pi install`，更新/移除使用原生 Package 命令；固定 npm 版本或 Git tag/commit 固定的是扩展代码，不锁住用户全局 Pi。项目安装通过 `--local` 限定声明作用域，项目资源受原生信任控制；Package 作用域与压缩配置作用域须分别说明，不因安装项目包而假装设置已关闭压缩。
 
@@ -85,6 +85,7 @@ MemWeave 在 Session 启动/恢复及每次请求前检查 `pi.getSettings()` �
 | Pi / 路径 | Package 安装 | Rule/Window/State 组装 | 主动取消与压缩 | Session/共存 | 状态 |
 |---|---|---|---|---|---|
 | v1.3.0 普通主会话＋官方 DeepSeek Flash | 本地、npm 归档、临时 registry 升级、GitHub SSH 固定 commit 安装/更新/禁用/移除通过；HTTPS 网络失败，npm 公网未发布 | 正式 Rule/Task/State/Window、60% 总 Q、原文/图片回读及真实模型通过 | 主动取消、HTTP 无发送、关闭/重开压缩对照及手动取消通过 | 独立进程共享 Task、重启、fork/tree、reload、旧快照数据升级、部分提交恢复与安装代码业务闭环通过 | 阶段 0–6 已验收；限制见 PHASE_6_VALIDATION.md |
+| v1.4.0 普通主会话＋官方 DeepSeek Flash | 本地/归档加载、scoped 临时 registry 跨宿主升级与卸载通过；公网发布结果单列记录 | 190 项常规检查、完整上下文与预算；实际 npm 归档的真实 DeepSeek 回读/State 恢复通过 | 实际 HTTP 取消与压缩保护回归通过；真实 PTY 回车初始化、合并全局设置与 reload 通过 | 旧产品在真实 1.3.0 上创建，当前产品在 1.4.0 恢复；原始消息与数据保留 | 见 PI_1_4_VALIDATION.md；不外推任意提供方/第三方组合 |
 | v1.3.0 受控动态描述/隐藏声明 | 同一宿主 | 实际工具描述变化进入后续 R 预算，隐藏声明不发送，Rule 保留 | 普通保护保留 | prepareLoadout 受控组合通过 | 不外推任意 MCP/codemode |
 | v1.3.0 强制整段 system 覆盖 | 同一宿主 | Pi 的后置投影会覆盖 Rule | 不宣称能自动阻止这类覆盖 | 已保留不兼容反例 | 不兼容 |
 | v1.3.0 虚拟模型路由 | 同一宿主 | 受控测试容量无法核验 | 主动取消，物理推理为零 | 只验证拒绝，未验证可用路由 | 不支持 |
@@ -105,7 +106,7 @@ MemWeave 在 Session 启动/恢复及每次请求前检查 `pi.getSettings()` �
 
 Pi v1.3.0 的固定来源升级须区分：Git 更改声明 ref 后可通过原生 update 对齐；精确 npm 版本会被 update 跳过，需要显式 install 新版本，不能只改设置后宣称已升级。两种原生行为都有测试，用户操作见 USER_GUIDE.md。
 
-验证使用系统临时目录并清理，私有配置留在仓库外。本机 HTTP/临时 registry 与真实 DeepSeek 分开记录；未执行 npm 公网或 Git release 发布。开发和发布准备验收完成不等于已公开发行；当前 private/0.0.0 保留，首次实际发布按 [npm 发布规范](specs/发布与适配/npm.md) 准备版本和渠道，许可、账号与包名权限等事项在发布准备时核验。旧 SDK 应用与早期测试不能代替当前 Package 证据。
+验证使用系统临时目录并清理，私有配置留在仓库外。本机 HTTP/临时 registry 与真实 DeepSeek 分开记录。用户已授权首次发布 `@godice/memweave@0.1.0` 到 `next`，采用 MIT（godice）；公网实际结果及安装验证以 PI_1_4_VALIDATION.md 为准，准备完成不等于已发布，不自动创建 Git release 或变更稳定渠道。旧 SDK 应用与早期测试不能代替当前 Package 证据。
 
 依据：[v1.3.0 Packages](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/docs/packages.md)、[Extensions](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/docs/extensions.md)、[扩展类型](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/extensions/types.ts)、[runner](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/extensions/runner.ts)、[settings](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/settings-manager.ts)、[压缩/恢复](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/agent-session.ts)。
 

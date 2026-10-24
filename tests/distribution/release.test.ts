@@ -21,13 +21,17 @@ import {
 test("temporary npm registry: installed release upgrade recovers real Task/State/Session and removal preserves them", async (t) => {
   const f = await releaseFixture(t);
   const old = await sourceArtifact(f.root, "9868254");
+  const current = JSON.parse(await readFile(join(repository, "package.json"), "utf8"));
+  const packageName = current.name as string, targetVersion = current.version as string;
+  const oldManifest = JSON.parse(await readFile(join(old, "package.json"), "utf8"));
+  await writeFile(join(old, "package.json"), JSON.stringify({ ...oldManifest, name: packageName }));
   await writeFile(f.paths.rule, await readFile(join(old, "resources/rule.md")));
   const artifacts = new Map<string, Buffer>([
     [
       "0.0.0-before",
       await readFile(await packArtifact(f.root, old, "0.0.0-before")),
     ],
-    ["0.0.0", await readFile(await packArtifact(f.root))],
+    [targetVersion, await readFile(await packArtifact(f.root))],
   ]);
   const dependencyRoot = join(f.root, "dependency");
   await mkdir(dependencyRoot);
@@ -49,8 +53,8 @@ test("temporary npm registry: installed release upgrade recovers real Task/State
       JSON.parse(await readFile(join(old, "package.json"), "utf8")),
     ],
     [
-      "0.0.0",
-      JSON.parse(await readFile(join(repository, "package.json"), "utf8")),
+      targetVersion,
+      current,
     ],
   ]);
   let origin = "";
@@ -82,13 +86,13 @@ test("temporary npm registry: installed release upgrade recovers real Task/State
       return;
     }
 
-    if (request.url === "/memweave") {
+    if (decodeURIComponent(request.url ?? "") === `/${packageName}`) {
       const versions = Object.fromEntries(
         [...artifacts].map(([version, bytes]) => [
           version,
           {
             ...manifests.get(version),
-            name: "memweave",
+            name: packageName,
             version,
             dist: {
               tarball: `${origin}/memweave/-/memweave-${version}.tgz`,
@@ -100,8 +104,8 @@ test("temporary npm registry: installed release upgrade recovers real Task/State
       response.writeHead(200, { "content-type": "application/json" });
       response.end(
         JSON.stringify({
-          name: "memweave",
-          "dist-tags": { latest: "0.0.0" },
+          name: packageName,
+          "dist-tags": { next: targetVersion },
           versions,
         }),
       );
@@ -163,8 +167,8 @@ test("temporary npm registry: installed release upgrade recovers real Task/State
     noThemes: true,
     noPromptTemplates: true,
   });
-  const initial = "npm:memweave@0.0.0-before",
-    target = "npm:memweave@0.0.0";
+  const initial = `npm:${packageName}@0.0.0-before`,
+    target = `npm:${packageName}@${targetVersion}`;
   await manager.installAndPersist(initial, { local: true });
   await settings.flush();
   const installed = manager.getInstalledPath(initial, "project");
@@ -206,7 +210,7 @@ test("temporary npm registry: installed release upgrade recovers real Task/State
   assert.equal(manager.getInstalledPath(target, "project"), installed);
   assert.equal(
     JSON.parse(await readFile(join(installed, "package.json"), "utf8")).version,
-    "0.0.0",
+    targetVersion,
   );
   await loader.reload();
   assert.deepEqual(loader.getExtensions().errors, []);
@@ -226,7 +230,7 @@ test("temporary npm registry: installed release upgrade recovers real Task/State
   assert.equal(after.settings, 4);
   const upgradedRule = await readFile(f.paths.rule);
   assert.ok(upgradedRule.equals(await readFile(join(installed, "resources/rule.md"))));
-  assert.deepEqual(JSON.parse(await readFile(setup.marker, "utf8")), { version: 2, package_version: "0.0.0" });
+  assert.deepEqual(JSON.parse(await readFile(setup.marker, "utf8")), { version: 2, package_version: targetVersion });
   await assert.rejects(access(setup.settings), { code: "ENOENT" });
   assert.ok(
     (await readFile(f.paths.state(task), "utf8")).startsWith(stateBefore),
@@ -275,7 +279,7 @@ test("temporary npm registry: installed release upgrade recovers real Task/State
     assert.ok(value.equals(await readFile(path)));
   assert.equal(await readFile(auth, "utf8"), authValue);
   assert.equal(settings.getCompactionEnabled(), false);
-  assert.deepEqual([...served].sort(), ["0.0.0", "0.0.0-before", "tokenizer"]);
+  assert.deepEqual([...served].sort(), [targetVersion, "0.0.0-before", "tokenizer"].sort());
   t.diagnostic(
     "Local registry protocol only, not npmjs.org: two installed versions; Rule refreshed from actual package version without settings writes; independent Pi processes; 7 local HTTP model requests; no real inference",
   );

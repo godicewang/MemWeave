@@ -14,7 +14,7 @@ import { once } from "node:events";
 import { fileURLToPath } from "node:url";
 test(
   "a previous release creates real Task data; an independent upgraded Pi process restores State, originals and Window",
-  { timeout: 60000 },
+  { timeout: 180000 },
   async (t) => {
     const h = await releaseFixture(t),
       old = await sourceArtifact(h.root, "9868254");

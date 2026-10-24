@@ -1,8 +1,21 @@
 {
-  "name": "memweave",
-  "version": "0.0.0",
-  "private": true,
+  "name": "@godice/memweave",
+  "version": "0.1.0",
+  "license": "MIT",
+  "author": "godice",
   "description": "Long-task memory extension for native Pi",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/godicewang/MemWeave.git"
+  },
+  "bugs": {
+    "url": "https://github.com/godicewang/MemWeave/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "next",
+    "registry": "https://registry.npmjs.org/"
+  },
   "type": "module",
   "engines": {
     "node": ">=22.19.0"
@@ -20,6 +33,7 @@
     "resources/rule.md",
     "README.md",
     "USER_GUIDE.md",
+    "LICENSE",
     "resources/tokenizer/*",
     "src/config/defaults.json"
   ],
@@ -42,8 +56,8 @@
     "typebox": "*"
   },
   "devDependencies": {
-    "@earendil-works/pi-ai": "1.3.0",
-    "@earendil-works/pi-coding-agent": "1.3.0",
+    "@earendil-works/pi-ai": "1.4.0",
+    "@earendil-works/pi-coding-agent": "1.4.0",
     "@types/node": "22.19.19",
     "typebox": "1.3.27",
     "typescript": "7.0.2"

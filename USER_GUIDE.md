@@ -2,19 +2,26 @@
 
 MemWeave 在原生 `pi` 内提供长程任务记忆。你仍使用 Pi 的界面、模型、工具与 Session；扩展管理 Task、结构化认知和请求中的近期窗口。
 
-目前已验收 **Pi v1.3.0**，Node 最低版本为 **22.19.0**；本机测试使用 Node 24.22.0。其他 Pi 版本不在支持范围。真实模型验收使用官方 DeepSeek `deepseek-flash`，精确上下文容量 1,048,576 tokens，MemWeave 默认总预算为其中 60% 即 629,145，包含输出预留。
+支持 **Pi v1.3.0 和 v1.4.0**，Node 最低版本为 **22.19.0**；本机测试使用 Node 24.22.0。其他 Pi 版本不在支持范围。真实模型验收使用官方 DeepSeek `deepseek-flash`，精确上下文容量 1,048,576 tokens，MemWeave 默认总预算为其中 60% 即 629,145，包含输出预留。
 
 ## 安装与首次启用
 
-当前可从 Git 安装开发快照，需具备仓库读取权限；尚未向 npm 公网发布，`0.0.0` 不是正式发行版。安装操作在你的**业务项目目录**运行，不要把 Package 安装目录当工作目录。
+首版 npm 测试包为 `@godice/memweave@0.1.0`，渠道为 `next`。安装操作在你的**业务项目目录**运行，不要把 Package 安装目录当工作目录。
+
+已有 Pi 1.3.0 或 1.4.0 时，直接安装扩展：
 
 ```sh
-# SSH 通道需要 GitHub 读取权限；将 <commit> 换成要使用的完整提交 ID
-pi install 'git:git@github.com:godicewang/MemWeave.git@<commit>' --local
+pi --version
+pi install npm:@godice/memweave@0.1.0
 pi list
+pi
 ```
 
-Pi 原生支持 HTTPS Git 来源，但本机的首次 HTTPS 克隆遇到 HTTP/2 网络错误；SSH 路径已验收。项目安装声明写入 `.pi/settings.json`，需先通过 Pi 的项目信任检查。也可用 `pi install /absolute/path/to/MemWeave --local` 安装本地 checkout；两者直接加载 TypeScript，不需要用户构建 SDK 或运行独立安装器。
+没有 Pi 时，先安装 Node.js 22.19.0 或以上，再运行 `npm install -g --ignore-scripts @earendil-works/pi-coding-agent@1.4.0`，然后执行上面的扩展安装与启动命令。只有其他 Pi 版本时，请按原安装方式切换到已支持版本并核验 `pi --version`；MemWeave 不自动升级或降级宿主。
+
+以上默认是用户范围安装；仅在当前项目启用可使用 `pi install npm:@godice/memweave@0.1.0 --local`，项目声明受 Pi 原生信任控制。跟随测试渠道安装可使用 `pi install npm:@godice/memweave@next`；尚未提供稳定版时，不使用 `@latest`。使用公开 npm 包不需要 GitHub 仓库权限，也不需要用户构建开发 SDK。
+
+Git 来源仍可使用 `pi install 'git:git@github.com:godicewang/MemWeave.git@<commit>' --local`，SSH 需要仓库读取权限。Pi 原生也支持 HTTPS Git 来源，但此前本机克隆遇到网络错误。已有本地 checkout 可使用 `pi install /absolute/path/to/MemWeave --local`，其运行依赖由 checkout 维护者准备。
 
 1. **首次启动确认初始化。** 安装后启动交互式 `pi`，扩展会自动进入 `/memweave-setup` 的原生确认框。回车确认后，程序创建 memory 目录，**直接以包内默认模板替换 `~/.pi/memory/rule.md`，包括已有自定义内容**，并在当前 Pi 配置目录的全局 `settings.json` 中合并写入 `compaction.enabled=false`，随后自动 reload。
 
@@ -100,7 +107,7 @@ Task 保存目标和当前认知，Pi Session 保存原始交互。你可直接�
 
 **升级 npm 包会覆盖 `~/.pi/memory/rule.md` 的自定义内容。** 扩展从实际安装包的 `package.json.version` 判断版本；加载不同版本时自动对齐该包默认模板，旧 v1 标记首次加载也会覆盖并迁移。需要保留的定制内容请在升级前自行备份；config.json、Task/State、Session 和压缩设置不因模板升级重置。Git/本地包共用版本规则，同版本修改包内模板不会触发升级同步；开发新协议时也要递增包版本。
 
-将来采用 npm 固定版本时，需要 `pi install npm:<包名>@<新版本> --local` 显式安装新版本；Pi v1.3.0 的 update 会跳过精确 npm 版本，即使手动改了声明也不会据此重装。已通过临时 registry 验证这一差异，尚未向 npm 公网发布。
+采用 npm 固定版本时，需要 `pi install npm:@godice/memweave@<新版本>` 显式安装新版本；项目安装继续加 `--local`。Pi v1.3.0/1.4.0 的 update 会跳过精确 npm 版本，即使手动改了声明也不会据此重装。跟随测试渠道时使用原来源 `npm:@godice/memweave@next`，更新后重启或 reload，并用 `pi list` 确认生效来源。
 
 使用 `pi config --local` 禁用或重新启用扩展，再 reload；移除使用：
 

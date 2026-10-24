@@ -4,19 +4,19 @@
 
 本规范根据用户明确要求制定，约束 MemWeave 的 npm 包名、版本编号、发布时机和渠道选择。Package 内容、宿主兼容与运行时边界仍遵循 [Pi Package 发布层设计](../../PACKAGING.md)。
 
-- npm 包名为 `memweave`，首次发布版本为 `0.1.0`。
+- npm 包名为 `@godice/memweave`，首次发布版本为 `0.1.0`。原定名称 `memweave` 已被他人占用，用户于 2026-10-24 明确确认使用当前 scoped 包名；其余编号、授权与渠道规则不变。
 - **只有用户主动、明确要求发布时，才执行 npm 发布。** 完成开发、修复、测试、构建、Git commit 或 push，均不构成发布授权。
 - 要求编写或修改发布规范、准备发布、检查发布条件，也不等于要求实际发布。
 - 一次发布指令只执行该指令要求的发布，不自动形成后续持续发布或定时发布。
 - 本规范本身不触发发布，不立即修改当前开发快照的版本或解除 `private` 限制。首次实际发布时，再按授权准备对应元数据。
-- 发布前核验账号对 `memweave` 的发布权限；包名不可用或无权发布时，报告阻碍，不擅自改用其他包名。
+- 发布前核验账号对 `@godice/memweave` 的发布权限；包名不可用或无权发布时，报告阻碍，不擅自改用其他包名。
 
 ## 2. 版本编号
 
 默认从以下序列连续发布：
 
 ```text
-memweave@0.1.0 → memweave@0.1.1 → memweave@0.1.2 → …
+@godice/memweave@0.1.0 → @godice/memweave@0.1.1 → @godice/memweave@0.1.2 → …
 ```
 
 1. 没有已发布版本时，首次使用 `0.1.0`。
@@ -67,7 +67,7 @@ npm publish --access public --tag latest
 2. 核验包名权限、已发布版本与当前标签，确定本次版本。按现有工程流程完成元数据、许可、相关测试、构建与归档内容检查；不扩大宿主兼容承诺。
 3. 只发布经检查的本次版本，显式使用 `--tag next` 或 `--tag latest`。账号、认证、网络或检查失败时报告，不将准备完成表述为发布成功。
 4. 发布后核验目标版本实际存在、所选标签指向正确，并确认未意外移动另一个渠道的标签。若结果异常，报告实际状态，不自动增加版本重发或擅自调整其他标签。
-5. 交付说明写清实际包名、版本、渠道及对应安装命令。稳定渠道使用 `pi install npm:memweave@latest`，测试渠道使用 `pi install npm:memweave@next`；需要固定版本时使用如 `pi install npm:memweave@0.1.2`。
+5. 交付说明写清实际包名、版本、渠道及对应安装命令。稳定渠道使用 `pi install npm:@godice/memweave@latest`，测试渠道使用 `pi install npm:@godice/memweave@next`；需要固定版本时使用如 `pi install npm:@godice/memweave@0.1.2`。
 
 发布新包版本仍遵循现有 Rule 升级行为：用户加载不同 `package.json.version` 的包时，会自动以该包默认模板覆盖运行时 Rule；本规范不修改初始化、记忆数据或压缩设置的既定契约。
 

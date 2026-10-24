@@ -11,7 +11,8 @@ test("Agent 上限使用经核验的精确 token 容量并向下取整", () => {
 
 test("未验收的 Pi 版本有明确诊断，peer 通配符不是兼容声明", () => {
   assert.doesNotThrow(() => assertSupportedHost("1.3.0"));
-  for (const version of ["1.1.0", "1.3.1", "2.0.0", "unknown"]) {
+  assert.doesNotThrow(() => assertSupportedHost("1.4.0"));
+  for (const version of ["1.1.0", "1.3.1", "1.4.1", "1.4.0-next.1", "2.0.0", "unknown"]) {
     assert.throws(() => assertSupportedHost(version), /UNVERIFIED_PI_VERSION/);
   }
 });

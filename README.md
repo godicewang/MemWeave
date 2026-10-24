@@ -4,7 +4,23 @@
 
 ## 安装与使用
 
-普通用户请阅读随包提供的[使用指南](USER_GUIDE.md)：安装开发快照、配置模型与压缩设置、创建 Task、恢复、升级和卸载。当前验收宿主为 Pi v1.3.0，真实模型为官方 DeepSeek Flash；尚未向 npm 公网发布。
+首版测试包为 `@godice/memweave@0.1.0`，发布渠道 `next`，许可证 MIT。支持 Pi **1.3.0 和 1.4.0**，需要 Node.js **22.19.0 或以上**；真实模型验收使用官方 DeepSeek Flash。
+
+已有受支持 Pi 的用户，在业务项目目录运行：
+
+```sh
+pi install npm:@godice/memweave@0.1.0
+pi
+```
+
+没有 Pi 时先安装宿主：
+
+```sh
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent@1.4.0
+pi --version
+```
+
+首次启动回车确认后，扩展会替换 `~/.pi/memory/rule.md`、全局关闭自动压缩并自动 reload；升级扩展也会覆盖自定义 Rule。模型与 API 认证由用户在 Pi 中配置。详细安装、恢复、升级与卸载方法见随包提供的[使用指南](USER_GUIDE.md)。
 
 ## 开发前
 
@@ -44,7 +60,7 @@ State 窗口只计活动 F/D，Goal 常驻；默认到 500 或 token 管理线�
 
 2026-10-23 审计后的历史 State 查询与 10 条消息回读生命周期已实现；137 项常规测试通过。真实 DeepSeek 新增查询通过；整组视觉测试曾出现一位 OCR 误识别，单独复测通过。变更、失败记录与未修复问题见[审计后改进验收](docs/AUDIT_FOLLOWUP_VALIDATION.md)。
 
-最终验收通过 126 项常规测试、10 项真实 DeepSeek 测试（32 次推理）和 3 项独立分发测试。覆盖独立进程并发、旧快照数据升级、安装代码的恢复与卸载保留。npm registry 使用临时本机服务，未向 npm 公网发布；GitHub SSH 通过，HTTPS 复测低速超时。强制 system 覆盖已验证不兼容，虚拟路由仅验证拒绝；受控动态工具组合通过，其他组合不外推。完整边界见[发布与兼容矩阵](docs/PACKAGING.md)。
+阶段 6 当时验收通过 126 项常规测试、10 项真实 DeepSeek 测试（32 次推理）和 3 项独立分发测试。覆盖独立进程并发、旧快照数据升级、安装代码的恢复与卸载保留。当时 npm registry 使用临时本机服务，未向 npm 公网发布；GitHub SSH 通过，HTTPS 复测低速超时。强制 system 覆盖已验证不兼容，虚拟路由仅验证拒绝；受控动态工具组合通过，其他组合不外推。当前宿主与首次发布验收见 [Pi 1.4.0 验收记录](docs/PI_1_4_VALIDATION.md)，完整边界见[发布与兼容矩阵](docs/PACKAGING.md)。
 
 ## 运行文件
 
@@ -112,7 +128,7 @@ tests/
 └── fixtures/               隔离 Session 与请求测试夹具
 ```
 
-Node 最低版本与目标 Pi 一致，为 22.19.0；本机验证使用 `.node-version` 中的 24.22.0。开发依赖精确固定 Pi v1.3.0，生产使用宿主 peer。安装和验证命令：
+Node 最低版本与目标 Pi 一致，为 22.19.0；本机验证使用 `.node-version` 中的 24.22.0。开发依赖精确固定 Pi v1.4.0，生产使用宿主 peer，保留已验证的 v1.3.0 兼容。安装和验证命令：
 
 ```sh
 npm ci --ignore-scripts
@@ -128,7 +144,7 @@ npm run test:live
 
 `test:distribution` 默认使用既有 GitHub SSH 通道，Git 候选取本地 `origin/main`；可用 `MEMWEAVE_DISTRIBUTION_REF=<完整commit>` 指定已推送候选，用 `MEMWEAVE_DISTRIBUTION_TRANSPORT=https` 复测 HTTPS。该组测试独立于常规检查，npm 路径验证本地归档和临时 registry 的真实安装/升级，不代表 npm 公网发布已验收。
 
-当前版本为 `0.0.0`，`private: true` 防止开发快照被误发布到 npm；正式包名、版本与许可等事项在公开发布前确定。不要手改 `resources/rule.md`，应维护规范中的两份一致模板后执行 `npm run resources:sync`。密钥继续使用仓库外的私有配置。
+当前版本为 `@godice/memweave@0.1.0`，使用 MIT 许可证，版权署名 `godice`。只有用户主动要求才发布；默认测试渠道为 `next`，明确要求稳定版才使用 `latest`。不要手改 `resources/rule.md`，应维护规范中的两份一致模板后执行 `npm run resources:sync`。密钥继续使用仓库外的私有配置。
 
 2026-10-23 预算调整：Agent 使用模型总容量的 60%，State 默认 500 条/每批候选 100/正文 100 字符。State 12.5%、Window 37.5%、系统工具 15%、输出 10%、最新输入 5%、完整回读 10%、协议 5%、安全 5%。config.json 省略 N/B 才按模型自动计算，已有显式数值不覆盖。输出上限落实到请求；末尾 State 附实际预算快照。State 达到 token 管理线会提前提醒，超准入预算的增长在提交前拒绝。详见开发仓库 docs/CONTEXT_BUDGET_DESIGN.md。
 

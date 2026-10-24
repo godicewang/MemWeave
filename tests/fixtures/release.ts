@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { TestContext } from "node:test";
+import { VERSION } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_CONFIG } from "../../src/config/schema.ts";
 import { memoryPaths } from "../../src/storage/paths.ts";
 export const run = promisify(execFile);
@@ -22,6 +23,7 @@ export interface ReleaseCase {
   label: string;
   turns?: number;
   authPath?: string;
+  hostRoot?: string;
 }
 export interface ReleaseResult {
   taskId: string;
@@ -127,6 +129,10 @@ export async function unpackArtifact(root: string, archive: string) {
 export async function releaseWorker(
   input: ReleaseCase,
 ): Promise<ReleaseResult> {
+  const manifest = JSON.parse(await readFile(join(input.artifact, "package.json"), "utf8"));
+  if (!input.hostRoot && VERSION !== "1.3.0" && manifest.devDependencies?.["@earendil-works/pi-coding-agent"] === "1.3.0") {
+    input = { ...input, hostRoot: await legacyReleaseHost(input.root) };
+  }
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     MEMWEAVE_RELEASE_CASE: JSON.stringify(input),
@@ -137,7 +143,8 @@ export async function releaseWorker(
     [
       "--test",
       "--test-reporter=tap",
-      fileURLToPath(new URL("./release-worker.ts", import.meta.url)),
+      input.hostRoot ? join(input.hostRoot, "tests/fixtures/release-worker.ts")
+        : fileURLToPath(new URL("./release-worker.ts", import.meta.url)),
     ],
     {
       cwd: input.cwd,
@@ -154,4 +161,22 @@ export async function releaseWorker(
     assert.match(stdout + stderr, /LOCK_OWNER_DEAD/);
   else assert.doesNotMatch(stdout + stderr, /\[MemWeave\]/);
   return JSON.parse(line.slice("# MEMWEAVE_RESULT ".length)) as ReleaseResult;
+}
+
+/** Run historical product code on its verified host before testing recovery on the new host. */
+export async function legacyReleaseHost(root: string): Promise<string> {
+  const hostRoot = join(root, "pi-1.3-host");
+  await mkdir(join(hostRoot, "tests/fixtures"), { recursive: true });
+  await cp(join(repository, "src"), join(hostRoot, "src"), { recursive: true });
+  for (const file of ["native-session.ts", "release-worker.ts", "release.ts"]) {
+    await cp(join(repository, "tests/fixtures", file), join(hostRoot, "tests/fixtures", file));
+  }
+  await writeFile(join(hostRoot, "package.json"), JSON.stringify({ type: "module", private: true }));
+  const npm = process.env.npm_execpath;
+  assert.ok(npm, "Run through an npm test script");
+  await run(process.execPath, [npm, "install", "--prefix", hostRoot, "--ignore-scripts", "--no-audit", "--no-fund",
+    "--package-lock=false", "--cache", join(root, "npm-cache"),
+    "@earendil-works/pi-coding-agent@1.3.0", "@earendil-works/pi-ai@1.3.0", "typebox@1.3.27"],
+    { timeout: 120_000, maxBuffer: 1024 * 1024 });
+  return hostRoot;
 }

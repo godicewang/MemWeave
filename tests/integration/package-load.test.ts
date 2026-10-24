@@ -6,7 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { DefaultPackageManager, DefaultResourceLoader, discoverAndLoadExtensions, SettingsManager } from "@earendil-works/pi-coding-agent";
+import { DefaultPackageManager, DefaultResourceLoader, discoverAndLoadExtensions, SettingsManager, VERSION } from "@earendil-works/pi-coding-agent";
 
 const run = promisify(execFile);
 const root = fileURLToPath(new URL("../../", import.meta.url));
@@ -47,7 +47,7 @@ async function assertPackageLoads(packageRoot: string, temporaryRoot: string) {
   assert.deepEqual(await readdir(agentDir), []);
 }
 
-test("Pi v1.3.0 通过 manifest 加载本地 TypeScript 入口", async (t) => {
+test(`Pi v${VERSION} 通过 manifest 加载本地 TypeScript 入口`, async (t) => {
   const temporaryRoot = await mkdtemp(join(tmpdir(), "memweave-local-load-"));
   t.after(() => rm(temporaryRoot, { recursive: true, force: true }));
 
@@ -72,6 +72,7 @@ test("npm 归档只含运行资源，解包后由 Pi 加载同一入口", async 
   const paths = archive.files.map((file) => file.path).sort();
   const sources = (await readdir(join(root, "src"), { recursive: true })).filter(path => path.endsWith(".ts")).map(path => `src/${path}`);
   assert.deepEqual(paths, [
+    "LICENSE",
     "README.md",
     "USER_GUIDE.md",
     "package.json",
@@ -83,6 +84,7 @@ test("npm 归档只含运行资源，解包后由 Pi 加载同一入口", async 
 
   await run("tar", ["-xzf", join(temporaryRoot, archive.filename), "-C", temporaryRoot]);
   const packageRoot = join(temporaryRoot, "package");
+  assert.match(await readFile(join(packageRoot, "LICENSE"), "utf8"), /MIT License[\s\S]*Copyright \(c\) 2026 godice/);
   assert.deepEqual(
     await readFile(join(packageRoot, "resources/rule.md")),
     await readFile(join(root, "docs/specs/1.2.rule_v1_3_final_updated.md")),

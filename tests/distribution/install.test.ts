@@ -114,7 +114,8 @@ test("npm 本地归档：经原生 PackageManager 安装/禁用/卸载，不自�
   const npmCli = process.env.npm_execpath; assert.ok(npmCli, "Run through npm run test:distribution");
   const { stdout } = await run(process.execPath, [npmCli, "--cache", join(h.root, "npm-cache"), "pack", "--json", "--ignore-scripts", "--pack-destination", h.root], { cwd: repository });
   const archive = (JSON.parse(stdout) as Array<{ filename: string }>)[0]; assert.ok(archive);
-  const source = `npm:memweave@file:${join(h.root, archive.filename)}`;
+  const manifest = JSON.parse(await readFile(join(repository, "package.json"), "utf8"));
+  const source = `npm:${manifest.name}@file:${join(h.root, archive.filename)}`;
   await h.manager.installAndPersist(source, { local: true }); await h.settings.flush();
   const installed = h.manager.getInstalledPath(source, "project"); assert.ok(installed);
   assert.ok(!relative(h.root, installed).startsWith(".."));

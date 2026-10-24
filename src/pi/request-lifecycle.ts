@@ -14,7 +14,9 @@ export interface RequestServices {
 }
 
 export function assertSupportedHost(version: string): void {
-  if (version !== "1.3.0") throw new Error(`UNVERIFIED_PI_VERSION: ${version}; verified target is 1.3.0`);
+  if (version !== "1.3.0" && version !== "1.4.0") {
+    throw new Error(`UNVERIFIED_PI_VERSION: ${version}; verified targets are 1.3.0 and 1.4.0`);
+  }
 }
 
 export function reportRequestError(error: unknown, ctx: ExtensionContext): void {

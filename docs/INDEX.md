@@ -18,6 +18,7 @@
 |---|---|
 | `ARCHITECTURE.md` | 原生扩展的数据流、模块/存储边界、待确认契约 |
 | `PACKAGING.md` | npm/Git 分发、宿主依赖、四项副作用及兼容验收 |
+| `PI_1_4_VALIDATION.md` | Pi 1.4.0 接口核查、双版本兼容与首版 npm 发布验收 |
 | `IMPLEMENTATION_PLAN.md` | 当前进度、阶段依赖、交付范围和进入条件 |
 | `PHASE_0_VALIDATION.md` | 阶段 0 的实际测试证据、复现命令、兼容与未验证范围 |
 | `PHASE_1_VALIDATION.md` | 配置/Rule 正式模块、精确容量、HTTP 重试与真实 DeepSeek 验收 |

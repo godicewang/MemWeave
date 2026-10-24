@@ -7,7 +7,7 @@ import {
 } from "@earendil-works/pi-ai";
 import { budgetPlan } from "../window/policy.ts";
 import { originalImage } from "./original-image.ts";
-/** Pi 1.3.0 ordinary main-session output ceiling; reserve overrides conservatively. */
+/** Pi 1.3.0/1.4.0 ordinary main-session output ceiling; reserve overrides conservatively. */
 export function outputReserve(
   model: Model<Api>,
   level: ModelThinkingLevel = "off",
