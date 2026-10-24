@@ -182,8 +182,11 @@ test("temporary npm registry: installed release upgrade recovers real Task/State
   assert.equal(before.window, false);
   const task = JSON.parse(await readFile(f.paths.index, "utf8"))[0];
   const stateBefore = await readFile(f.paths.state(task), "utf8"),
-    configBefore = await readFile(f.paths.config),
-    ruleBefore = await readFile(f.paths.rule);
+    configBefore = await readFile(f.paths.config);
+  const setup = f.paths.setup(join(f.root, "setup-agent"));
+  await mkdir(join(f.paths.root, "setup"));
+  await writeFile(setup.marker, '{"version":2,"package_version":"0.0.0-before"}');
+  await writeFile(f.paths.rule, "CUSTOM RULE FROM PREVIOUS NPM VERSION");
   const messagesBefore = (await readFile(before.sessionFile, "utf8"))
     .trimEnd()
     .split("\n")
@@ -221,6 +224,10 @@ test("temporary npm registry: installed release upgrade recovers real Task/State
   assert.equal(after.version, 3);
   assert.equal(after.window, true);
   assert.equal(after.settings, 4);
+  const upgradedRule = await readFile(f.paths.rule);
+  assert.ok(upgradedRule.equals(await readFile(join(installed, "resources/rule.md"))));
+  assert.deepEqual(JSON.parse(await readFile(setup.marker, "utf8")), { version: 2, package_version: "0.0.0" });
+  await assert.rejects(access(setup.settings), { code: "ENOENT" });
   assert.ok(
     (await readFile(f.paths.state(task), "utf8")).startsWith(stateBefore),
   );
@@ -261,7 +268,7 @@ test("temporary npm registry: installed release upgrade recovers real Task/State
   await assert.rejects(access(installed), { code: "ENOENT" });
   for (const [path, value] of [
     [f.paths.config, configBefore],
-    [f.paths.rule, ruleBefore],
+    [f.paths.rule, upgradedRule],
     [f.paths.state(task), stateAfter],
     [before.sessionFile, sessionAfter],
   ] as const)
@@ -270,6 +277,6 @@ test("temporary npm registry: installed release upgrade recovers real Task/State
   assert.equal(settings.getCompactionEnabled(), false);
   assert.deepEqual([...served].sort(), ["0.0.0", "0.0.0-before", "tokenizer"]);
   t.diagnostic(
-    "Local registry protocol only, not npmjs.org: two installed versions; independent Pi processes; 7 local HTTP model requests; no real inference",
+    "Local registry protocol only, not npmjs.org: two installed versions; Rule refreshed from actual package version without settings writes; independent Pi processes; 7 local HTTP model requests; no real inference",
   );
 });

@@ -58,7 +58,7 @@
 - 运行时数据放在 `~/.pi/memory/`，不得写入业务项目仓库。
 - `src/config/defaults.json` 保存包内默认值；可选 `~/.pi/memory/config.json` 保存用户部分覆盖；Session/分支运行时覆盖必须隔离，避免多个 Pi 进程互相覆盖设置。
 - Agent 总预算默认实际调用模型最大上下文的 `floor(C_model * 3 / 5)`，可配置降低但不得超过 60%，包含输入、输出预留及协议开销；Recent Window 缺省 N/B 按模型预算自动计算（最高默认 200/40），已有显式值优先，State 默认 500 个事件、每批管理 100 个，单事件正文 100 字符与最多保留 20 个的既定限制不变。State 规划 12.5%、普通 Window 37.5%、系统/工具 15%；其余比例与精确容量见 Recent Window §14，§5.1，配置见 Rule 技术稿 §3、§12 和 CONFIGURATION_PROPOSAL.md。
-- `rule.md` 独立维护并在请求准备阶段读取；仅支持白名单 `{{variable}}` 替换。禁止 eval、表达式、递归模板，禁止处理用户自己的 SYSTEM/APPEND 文本。
+- `rule.md` 独立维护并在请求准备阶段读取；首次确认初始化及后续包版本变化时以包内默认模板覆盖，版本标记最后提交，同版本重启/reload 不重复覆盖，旧初始化标记兼容迁移。仅支持白名单 `{{variable}}` 替换；禁止 eval、表达式、递归模板，禁止处理用户自己的 SYSTEM/APPEND 文本。
 - 保留 Pi 原生 SYSTEM/APPEND/AGENTS 的发现、信任和优先级，不修改或静默屏蔽用户文件。
 - 请求语义顺序为 Rule → Recent Window → State；末尾 State 同时附预算快照，Window 提醒在它之前。State、预算和提醒是请求级临时内容，不写入 Session、不参与真实交互事件计数。
 - Rule 渲染、Window 预算与 State 注入统一接在 `context_with_system`，使用同一请求快照；仅额外使用公开 before_provider_request 对齐已预留的输出上限，不重新处理历史；不先按旧 Rule 计算预算再补写，不包装 `session.agent.prepareRequest`。模板、配置或预算失败时先调用 `ctx.abort()`，再报告；不得仅依赖抛异常或返回空消息阻止发送。

@@ -2,6 +2,19 @@ import { readFile } from "node:fs/promises";
 import { SettingsManager } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_CONFIG } from "../config/schema.ts";
 import { renderRule } from "../rule/render.ts";
+import { assertPackageVersion } from "../storage/setup.ts";
+
+export async function loadPackageVersion(): Promise<string> {
+  let metadata: unknown;
+  try {
+    metadata = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(
+      await readFile(new URL("../../package.json", import.meta.url))));
+  } catch { throw Error("SETUP_PACKAGE_VERSION_INVALID: cannot read package.json"); }
+  const version = metadata && typeof metadata === "object" && !Array.isArray(metadata) && "version" in metadata
+    ? metadata.version : undefined;
+  assertPackageVersion(version);
+  return version;
+}
 
 export async function loadDefaultRule(): Promise<string> {
   const bytes = await readFile(new URL("../../resources/rule.md", import.meta.url));

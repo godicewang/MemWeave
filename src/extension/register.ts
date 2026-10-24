@@ -36,6 +36,7 @@ import { registerSetup } from "./setup.ts";
 export interface MemweaveOptions extends WindowOptions {
   paths?: MemoryPaths;
   setupAgentDir?: string;
+  setupPackageVersion?: string;
   verifyCapacity?: CapacityVerifier;
   observe?: (messages: RequestMessages) => void;
   report?: (error: unknown, ctx: ExtensionContext) => void;
@@ -63,7 +64,7 @@ export function registerMemweave(
       return prepared.messages;
     },
   });
-  const setup = registerSetup(pi, paths, report, options.setupAgentDir);
+  const setup = registerSetup(pi, paths, report, options.setupAgentDir, options.setupPackageVersion);
   registerRequestLifecycle(pi, { ...services, ...setup, report });
   pi.on("before_provider_request", (event, ctx) => {
     try {

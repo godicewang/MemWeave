@@ -19,11 +19,11 @@ test(
     assert.ok(input && input.artifact && input.memory);
     const paths = memoryPaths(input.memory),
       entry = join(input.root, `entry-${input.label}.ts`);
-    // Execute installed product code; only the existing memoryRoot seam is isolated.
+    // Execute installed product code with isolated memoryRoot and Pi setup profile paths.
     // Capacity, request lifecycle, SDK loop and provider paths are production implementations.
     await writeFile(
       entry,
-      `import {registerMemweave} from ${JSON.stringify(join(input.artifact, "src/extension/register.ts"))};\nimport {memoryPaths} from ${JSON.stringify(join(input.artifact, "src/storage/paths.ts"))};\nexport default pi=>registerMemweave(pi,{paths:memoryPaths(${JSON.stringify(input.memory)})});\n`,
+      `import {registerMemweave} from ${JSON.stringify(join(input.artifact, "src/extension/register.ts"))};\nimport {memoryPaths} from ${JSON.stringify(join(input.artifact, "src/storage/paths.ts"))};\nexport default pi=>registerMemweave(pi,{paths:memoryPaths(${JSON.stringify(input.memory)}),setupAgentDir:${JSON.stringify(join(input.root, "setup-agent"))}});\n`,
     );
     const manager = input.sessionFile
       ? SessionManager.open(input.sessionFile)

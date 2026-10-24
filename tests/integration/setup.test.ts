@@ -27,10 +27,10 @@ async function fixture(t: TestContext, options: { accept?: boolean; projectEnabl
   const faux = fauxProvider({ provider: "setup-fixture", models: [{ id: "test", contextWindow: 1000000, maxTokens: 1024 }], tokensPerSecond: Infinity });
   runtime.registerNativeProvider(faux.provider);
   const diagnostics: string[] = [], errors: string[] = [], prompts: string[] = [];
-  let accept = options.accept ?? true, reloads = 0, failReload = options.failReload ?? false;
+  let accept = options.accept ?? true, reloads = 0, failReload = options.failReload ?? false, packageVersion = "0.1.0";
   const loader = new DefaultResourceLoader({ cwd, agentDir, settingsManager: settings,
     noExtensions: true, noSkills: true, noThemes: true, noPromptTemplates: true,
-    extensionFactories: [pi => { registerMemweave(pi, { paths, setupAgentDir: agentDir,
+    extensionFactories: [pi => { registerMemweave(pi, { paths, setupAgentDir: agentDir, setupPackageVersion: packageVersion,
       verifyCapacity: async () => 1000000, report: error => diagnostics.push(String(error)) }); }],
   });
   await loader.reload();
@@ -47,7 +47,7 @@ async function fixture(t: TestContext, options: { accept?: boolean; projectEnabl
     } });
   return { paths, agentDir, cwd, settings, faux, manager, session, diagnostics, errors, prompts, bind,
     setAccept: (value: boolean) => { accept = value; }, setFailReload: (value: boolean) => { failReload = value; },
-    get reloads() { return reloads; } };
+    setPackageVersion: (value: string) => { packageVersion = value; }, get reloads() { return reloads; } };
 }
 
 async function waitUntil(done: () => boolean) {
@@ -163,4 +163,55 @@ test("failed reload leaves a guard, and retry refreshes settings without replaci
   assert.equal(h.settings.getCompactionEnabled(), false);
   assert.equal(h.prompts.length, 1);
   assert.equal(await readFile(h.paths.rule, "utf8"), "KEEP AFTER COMMIT");
+});
+
+test("native reload after a package version change refreshes Rule without another confirmation or model request", async t => {
+  const h = await fixture(t);
+  await h.bind(); await waitUntil(() => h.reloads === 1 && !h.settings.getCompactionEnabled()); await setTimeout(20);
+  const settingsBefore = await readFile(join(h.agentDir, "settings.json"));
+  await writeFile(h.paths.rule, "CUSTOM OLD VERSION");
+  h.setPackageVersion("0.2.0");
+  await h.session.reload();
+  assert.match(await readFile(h.paths.rule, "utf8"), /长程任务记忆协议/);
+  assert.deepEqual(JSON.parse(await readFile(h.paths.setup(h.agentDir).marker, "utf8")), { version: 2, package_version: "0.2.0" });
+  assert.equal(h.prompts.length, 1); assert.equal(h.faux.state.callCount, 0);
+  assert.ok(settingsBefore.equals(await readFile(join(h.agentDir, "settings.json"))));
+  await writeFile(h.paths.rule, "SAME VERSION EDIT");
+  await h.session.reload();
+  assert.equal(await readFile(h.paths.rule, "utf8"), "SAME VERSION EDIT");
+  assert.deepEqual(h.errors, []); assert.deepEqual(h.diagnostics, []);
+});
+
+test("previously initialized headless startup refreshes a legacy Rule without changing settings", async t => {
+  const h = await fixture(t, { mode: "print" });
+  await mkdir(join(h.paths.root, "setup"), { recursive: true });
+  await writeFile(h.paths.setup(h.agentDir).marker, '{"version":1}');
+  await writeFile(h.paths.rule, "LEGACY CUSTOM RULE");
+  h.settings.setCompactionEnabled(false); await h.settings.flush();
+  const before = await readFile(join(h.agentDir, "settings.json"));
+  await h.bind();
+  assert.match(await readFile(h.paths.rule, "utf8"), /长程任务记忆协议/);
+  assert.deepEqual(JSON.parse(await readFile(h.paths.setup(h.agentDir).marker, "utf8")), { version: 2, package_version: "0.1.0" });
+  assert.ok(before.equals(await readFile(join(h.agentDir, "settings.json"))));
+  assert.equal(h.prompts.length, 0); assert.equal(h.faux.state.callCount, 0);
+  assert.deepEqual(h.errors, []); assert.deepEqual(h.diagnostics, []);
+});
+
+test("failed startup upgrade cancels inference until the pending package version is successfully applied", async t => {
+  const h = await fixture(t);
+  await h.bind(); await waitUntil(() => h.reloads === 1 && !h.settings.getCompactionEnabled()); await setTimeout(20);
+  const markerBefore = await readFile(h.paths.setup(h.agentDir).marker);
+  await rm(h.paths.rule); await mkdir(h.paths.rule);
+  h.setPackageVersion("0.2.0");
+  await h.session.reload();
+  await h.session.prompt("failed upgrade must not infer");
+  assert.equal(h.faux.state.callCount, 0);
+  assert.ok(markerBefore.equals(await readFile(h.paths.setup(h.agentDir).marker)));
+  assert.ok(h.diagnostics.some(message => message.includes("SETUP_FAILED")));
+  await rm(h.paths.rule, { recursive: true });
+  await h.session.reload();
+  assert.deepEqual(JSON.parse(await readFile(h.paths.setup(h.agentDir).marker, "utf8")), { version: 2, package_version: "0.2.0" });
+  assert.match(await readFile(h.paths.rule, "utf8"), /长程任务记忆协议/);
+  assert.equal(h.prompts.length, 1);
+  assert.deepEqual(h.errors, []);
 });

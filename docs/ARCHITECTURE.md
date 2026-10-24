@@ -105,7 +105,7 @@ Pi 原生准备 → 普通 context 处理 → Pi 恢复 system/工具状态
 
 Pi 的 `settings.json` 与 MemWeave 的 `~/.pi/memory/config.json` 是不同配置。首次启用经用户确认后，前者通过公开 SettingsManager 全局设置 `compaction.enabled=false`，当前 Pi 由 `/memweave-setup` 的命令上下文原生 reload；后者仍只管理记忆参数。项目显式设置优先，不改项目覆盖，仍逐请求核验有效值。
 
-初始化完成标记 `setup/<stableId(resolve(agentDir))>.json` 固定为 `{"version":1}`，写入顺序及恢复边界见 PACKAGING.md 和 Rule 技术稿 §13。该文件仅记已确认初始化，不是第二套 Session 或认知记录；升级、reload、换 Session 不重写 Rule，卸载保留。
+初始化完成标记 `setup/<stableId(resolve(agentDir))>.json` 为 `{"version":2,"package_version":"<已应用的包版本>"}`，兼容旧 v1。包版本变化或旧标记迁移时，在启动/reload 中锁内对齐当前包默认 Rule，最后写版本标记；同版本不重写日常编辑。升级不改其他配置，失败不推进版本标记。该文件不是 Session 或认知记录，卸载保留；完整顺序及恢复边界见 PACKAGING.md 和 Rule 技术稿 §13。
 
 接受同一配置范围内其他 Pi 在读取设置后关闭自动压缩；禁用/卸载 Package 不自动恢复该值。运行中重新启用压缩时，Pi 可能在取消 hook 前追加恢复用 `context_edit`，改变有效会话视图。本扩展不主动用它实现窗口、不删除这些原生记录，也不把恢复记录当成新的认知证据；旧表示的支持边界沿用 Window §4.3。
 

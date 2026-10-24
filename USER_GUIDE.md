@@ -22,7 +22,7 @@ Pi 原生支持 HTTPS Git 来源，但本机的首次 HTTPS 克隆遇到 HTTP/2 
 
    **全局压缩设置影响同一配置范围内的其他 Pi**，它们读取新设置后生效，卸载后仍保留。项目显式 `compaction.enabled=true` 仍能覆盖全局 false；扩展不修改项目覆盖，若有效值仍开启，会明确诊断并取消请求，需要自行关闭该覆盖并 reload。手动 compaction 会被取消；运行中重新打开压缩时，Pi 可能先写入原生 `context_edit`，扩展不删除这些记录。
 
-2. **按需配置运行参数。** `setup/<profile_key>.json` 在 memory 目录记录当前 Pi 配置目录已完成初始化，正文为 `{"version":1}`；它不绑定包版本，升级、reload、新会话不会再次替换 Rule。完成后再次运行 `/memweave-setup` 只 reload，不重置模板。不同 Pi 配置目录各自首次确认；删除标记会使下次交互启动重新确认和替换 Rule。
+2. **按需配置运行参数。** `setup/<profile_key>.json` 在 memory 目录记录初始化及已应用包版本，正文为 `{"version":2,"package_version":"<包版本>"}`，兼容旧 v1 标记。**升级后首次启动或 reload 会自动以新包的默认 Rule 覆盖已有模板**，无需再次确认；同版本的重启/reload/新会话保留日常编辑。同版本完成后再次运行 `/memweave-setup` 只 reload。不同 Pi 配置目录各自首次确认；删除标记会使下次交互启动重新确认初始化。
 
    包内 `src/config/defaults.json` 集中保存默认值；可选的 `~/.pi/memory/config.json` 只填写需要覆盖的项，例如：
 
@@ -89,7 +89,7 @@ Task 保存目标和当前认知，Pi Session 保存原始交互。你可直接�
 - 备份时同时保留 `~/.pi/memory/` 和其 Task 注册过的 Pi Session 原件。`state.md` 可由 `state.json` 重建，`state.json`、index、blobs 和 Session 不能当缓存删除。
 - 不同 Pi 进程可通过各自 Session 共享同一 Task，写入使用进程锁；Recent Window 设置互相隔离。**多个进程同时写同一 Session 文件未验收。**
 - 磁盘失败可能出现“State 已提交、派生视图或索引未更新”；不要据此重复制造新认知。保留原文件并按诊断恢复，幂等重试会识别已提交操作。Session 元数据未可靠落盘时，需从磁盘重新打开，单纯 `/reload` 不能修复脏内存。
-- 初始化写入顺序是 Rule → 全局压缩设置 → 完成标记。`SETUP_FAILED` 会报告失败阶段及此前已提交内容；修复原因后重新运行 `/memweave-setup`。完成标记尚未提交时会再次确认；已经提交时重试只 reload，不再替换 Rule。损坏或未知格式标记明确报错，不自动覆盖。原生 reload 失败时可重试该命令或重启 Pi。
+- 首次初始化顺序是 Rule → 全局压缩设置 → 完成标记；后续版本更新只写 Rule → 版本标记，不改其他设置。`SETUP_FAILED` 报告阶段与已提交内容，失败不推进版本标记；修复后 reload/重启或运行 `/memweave-setup` 重试。首次尚未提交完成标记时仍须确认，既有初始化的升级不重新确认；标记已记录当前版本时不重复覆盖。损坏或未知格式标记明确报错，原生 reload 失败可重试命令或重启。
 - 强杀进程可能留下 `write.lock` 或 `index.lock`。`LOCK_OWNER_DEAD` 会阻止后续写入，不自动抢占。先备份，核对锁内 owner PID 和所有写入者已退出，再人工移除对应锁目录；不能按等待时长盲删活锁。
 
 ## 更新、禁用和卸载
@@ -98,7 +98,7 @@ Task 保存目标和当前认知，Pi Session 保存原始交互。你可直接�
 
 本项目已验收阶段 4 快照创建的数据升级到当前 Runtime；这不是任意旧版本迁移或新格式向旧版本降级的保证。需要回滚时保留原始备份，并先核对数据格式兼容性。
 
-默认 Rule 包含历史 F/D 查询及回读期限说明，并已增加四个策略占位符（见下文配置参数）。升级 Package 不会覆盖 `~/.pi/memory/rule.md`；请先备份，再对照包内 `resources/rule.md` 合并这两处协议说明，保留自己的定制内容。
+**升级 npm 包会覆盖 `~/.pi/memory/rule.md` 的自定义内容。** 扩展从实际安装包的 `package.json.version` 判断版本；加载不同版本时自动对齐该包默认模板，旧 v1 标记首次加载也会覆盖并迁移。需要保留的定制内容请在升级前自行备份；config.json、Task/State、Session 和压缩设置不因模板升级重置。Git/本地包共用版本规则，同版本修改包内模板不会触发升级同步；开发新协议时也要递增包版本。
 
 将来采用 npm 固定版本时，需要 `pi install npm:<包名>@<新版本> --local` 显式安装新版本；Pi v1.3.0 的 update 会跳过精确 npm 版本，即使手动改了声明也不会据此重装。已通过临时 registry 验证这一差异，尚未向 npm 公网发布。
 
@@ -108,7 +108,7 @@ Task 保存目标和当前认知，Pi Session 保存原始交互。你可直接�
 pi remove '<pi list 中的完整来源>' --local
 ```
 
-卸载移除受管 Package 和安装声明；`~/.pi/memory/`（含初始化完成标记）、Pi Session、认证、用户 SYSTEM/APPEND/AGENTS 和共享压缩设置保留。重新安装不会因为包版本变化而再次替换已有 Rule。需要恢复压缩时由用户自行合并修改有效设置。
+卸载移除受管 Package 和安装声明；`~/.pi/memory/`（含初始化完成标记）、Pi Session、认证、用户 SYSTEM/APPEND/AGENTS 和共享压缩设置保留。重新安装同版本保留 Rule，加载不同版本自动对齐该版本默认 Rule。需要恢复压缩时由用户自行合并修改有效设置。
 
 ## 常见诊断与兼容范围
 
