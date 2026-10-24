@@ -13,6 +13,8 @@
 5. 兼容性以测试为准；未通过的版本标为未验证，不静默降级。
 6. 核心记忆语义、工具 schema、事件模型和持久化格式不能为发布便利而改变。
 
+新 Pi 适配遵循 [Pi 新版本适配原则](specs/发布与适配/pi_version_update.md)：用户明确要求适配后，在不改变核心设计、功能与原则且无额外运行时副作用的范围内，Agent 自行完成核查、实现与验收；旧宿主尽量兼容，不作为硬性条件。涉及核心契约变化或新增副作用时先讨论，可主动提出新机制带来的优化建议。适配完成不等于授权 npm 发布，也不提前改变下文记录的当前兼容结果。
+
 ## 首次初始化调整（2026-10-24 用户确认）
 
 用户已取消“不自动创建或覆盖用户文件”的通用约束，目标是在安装扩展后的命令行交互中，由用户回车确认后自动准备默认 `~/.pi/memory/rule.md` 并关闭 Pi 压缩。此次授权针对默认 Rule 与 `compaction.enabled` 的初始化，不扩大到用户 SYSTEM/APPEND/AGENTS、认证、Session 或 Task/State 数据。
@@ -33,7 +35,7 @@
 
 ## Package 入口与分发
 
-使用显式 manifest，让 Pi 直接加载 TypeScript 源入口，避免 Git 安装依赖开发编译步骤。npm 包名为 `memweave`，首次版本为 `0.1.0`；只有用户主动要求才发布，默认连续增加补丁号并发布到 `next`，明确要求稳定版才使用 `latest`，完整规则见 [npm 发布规范](specs/npm.md)。示意如下；当前 Git 开发快照及本地归档可安装，尚未公开发布 npm 产品：
+使用显式 manifest，让 Pi 直接加载 TypeScript 源入口，避免 Git 安装依赖开发编译步骤。npm 包名为 `memweave`，首次版本为 `0.1.0`；只有用户主动要求才发布，默认连续增加补丁号并发布到 `next`，明确要求稳定版才使用 `latest`，完整规则见 [npm 发布规范](specs/发布与适配/npm.md)。示意如下；当前 Git 开发快照及本地归档可安装，尚未公开发布 npm 产品：
 
 ```json
 {
@@ -103,7 +105,7 @@ MemWeave 在 Session 启动/恢复及每次请求前检查 `pi.getSettings()` �
 
 Pi v1.3.0 的固定来源升级须区分：Git 更改声明 ref 后可通过原生 update 对齐；精确 npm 版本会被 update 跳过，需要显式 install 新版本，不能只改设置后宣称已升级。两种原生行为都有测试，用户操作见 USER_GUIDE.md。
 
-验证使用系统临时目录并清理，私有配置留在仓库外。本机 HTTP/临时 registry 与真实 DeepSeek 分开记录；未执行 npm 公网或 Git release 发布。开发和发布准备验收完成不等于已公开发行；当前 private/0.0.0 保留，首次实际发布按 [npm 发布规范](specs/npm.md) 准备版本和渠道，许可、账号与包名权限等事项在发布准备时核验。旧 SDK 应用与早期测试不能代替当前 Package 证据。
+验证使用系统临时目录并清理，私有配置留在仓库外。本机 HTTP/临时 registry 与真实 DeepSeek 分开记录；未执行 npm 公网或 Git release 发布。开发和发布准备验收完成不等于已公开发行；当前 private/0.0.0 保留，首次实际发布按 [npm 发布规范](specs/发布与适配/npm.md) 准备版本和渠道，许可、账号与包名权限等事项在发布准备时核验。旧 SDK 应用与早期测试不能代替当前 Package 证据。
 
 依据：[v1.3.0 Packages](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/docs/packages.md)、[Extensions](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/docs/extensions.md)、[扩展类型](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/extensions/types.ts)、[runner](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/extensions/runner.ts)、[settings](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/settings-manager.ts)、[压缩/恢复](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/agent-session.ts)。
 

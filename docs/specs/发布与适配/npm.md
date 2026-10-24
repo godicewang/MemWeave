@@ -2,7 +2,7 @@
 
 ## 1. 适用范围与发布授权
 
-本规范根据用户明确要求制定，约束 MemWeave 的 npm 包名、版本编号、发布时机和渠道选择。Package 内容、宿主兼容与运行时边界仍遵循 [Pi Package 发布层设计](../PACKAGING.md)。
+本规范根据用户明确要求制定，约束 MemWeave 的 npm 包名、版本编号、发布时机和渠道选择。Package 内容、宿主兼容与运行时边界仍遵循 [Pi Package 发布层设计](../../PACKAGING.md)。
 
 - npm 包名为 `memweave`，首次发布版本为 `0.1.0`。
 - **只有用户主动、明确要求发布时，才执行 npm 发布。** 完成开发、修复、测试、构建、Git commit 或 push，均不构成发布授权。
