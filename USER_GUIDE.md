@@ -16,15 +16,13 @@ pi list
 
 Pi 原生支持 HTTPS Git 来源，但本机的首次 HTTPS 克隆遇到 HTTP/2 网络错误；SSH 路径已验收。项目安装声明写入 `.pi/settings.json`，需先通过 Pi 的项目信任检查。也可用 `pi install /absolute/path/to/MemWeave --local` 安装本地 checkout；两者直接加载 TypeScript，不需要用户构建 SDK 或运行独立安装器。
 
-1. **关闭有效自动压缩。** 在已有 `.pi/settings.json` 中合并以下字段，保留其中的 packages 和其他设置，再按 Pi 原生方式 reload 或重启。不要用这个片段覆盖整个文件。
+1. **首次启动确认初始化。** 安装后启动交互式 `pi`，扩展会自动进入 `/memweave-setup` 的原生确认框。回车确认后，程序创建 memory 目录，**直接以包内默认模板替换 `~/.pi/memory/rule.md`，包括已有自定义内容**，并在当前 Pi 配置目录的全局 `settings.json` 中合并写入 `compaction.enabled=false`，随后自动 reload。
 
-   ```json
-   { "compaction": { "enabled": false } }
-   ```
+   取消不写入初始化文件；准备好后运行 `/memweave-setup` 可重新确认。没有交互界面时不自动接受；可先在交互式 Pi 中完成初始化，或按原有手动方式复制默认 Rule、合并关闭压缩并 reload/重启。初始化过程不向模型发送命令，不产生模型请求。
 
-   扩展不会替你静默改设置。同配置范围的其他 Pi 也会受影响，禁用和卸载后此设置仍保留。手动 compaction 会被取消；运行中重新打开压缩时，Pi 可能先写入原生 `context_edit`，扩展不删除这些记录。
+   **全局压缩设置影响同一配置范围内的其他 Pi**，它们读取新设置后生效，卸载后仍保留。项目显式 `compaction.enabled=true` 仍能覆盖全局 false；扩展不修改项目覆盖，若有效值仍开启，会明确诊断并取消请求，需要自行关闭该覆盖并 reload。手动 compaction 会被取消；运行中重新打开压缩时，Pi 可能先写入原生 `context_edit`，扩展不删除这些记录。
 
-2. **准备运行文件。** 首次创建 `~/.pi/memory/`，将安装包的 `resources/rule.md` 复制为 `~/.pi/memory/rule.md`。通过 `pi list` 确认安装位置。已有模板应先备份、检查，不能直接覆盖。
+2. **按需配置运行参数。** `setup/<profile_key>.json` 在 memory 目录记录当前 Pi 配置目录已完成初始化，正文为 `{"version":1}`；它不绑定包版本，升级、reload、新会话不会再次替换 Rule。完成后再次运行 `/memweave-setup` 只 reload，不重置模板。不同 Pi 配置目录各自首次确认；删除标记会使下次交互启动重新确认和替换 Rule。
 
    包内 `src/config/defaults.json` 集中保存默认值；可选的 `~/.pi/memory/config.json` 只填写需要覆盖的项，例如：
 
@@ -39,7 +37,7 @@ Pi 原生支持 HTTPS Git 来源，但本机的首次 HTTPS 克隆遇到 HTTP/2 
 
 3. **在 Pi 中配置模型和认证。** 使用 Pi 自己的模型选择与私有认证配置，密钥不要放入项目、Rule 或聊天。当前生产容量适配要求 OpenAI 兼容 `/models` 提供唯一匹配模型的精确 `context_window`；仅有静态目录或“1M”显示名称不足以通过检查。DeepSeek Flash 已验收，不能由此推断所有 OpenAI 兼容供应商都可用。仓库的开发验证私有配置不随 Package 分发。
 
-4. 启动 `pi` 或在已有会话中执行 `/reload`。先用文字让模型创建 Task，例如：“为当前工作创建一个 Task，目标是完成……”。再进行正常工作。没有当前 Task 时不可写 State 或读取 Task 引用。
+4. 初始化完成后，先用文字让模型创建 Task，例如：“为当前工作创建一个 Task，目标是完成……”。再进行正常工作。没有当前 Task 时不可写 State 或读取 Task 引用。
 
 ## 正常使用
 
@@ -91,6 +89,7 @@ Task 保存目标和当前认知，Pi Session 保存原始交互。你可直接�
 - 备份时同时保留 `~/.pi/memory/` 和其 Task 注册过的 Pi Session 原件。`state.md` 可由 `state.json` 重建，`state.json`、index、blobs 和 Session 不能当缓存删除。
 - 不同 Pi 进程可通过各自 Session 共享同一 Task，写入使用进程锁；Recent Window 设置互相隔离。**多个进程同时写同一 Session 文件未验收。**
 - 磁盘失败可能出现“State 已提交、派生视图或索引未更新”；不要据此重复制造新认知。保留原文件并按诊断恢复，幂等重试会识别已提交操作。Session 元数据未可靠落盘时，需从磁盘重新打开，单纯 `/reload` 不能修复脏内存。
+- 初始化写入顺序是 Rule → 全局压缩设置 → 完成标记。`SETUP_FAILED` 会报告失败阶段及此前已提交内容；修复原因后重新运行 `/memweave-setup`。完成标记尚未提交时会再次确认；已经提交时重试只 reload，不再替换 Rule。损坏或未知格式标记明确报错，不自动覆盖。原生 reload 失败时可重试该命令或重启 Pi。
 - 强杀进程可能留下 `write.lock` 或 `index.lock`。`LOCK_OWNER_DEAD` 会阻止后续写入，不自动抢占。先备份，核对锁内 owner PID 和所有写入者已退出，再人工移除对应锁目录；不能按等待时长盲删活锁。
 
 ## 更新、禁用和卸载
@@ -109,7 +108,7 @@ Task 保存目标和当前认知，Pi Session 保存原始交互。你可直接�
 pi remove '<pi list 中的完整来源>' --local
 ```
 
-卸载移除受管 Package 和安装声明；`~/.pi/memory/`、Pi Session、认证、用户 SYSTEM/APPEND/AGENTS 和共享压缩设置保留。需要恢复压缩时由用户自行合并修改有效设置。
+卸载移除受管 Package 和安装声明；`~/.pi/memory/`（含初始化完成标记）、Pi Session、认证、用户 SYSTEM/APPEND/AGENTS 和共享压缩设置保留。重新安装不会因为包版本变化而再次替换已有 Rule。需要恢复压缩时由用户自行合并修改有效设置。
 
 ## 常见诊断与兼容范围
 

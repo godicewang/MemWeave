@@ -6,6 +6,9 @@ export type RequestMessages = ContextWithSystemEvent["messages"];
 export interface RequestServices {
   /** Clear optional in-memory request helpers on native Session startup/reload/replacement. */
   reset?(): void;
+  /** False defers the startup check until a user initialization command reloads Pi. */
+  startup?(ctx: ExtensionContext): Promise<boolean>;
+  assertReady?(): void;
   prepare(messages: RequestMessages, ctx: ExtensionContext): Promise<RequestMessages>;
   report(error: unknown, ctx: ExtensionContext): void;
 }
@@ -24,13 +27,19 @@ export function registerRequestLifecycle(pi: ExtensionAPI, services?: RequestSer
   const report = services?.report ?? reportRequestError;
   const check = () => {
     assertSupportedHost(VERSION);
+    services?.assertReady?.();
     if (pi.getSettings().compaction?.enabled !== false) {
-      throw new Error("COMPACTION_ENABLED: explicitly set Pi compaction.enabled=false and reload");
+      throw new Error("COMPACTION_ENABLED: effective Pi compaction.enabled must be false; a project override can re-enable it; adjust settings and reload");
     }
   };
   const subscriptions = [
-    pi.on("session_start", (_event, ctx) => {
-      try { services?.reset?.(); check(); } catch (error) { report(error, ctx); }
+    pi.on("session_start", async (_event, ctx) => {
+      try {
+        services?.reset?.();
+        assertSupportedHost(VERSION);
+        if (services?.startup && !await services.startup(ctx)) return;
+        check();
+      } catch (error) { report(error, ctx); }
     }),
     pi.on("session_before_compact", () => ({ cancel: true })),
     pi.on("context_with_system", async (event, ctx) => {

@@ -28,6 +28,7 @@
 | `PHASE_6_READINESS.md` | 阶段 6 早期部分安装验收的历史记录；当前状态由最终验收记录取代 |
 | `PHASE_6_VALIDATION.md` | 阶段 6 完整恢复、多进程、安装升级、真实 DeepSeek 与兼容边界 |
 | `CONFIGURATION_VALIDATION.md` | 两层配置、策略生效、真实 API 与分发验收 |
+| `SETUP_VALIDATION.md` | 首次 TUI 确认、直接替换 Rule、全局关闭压缩、完成标记和原生 reload 验收 |
 | `CONFIGURATION_PROPOSAL.md` | 已批准的两层配置、策略覆盖、旧配置/模板兼容与权限边界 |
 | `SOURCE_VERIFICATION.md` | 已批准的有界来源定位缓存、直接比较、按需原生投影及验收 |
 | `CONTEXT_BUDGET_DESIGN.md` | 已确认 60% 预算、500 条 State、自动窗口与提交准入契约 |
@@ -61,4 +62,4 @@
 
 2026-10-24 用户确认配置集中管理：包内 defaults.json 保存默认值，运行时 config.json 保存部分覆盖，允许缺失文件；原六字段分支覆盖优先。开放策略及上限见 CONFIGURATION_PROPOSAL.md，取代早期“只允许六字段、四个 State 必填、预算比例不开放”的限制；默认数值与核心记忆语义不变。
 
-2026-10-24 用户确认首次启用：安装后首次 Pi TUI 启动时回车确认，直接替换已有独立 Rule，全局关闭压缩；允许新增 `/memweave-setup` 和完成标记，通过原生命令上下文 reload。完成标记按 Pi 配置目录区分，不随 Package 升级重置；项目显式覆盖仍按有效设置诊断。详见 PACKAGING.md“首次初始化调整”与 Rule 技术稿 §13；该切片开发验收中。
+2026-10-24 用户确认首次启用：安装后首次 Pi TUI 启动时回车确认，直接替换已有独立 Rule，全局关闭压缩；允许新增 `/memweave-setup` 和完成标记，通过原生命令上下文 reload。完成标记按 Pi 配置目录区分，不随 Package 升级重置；项目显式覆盖仍按有效设置诊断。详见 PACKAGING.md“首次初始化调整”与 Rule 技术稿 §13。该切片已通过 184 项单元/集成检查和真实 Pi 终端回车/独立重启验证，未新增真实模型 API 调用；见 SETUP_VALIDATION.md。

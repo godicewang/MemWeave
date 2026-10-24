@@ -1,6 +1,7 @@
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
+import { stableId } from "./identity.ts";
 export interface TaskLocation {
   readonly workspace: string;
   readonly task_id: string;
@@ -11,6 +12,7 @@ export interface MemoryPaths {
   readonly rule: string;
   readonly index: string;
   readonly indexLock: string;
+  setup(agentDir: string): { marker: string; lock: string; settings: string };
   blob(hash: string): string;
   state(task: TaskLocation): string;
   view(task: TaskLocation): string;
@@ -50,6 +52,12 @@ export function memoryPaths(
     rule: join(normalized, "rule.md"),
     index: join(normalized, "index.json"),
     indexLock: join(normalized, "index.lock"),
+    setup: (agentDir: string) => {
+      if (!isAbsolute(agentDir)) throw Error("INVALID_SETUP_PROFILE: expected absolute Pi agentDir");
+      const profile = resolve(agentDir), key = stableId(profile);
+      return { marker: join(normalized, "setup", `${key}.json`),
+        lock: join(normalized, "setup", `${key}.lock`), settings: join(profile, "settings.json") };
+    },
     blob: (hash: string) => {
       if (!/^[a-f0-9]{64}$/.test(hash)) throw Error("INVALID_BLOB_HASH");
       return join(normalized, "blobs", hash);

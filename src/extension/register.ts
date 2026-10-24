@@ -32,8 +32,10 @@ import { MemoryReadSchema } from "../memory/model.ts";
 import { SetWindowSchema } from "../window/model.ts";
 import { StateReadSchema, historyReadRanges } from "../state/read.ts";
 import { WindowService, type WindowOptions } from "../pi/window-service.ts";
+import { registerSetup } from "./setup.ts";
 export interface MemweaveOptions extends WindowOptions {
   paths?: MemoryPaths;
+  setupAgentDir?: string;
   verifyCapacity?: CapacityVerifier;
   observe?: (messages: RequestMessages) => void;
   report?: (error: unknown, ctx: ExtensionContext) => void;
@@ -61,7 +63,8 @@ export function registerMemweave(
       return prepared.messages;
     },
   });
-  registerRequestLifecycle(pi, { ...services, report });
+  const setup = registerSetup(pi, paths, report, options.setupAgentDir);
+  registerRequestLifecycle(pi, { ...services, ...setup, report });
   pi.on("before_provider_request", (event, ctx) => {
     try {
       const frame = window.outputFrame;
