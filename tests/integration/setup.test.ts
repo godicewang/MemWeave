@@ -12,7 +12,7 @@ import { memoryPaths } from "../../src/storage/paths.ts";
 import { isSetupComplete } from "../../src/storage/setup.ts";
 
 async function fixture(t: TestContext, options: { accept?: boolean; projectEnabled?: boolean; mode?: "tui" | "print";
-  confirm?: () => Promise<boolean>; failReload?: boolean } = {}) {
+  confirm?: () => Promise<boolean>; failReload?: boolean; reloadDelayMs?: number } = {}) {
   const root = await mkdtemp(join(tmpdir(), "memweave-native-setup-"));
   const cwd = join(root, "business"), agentDir = join(root, "agent"), paths = memoryPaths(join(root, "memory"));
   await mkdir(cwd); await mkdir(agentDir);
@@ -27,7 +27,8 @@ async function fixture(t: TestContext, options: { accept?: boolean; projectEnabl
   const faux = fauxProvider({ provider: "setup-fixture", models: [{ id: "test", contextWindow: 1000000, maxTokens: 1024 }], tokensPerSecond: Infinity });
   runtime.registerNativeProvider(faux.provider);
   const diagnostics: string[] = [], errors: string[] = [], prompts: string[] = [];
-  let accept = options.accept ?? true, reloads = 0, failReload = options.failReload ?? false, packageVersion = "0.1.0";
+  let accept = options.accept ?? true, reloads = 0, completedReloads = 0,
+    failReload = options.failReload ?? false, packageVersion = "0.1.0";
   const loader = new DefaultResourceLoader({ cwd, agentDir, settingsManager: settings,
     noExtensions: true, noSkills: true, noThemes: true, noPromptTemplates: true,
     extensionFactories: [pi => { registerMemweave(pi, { paths, setupAgentDir: agentDir, setupPackageVersion: packageVersion,
@@ -43,11 +44,13 @@ async function fixture(t: TestContext, options: { accept?: boolean; projectEnabl
     onError: error => errors.push(error.error), commandContextActions: {
       waitForIdle: () => session.waitForIdle(), newSession: async () => ({ cancelled: true }),
       fork: async () => ({ cancelled: true }), navigateTree: async () => ({ cancelled: true }), switchSession: async () => ({ cancelled: true }),
-      reload: async () => { reloads++; if (failReload) throw Error("fixture reload failure"); await session.reload(); },
+      reload: async () => { reloads++; if (failReload) throw Error("fixture reload failure");
+        await session.reload({ beforeSessionStart: () => setTimeout(options.reloadDelayMs ?? 0) }); completedReloads++; },
     } });
   return { paths, agentDir, cwd, settings, faux, manager, session, diagnostics, errors, prompts, bind,
     setAccept: (value: boolean) => { accept = value; }, setFailReload: (value: boolean) => { failReload = value; },
-    setPackageVersion: (value: string) => { packageVersion = value; }, get reloads() { return reloads; } };
+    setPackageVersion: (value: string) => { packageVersion = value; }, get reloads() { return reloads; },
+    get completedReloads() { return completedReloads; } };
 }
 
 async function waitUntil(done: () => boolean) {
@@ -59,8 +62,7 @@ test("native first-start command confirms once, replaces Rule, reloads effective
   const h = await fixture(t);
   await mkdir(h.paths.root); await writeFile(h.paths.rule, "EXISTING CUSTOM RULE");
   await h.bind();
-  await waitUntil(() => h.reloads === 1 && h.settings.getCompactionEnabled() === false);
-  await setTimeout(20);
+  await waitUntil(() => h.completedReloads === 1 && h.settings.getCompactionEnabled() === false);
   assert.equal(h.prompts.length, 1);
   assert.match(h.prompts[0]!, /替换/); assert.match(h.prompts[0]!, /全局/);
   assert.equal(await isSetupComplete(h.paths, h.agentDir), true);
@@ -97,7 +99,7 @@ test("declining writes nothing and cancels inference; an explicit command can re
 
 test("global setup preserves project override and blocks inference when effective compaction is still enabled", async t => {
   const h = await fixture(t, { projectEnabled: true });
-  await h.bind(); await waitUntil(() => h.reloads === 1); await setTimeout(20);
+  await h.bind(); await waitUntil(() => h.completedReloads === 1);
   assert.equal(JSON.parse(await readFile(join(h.agentDir, "settings.json"), "utf8")).compaction.enabled, false);
   assert.equal(h.settings.getCompactionEnabled(), true);
   assert.equal(await readFile(join(h.cwd, ".pi/settings.json"), "utf8"), '{"compaction":{"enabled":true}}');
@@ -129,8 +131,7 @@ test("pending confirmation cancels concurrent inference before any initializatio
   assert.ok(h.diagnostics.some(message => message.includes("SETUP_PENDING")));
   assert.equal(await isSetupComplete(h.paths, h.agentDir), false);
   answer(true);
-  await waitUntil(() => h.reloads === 1 && !h.settings.getCompactionEnabled());
-  await setTimeout(20);
+  await waitUntil(() => h.completedReloads === 1 && !h.settings.getCompactionEnabled());
   assert.deepEqual(h.errors, []);
 });
 
@@ -166,8 +167,8 @@ test("failed reload leaves a guard, and retry refreshes settings without replaci
 });
 
 test("native reload after a package version change refreshes Rule without another confirmation or model request", async t => {
-  const h = await fixture(t);
-  await h.bind(); await waitUntil(() => h.reloads === 1 && !h.settings.getCompactionEnabled()); await setTimeout(20);
+  const h = await fixture(t, { reloadDelayMs: 75 });
+  await h.bind(); await waitUntil(() => h.completedReloads === 1 && !h.settings.getCompactionEnabled());
   const settingsBefore = await readFile(join(h.agentDir, "settings.json"));
   await writeFile(h.paths.rule, "CUSTOM OLD VERSION");
   h.setPackageVersion("0.2.0");
@@ -199,7 +200,7 @@ test("previously initialized headless startup refreshes a legacy Rule without ch
 
 test("failed startup upgrade cancels inference until the pending package version is successfully applied", async t => {
   const h = await fixture(t);
-  await h.bind(); await waitUntil(() => h.reloads === 1 && !h.settings.getCompactionEnabled()); await setTimeout(20);
+  await h.bind(); await waitUntil(() => h.completedReloads === 1 && !h.settings.getCompactionEnabled());
   const markerBefore = await readFile(h.paths.setup(h.agentDir).marker);
   await rm(h.paths.rule); await mkdir(h.paths.rule);
   h.setPackageVersion("0.2.0");

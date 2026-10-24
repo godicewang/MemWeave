@@ -46,6 +46,7 @@
     "test:integration": "node --test tests/integration/*.test.ts",
     "test:distribution": "node --test tests/distribution/*.test.ts",
     "test:live": "node --test tests/live/*.test.ts",
+    "test:release": "node 发布测试/run.mjs",
     "test": "node --test tests/unit/*.test.ts tests/integration/*.test.ts",
     "check": "npm run resources:check && npm run typecheck && npm test",
     "prepack": "npm run build"
