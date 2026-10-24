@@ -14,6 +14,8 @@
 
 同日按用户要求完成升级增量：实际包版本变化时自动覆盖默认 Rule，旧 v1 标记迁移至含 package_version 的 v2；同版本不重复覆盖，不改其他配置。190 项常规测试、临时 npm registry 两版本安装/Rule 更新/数据恢复/卸载通过，未新增真实模型调用；见 SETUP_VALIDATION.md。
 
+同日完成用户要求的 Pi 1.4.0 适配和首发：保留 1.3.0，两宿主各 190 项常规检查与构建通过；实际 1.3.0 创建的历史数据可由 1.4.0 恢复，1.4.0 原生终端、Git/scoped npm 分发与 3 次真实 DeepSeek 调用通过。`@godice/memweave@0.1.0` 已发布到 `next`，MIT 署名 godice，公网 CLI 安装与独立进程恢复已核验；npm 首发额外 latest 标签无法按标准命令删除，用户已接受本次例外，后续测试版仍只更新 next。详细证据与边界见 PI_1_4_VALIDATION.md。
+
 审计后增量已完成：历史 State 查询、按 10 条真实消息失效的回读保护，以及 DeepSeek 所需的工具参数 object 根结构（保持原有参数约束）。137 项常规测试通过；真实新增查询通过，视觉 OCR 首轮误识别及复测结果单列保留。最新证据与遗留问题见 AUDIT_FOLLOWUP_VALIDATION.md。
 
 阶段 0 已完成：最小工程/Package、原生请求生命周期适配、主动取消、compaction 关闭与恢复反例、共享设置、reload/实例隔离、本地安装/移除、npm 归档及 Git ref 加载均已验证。Node v24.22.0 上构建、类型检查与 24 项常规测试通过；独立 DeepSeek 冒烟完成 2 次真实主会话请求及工具续跑。详细证据与未验证范围见 `PHASE_0_VALIDATION.md`。
