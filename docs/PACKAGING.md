@@ -35,6 +35,8 @@
 
 ## Package 入口与分发
 
+2026-10-24 用户确认额外发布 GitHub Packages 镜像 `@godicewang/memweave@0.1.0`，npm 包名保持 `@godice/memweave`，主页推荐 npm。镜像从已发布 npm 归档生成，仅修改包名与发布 registry，运行文件不变；使用仅响应精确首发 tag 或手动运行的 Actions，不因普通 push 发布。认证、原归档校验与公开验收见 [GitHub Packages 首发](specs/发布与适配/github_packages.md)。本次不发布 npm 新版本。
+
 使用显式 manifest，让 Pi 直接加载 TypeScript 源入口，避免 Git 安装依赖开发编译步骤。npm 包名为 `@godice/memweave`，首次版本为 `0.1.0`；原名称被他人占用，用户已明确确认 scoped 名称。只有用户主动要求才发布，默认连续增加补丁号并发布到 `next`，明确要求稳定版才使用 `latest`，完整规则见 [npm 发布规范](specs/发布与适配/npm.md)。当前首次发布验收见 [Pi 1.4.0 记录](PI_1_4_VALIDATION.md)，manifest 示意如下：
 
 ```json

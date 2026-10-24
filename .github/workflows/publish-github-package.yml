@@ -1,0 +1,91 @@
+name: Publish first GitHub Package
+
+on:
+  push:
+    tags:
+      - github-packages/v0.1.0
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-package-0.1.0
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'godicewang/MemWeave'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.22.0
+      - name: Prepare and verify the published npm archive
+        run: node scripts/prepare-github-package.mjs "$RUNNER_TEMP/github-package" > "$RUNNER_TEMP/github-package.json"
+      - name: Publish to GitHub Packages and verify download
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/github-packages.npmrc
+        shell: bash
+        run: |
+          printf '%s\n' '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}' > "$NPM_CONFIG_USERCONFIG"
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { execFile } from 'node:child_process';
+          import { createHash } from 'node:crypto';
+          import { mkdir, readFile, appendFile } from 'node:fs/promises';
+          import { join } from 'node:path';
+          import { promisify } from 'node:util';
+          const run = promisify(execFile);
+          const prepared = JSON.parse(await readFile(join(process.env.RUNNER_TEMP, 'github-package.json'), 'utf8'));
+          assert.equal(prepared.name, '@godicewang/memweave');
+          assert.equal(prepared.version, '0.1.0');
+          assert.equal(prepared.registry, 'https://npm.pkg.github.com');
+          const spec = `${prepared.name}@${prepared.version}`;
+          const registryArgs = ['--registry', prepared.registry];
+          let exists = false;
+          try {
+            const found = await run('npm', ['view', spec, 'version', '--json', ...registryArgs]);
+            assert.equal(JSON.parse(found.stdout), prepared.version);
+            exists = true;
+          } catch (error) {
+            if (!String(error.stdout).includes('"E404"') && !String(error.stderr).includes('E404')) throw error;
+          }
+          if (!exists) {
+            const published = await run('npm', ['publish', prepared.archive, '--ignore-scripts', '--access', 'public', '--tag', 'next', ...registryArgs]);
+            console.log(published.stdout);
+          }
+          const result = await run('npm', ['view', spec, '--json', ...registryArgs]);
+          const metadata = JSON.parse(result.stdout);
+          assert.equal(metadata.name, prepared.name);
+          assert.equal(metadata.version, prepared.version);
+          assert.equal(metadata['dist-tags'].next, prepared.version);
+          assert.equal(metadata.dist.integrity, prepared.integrity);
+          const downloaded = join(process.env.RUNNER_TEMP, 'github-download');
+          await mkdir(downloaded);
+          const packed = await run('npm', ['pack', spec, '--json', '--ignore-scripts', '--pack-destination', downloaded, ...registryArgs]);
+          const [pack] = JSON.parse(packed.stdout);
+          const bytes = await readFile(join(downloaded, pack.filename));
+          assert.equal(`sha512-${createHash('sha512').update(bytes).digest('base64')}`, prepared.integrity);
+          console.log(JSON.stringify({ ...prepared, archive: undefined, alreadyPublished: exists, downloaded: true }));
+          await appendFile(process.env.GITHUB_STEP_SUMMARY, `Published and downloaded **${spec}** from GitHub Packages with tag **next**.\n\nAll 58 files outside package.json match the original npm archive byte for byte.\n\nIntegrity: \`${prepared.integrity}\`\n`);
+          const status = await fetch('https://api.github.com/users/godicewang/packages/npm/memweave', {
+            headers: { Authorization: `Bearer ${process.env.NODE_AUTH_TOKEN}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
+            signal: AbortSignal.timeout(30_000),
+          });
+          assert(status.ok, `Package visibility check failed: HTTP ${status.status}`);
+          const pkg = await status.json();
+          assert.equal(pkg.repository?.full_name, 'godicewang/MemWeave');
+          console.log(JSON.stringify({ visibility: pkg.visibility, repository: pkg.repository.full_name, packageUrl: pkg.html_url }));
+          await appendFile(process.env.GITHUB_STEP_SUMMARY, `\nVisibility: **${pkg.visibility}**. Repository: **${pkg.repository.full_name}**.\n`);
+          NODE

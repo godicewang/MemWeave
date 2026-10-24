@@ -10,6 +10,7 @@
 | `specs/2.pi_long_task_agent_symbolic_state_v1_0_final_cn_updated.md` | Goal/Fact/Decision、state.json/state.md、State tools、memory_read、State 滑窗 | State、证据、原文读取、State 滑窗 |
 | `specs/3.pi_long_task_agent_recent_window_v1_0_final_cn_updated.md` | 交互事件、N/B、预算、截断、提醒、窗口恢复 | Recent Window、上下文变换、回读和提交 |
 | `specs/发布与适配/npm.md` | npm 包名、连续版本号、用户发布授权、`latest`/`next` 渠道 | npm 发布、版本与发布标签调整 |
+| `specs/发布与适配/github_packages.md` | 用户确认的 GitHub 镜像包名、原归档一致性、首发与可见性验收 | GitHub Packages 首发 |
 | `specs/发布与适配/pi_version_update.md` | 用户要求新 Pi 适配后的自主执行边界、旧宿主兼容、设计讨论与优化建议 | Pi 版本适配、兼容范围调整与新宿主机制评估 |
 
 ## 工程文档与已确认接入方式
