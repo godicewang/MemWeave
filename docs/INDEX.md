@@ -1,6 +1,6 @@
 # 技术知识库索引
 
-`docs/specs/` 是当前五份已定稿行为规范。实现前必须先阅读本索引，再阅读与任务对应的完整规范；设计不合理时主动提出，经用户确认后增量维护。
+`docs/specs/` 包含当前五份已定稿运行时行为规范及 npm 发布规范。实现前必须先阅读本索引，再阅读与任务对应的完整规范；设计不合理时主动提出，经用户确认后增量维护。
 
 | 文档 | 权威范围 | 哪些任务必须读 |
 |---|---|---|
@@ -9,6 +9,7 @@
 | `specs/1.2.rule_v1_3_final_updated.md` | 模型实际接收的固定记忆协议 | 修改任何记忆行为、工具语义、上下文规则 |
 | `specs/2.pi_long_task_agent_symbolic_state_v1_0_final_cn_updated.md` | Goal/Fact/Decision、state.json/state.md、State tools、memory_read、State 滑窗 | State、证据、原文读取、State 滑窗 |
 | `specs/3.pi_long_task_agent_recent_window_v1_0_final_cn_updated.md` | 交互事件、N/B、预算、截断、提醒、窗口恢复 | Recent Window、上下文变换、回读和提交 |
+| `specs/npm.md` | npm 包名、连续版本号、用户发布授权、`latest`/`next` 渠道 | npm 发布、版本与发布标签调整 |
 
 ## 工程文档与已确认接入方式
 

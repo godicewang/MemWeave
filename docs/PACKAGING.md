@@ -33,7 +33,7 @@
 
 ## Package 入口与分发
 
-使用显式 manifest，让 Pi 直接加载 TypeScript 源入口，避免 Git 安装依赖开发编译步骤。示意如下，正式包名和版本在发布前确定；当前 Git 开发快照及本地归档可安装，尚未公开发布 npm 产品：
+使用显式 manifest，让 Pi 直接加载 TypeScript 源入口，避免 Git 安装依赖开发编译步骤。npm 包名为 `memweave`，首次版本为 `0.1.0`；只有用户主动要求才发布，默认连续增加补丁号并发布到 `next`，明确要求稳定版才使用 `latest`，完整规则见 [npm 发布规范](specs/npm.md)。示意如下；当前 Git 开发快照及本地归档可安装，尚未公开发布 npm 产品：
 
 ```json
 {
@@ -103,7 +103,7 @@ MemWeave 在 Session 启动/恢复及每次请求前检查 `pi.getSettings()` �
 
 Pi v1.3.0 的固定来源升级须区分：Git 更改声明 ref 后可通过原生 update 对齐；精确 npm 版本会被 update 跳过，需要显式 install 新版本，不能只改设置后宣称已升级。两种原生行为都有测试，用户操作见 USER_GUIDE.md。
 
-验证使用系统临时目录并清理，私有配置留在仓库外。本机 HTTP/临时 registry 与真实 DeepSeek 分开记录；未执行 npm 公网或 Git release 发布。开发和发布准备验收完成不等于已公开发行；当前 private/0.0.0 保留，正式版本、包名和许可等发布事项另行确定。旧 SDK 应用与早期测试不能代替当前 Package 证据。
+验证使用系统临时目录并清理，私有配置留在仓库外。本机 HTTP/临时 registry 与真实 DeepSeek 分开记录；未执行 npm 公网或 Git release 发布。开发和发布准备验收完成不等于已公开发行；当前 private/0.0.0 保留，首次实际发布按 [npm 发布规范](specs/npm.md) 准备版本和渠道，许可、账号与包名权限等事项在发布准备时核验。旧 SDK 应用与早期测试不能代替当前 Package 证据。
 
 依据：[v1.3.0 Packages](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/docs/packages.md)、[Extensions](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/docs/extensions.md)、[扩展类型](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/extensions/types.ts)、[runner](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/extensions/runner.ts)、[settings](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/settings-manager.ts)、[压缩/恢复](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/src/core/agent-session.ts)。
 
