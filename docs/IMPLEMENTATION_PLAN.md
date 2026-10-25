@@ -184,3 +184,7 @@
 ## 2026-10-24 配置集中管理（已完成）
 
 用户确认 CONFIGURATION_PROPOSAL.md：先同步规范，再完成默认 JSON/部分覆盖、策略传递、模板兼容与资源分发。默认行为保持，新增策略不写入 scope，不增 Agent 工具。172 项常规测试、5 项真实 DeepSeek（13 次推理）、npm/临时 registry 与实现提交 43e4cd5 的 GitHub SSH 固定 ref 安装/恢复/卸载均已通过，详细记录见 CONFIGURATION_VALIDATION.md。
+
+## 2026-10-25 弹性预算（已完成）
+
+按 ELASTIC_BUDGET_DESIGN.md：基础 60%＋额外最多 20%，必需成本后 40% 回读/40% Window/20% 安全；事件权重 50/35/15，到期回读普通池 10%；回读严格分池、超限截断并固定 Rule 提醒 offset，新旧回读共享以支持续读。配置兼容、原有状态格式及独立窗口提交点不变。双宿主各 216 项常规检查及产物门槛、npm/Git 分发、真实 DeepSeek 与性能检查通过，详见 ELASTIC_BUDGET_VALIDATION.md；未发布 npm。
