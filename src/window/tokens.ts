@@ -5,6 +5,8 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 export interface TokenCounter {
   readonly estimator: string;
   count(text: string): number;
+  /** Optional candidate only: callers must verify source-prefix identity and final wrapped cost. */
+  prefix?(text: string, tokens: number): string | undefined;
 }
 export const conservativeCounter: TokenCounter = Object.freeze({
   estimator: "utf8-bytes-with-protocol-margin",
@@ -29,6 +31,17 @@ export function deepseekCounter(): Promise<TokenCounter> {
       estimator: "deepseek-v41-text-with-protocol-margin",
       count: (text: string) =>
         tokenizer.encode(text, { add_special_tokens: false }).ids.length,
+      prefix(text: string, tokens: number) {
+        if (tokens < 1) return "";
+        const ids = tokenizer.encode(text, { add_special_tokens: false }).ids;
+        const start = Math.min(tokens, ids.length);
+        // Token boundaries may split a UTF-8 code point; try complete preceding boundaries.
+        for (let end = start; end > Math.max(0, start - 8); end--) {
+          const value = tokenizer.decode(ids.slice(0, end), { clean_up_tokenization_spaces: false });
+          if (text.startsWith(value)) return value;
+        }
+        return undefined;
+      },
     });
   })());
 }

@@ -26,7 +26,6 @@ import {
 import { indexEvents, selectWindow, eventGroups } from "../window/select.ts";
 import {
   allocate,
-  renderAllocated,
   type BudgetMessage,
 } from "../window/budget.ts";
 import { readKinds } from "../window/read-grant.ts";
@@ -78,7 +77,7 @@ export function windowMetadata(entries: SessionEntry[]): WindowMetadata | null {
     throw Error("CORRUPT_WINDOW_METADATA");
   return structuredClone(last.data);
 }
-export type WindowBudget = ReturnType<typeof allocate>;
+export type WindowBudget = Omit<ReturnType<typeof allocate>, "rendered">;
 export interface WindowOptions {
   imageCost?: (model: Model<Api>, image: unknown) => number;
   observeBudget?: (budget: WindowBudget) => void;
@@ -317,7 +316,7 @@ Recent Window N/B：${prepared.frame.config.recent_turns}/${prepared.frame.confi
     const result = stateInsert(
       [
         system,
-        ...items.map((item, i) => renderAllocated(item, budget.allocations[i]!, counter)),
+        ...budget.rendered,
       ],
       `${state || "当前未绑定 Task。"}\n\n${description}`,
       reminder,
@@ -337,7 +336,8 @@ Recent Window N/B：${prepared.frame.config.recent_turns}/${prepared.frame.confi
     ctx.signal?.throwIfAborted();
     if (!previous || selected.metadata.stage === "reset" || pending.length)
       await this.tasks.memory.append(ctx, WINDOW_TYPE, selected.metadata);
-    this.options.observeBudget?.(budget);
+    const { rendered: _rendered, ...summary } = budget;
+    this.options.observeBudget?.(Object.freeze(summary));
     return result;
   }
   async complete(event: TurnEndEvent, ctx: ExtensionContext): Promise<void> {

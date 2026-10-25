@@ -84,13 +84,13 @@ export interface MessageAllocation {
   forceTag: boolean;
   exempt: boolean;
 }
-export function renderAllocated(item: BudgetMessage, allocation: MessageAllocation, counter: TokenCounter = conservativeCounter): NativeMessage {
+export function renderAllocated(item: BudgetMessage, allocation: MessageAllocation, counter: TokenCounter = conservativeCounter, fullTextCost?: number): NativeMessage {
   const message = structuredClone(item.message);
   if (Array.isArray(message.content)) {
     let i = 0;
     Object.assign(message, { content: message.content.filter(p => p.type !== "image" || allocation.keepImages[i++]) });
   }
-  return renderMessage(message, item.head, allocation.tokens, allocation.exempt, counter, allocation.forceTag);
+  return renderMessage(message, item.head, allocation.tokens, allocation.exempt, counter, allocation.forceTag, fullTextCost);
 }
 export function allocate(input: {
   limit: number; // Base only: State admission, output, safety and automatic N/B retain this meaning.
@@ -169,10 +169,12 @@ export function allocate(input: {
     return { tokens: remaining, used: 0, keepImages, forceTag: keepImages.some(keep => !keep), exempt: false };
   });
   let X = 0, windowUsed = 0, expiredUsed = 0;
+  const rendered = input.messages.map((item, i) => renderAllocated(item, allocations[i]!, counter, data[i]!.text));
   input.messages.forEach((item, i) => {
     if (allocations[i]!.exempt) return;
-    const shown = renderAllocated(item, allocations[i]!, counter),
-      used = counter.count(ordinaryText(shown)) + data[i]!.imageCosts.reduce((n, cost, j) => n + (allocations[i]!.keepImages[j] ? cost : 0), 0);
+    const shown = rendered[i]!,
+      textUsed = !allocations[i]!.forceTag && allocations[i]!.tokens >= data[i]!.text ? data[i]!.text : counter.count(ordinaryText(shown)),
+      used = textUsed + data[i]!.imageCosts.reduce((n, cost, j) => n + (allocations[i]!.keepImages[j] ? cost : 0), 0);
     allocations[i]!.used = used;
     if (item.read) X += used;
     else { windowUsed += used; if (item.group === "expired") expiredUsed += used; }
@@ -180,7 +182,7 @@ export function allocate(input: {
   if (X > readLimit || windowUsed > windowLimit || expiredUsed > expiredLimit) throw budgetError();
   allocations.forEach(value => { Object.freeze(value.keepImages); Object.freeze(value); });
   return Object.freeze({ R, S, O, P, A, H: P + A, U, X, M: input.messages.length,
-    allocations: Object.freeze(allocations), K, F, extra, peak, readLimit, windowLimit, poolSafety,
+    allocations: Object.freeze(allocations), rendered, K, F, extra, peak, readLimit, windowLimit, poolSafety,
     windowUsed, expiredLimit, expiredUsed,
     total: K + X + windowUsed, limit: input.limit, plan, estimator: counter.estimator });
 }
@@ -191,8 +193,15 @@ function fit(
   tail: string,
   Q: number,
   counter: TokenCounter,
+  forceTag: boolean,
 ): string {
   if (counter.count(lead + tail) > Q) throw budgetError();
+  if (forceTag && counter.count(lead + text + tail) <= Q) return text;
+  if (counter.prefix) {
+    // A little candidate slack avoids repeated encodes when the wrapper changes boundary merges.
+    const candidate = counter.prefix(text, Math.max(0, Q - counter.count(lead + tail) - 4));
+    if (candidate !== undefined && text.startsWith(candidate) && counter.count(lead + candidate + tail) <= Q) return candidate;
+  }
   const points = Array.from(text);
   let low = 0,
     high = points.length;
@@ -215,11 +224,12 @@ export function renderMessage<T extends NativeMessage>(
   exempt: boolean,
   counter: TokenCounter = conservativeCounter,
   forceTag = false,
+  fullTextCost?: number,
 ): T {
   const lead = head ? head + "\n" : "",
     body = ordinaryText(message),
-    truncated = !exempt && (forceTag || counter.count(lead + body) > Q);
-  const shown = truncated ? fit(body, lead, tag, Q, counter) : body;
+    truncated = !exempt && (forceTag || (fullTextCost ?? counter.count(lead + body)) > Q);
+  const shown = truncated ? fit(body, lead, tag, Q, counter, forceTag) : body;
   const copy = structuredClone(message);
   if (typeof copy.content === "string")
     copy.content = lead + shown + (truncated ? tag : "");

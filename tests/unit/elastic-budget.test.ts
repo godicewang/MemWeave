@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { allocate, ordinaryText, renderAllocated, type BudgetMessage } from "../../src/window/budget.ts";
+import { allocate, ordinaryText, renderAllocated, renderMessage, type BudgetMessage } from "../../src/window/budget.ts";
 import { mergeConfig } from "../../src/config/schema.ts";
 import { settingsFor } from "../../src/config/defaults.ts";
 import { boundMemoryRead, boundStateRead } from "../../src/window/read-budget.ts";
@@ -8,6 +8,7 @@ import { historyReadRanges, readHistoricalState } from "../../src/state/read.ts"
 import { reduceState } from "../../src/state/model.ts";
 import { eventGroups, indexEvents } from "../../src/window/select.ts";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
+import { deepseekCounter } from "../../src/window/tokens.ts";
 
 const counter = { count: (text: string) => [...text].length, estimator: "test" };
 const item = (text: string, group: BudgetMessage["group"] = "older", event = "e"): BudgetMessage => ({
@@ -132,4 +133,28 @@ test("exact capacity rounding and outer reserve remain safe for odd and maximum 
     assert.ok(capacity - b.peak >= extra);
   }
   assert.throws(() => allocate({ ...base, limit: 800000, messages: [] }), /CONTEXT_BUDGET_EXCEEDED/);
+});
+
+test("token-prefix hints preserve Unicode source prefixes and every final rendered quota is verified", async () => {
+  const official = await deepseekCounter();
+  assert.equal(typeof official.prefix, "function");
+  const body = "原文😀é👩‍💻 \" [bos] punctuation...\n".repeat(20);
+  for (let quota = official.count("[U1]\n\n[TRUNCATED]"); quota < 65; quota++) {
+    const message = { ...item(body), head: "[U1]" };
+    const b = allocate({ ...base, counter: official, messages: [message] });
+    const shown = renderAllocated(message, { ...b.allocations[0]!, tokens: quota }, official);
+    const text = ordinaryText(shown);
+    assert.ok(official.count(text) <= quota);
+    assert.ok(body.startsWith(text.slice("[U1]\n".length, -"\n[TRUNCATED]".length)));
+  }
+});
+
+test("unusable or over-budget prefix hints fall back to verified Unicode truncation", () => {
+  const message = item("abcdef😀".repeat(200)).message;
+  for (const prefix of [() => undefined, () => "not the source", (text: string) => text]) {
+    const value = renderMessage(message, "[U1]", 40, false, { ...counter, prefix });
+    const text = ordinaryText(value);
+    assert.ok(counter.count(text) <= 40);
+    assert.match(text, /\[TRUNCATED\]$/);
+  }
 });

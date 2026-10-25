@@ -43,6 +43,7 @@ test("parallel native reads share one pool, keep valid truncated JSON and ranges
   assert.equal(JSON.parse(continuedBody.text).items[0].offset, 10000);
   assert.ok(JSON.parse(continuedBody.text).total_chars > 0);
   assert.ok(h.budgets.every(b => b.X <= b.readLimit && b.windowUsed <= b.windowLimit && b.total <= b.peak - b.poolSafety));
+  assert.ok(h.budgets.every(b => !("rendered" in b) && Object.isFrozen(b)));
   assert.deepEqual(h.diagnostics, []);
   assert.deepEqual(h.errors, []);
 });
