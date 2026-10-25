@@ -9,8 +9,8 @@ import {
   fauxAssistantMessage,
   fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
-import { taskSession } from "../fixtures/task-session.ts";
-import { nativeSession } from "../fixtures/native-session.ts";
+import { productionTaskSession as taskSession } from "../fixtures/production-session.ts";
+import { productionNativeSession as nativeSession } from "../fixtures/production-session.ts";
 import { visionImage } from "../fixtures/vision-image.ts";
 import {
   verifyProviderCapacity,
@@ -122,7 +122,7 @@ test(
     // replace pictures with R and require an established Task before attachment input.
     const h = await nativeSession(t, [observe(wires, fixture.code)]);
     await configure(h, key);
-    h.session.setActiveToolsByName([]);
+
     await h.session.prompt(instruction, { images: [fixture.image] });
     checkAnswer({ ...h, diagnostics: [] }, fixture.code);
     assert.equal(wires.length, 1);
@@ -180,7 +180,7 @@ test(
     await h.session.prompt("Create a separate image consumer Task.");
     wires.length = 0;
     await configure(h, key);
-    h.session.setActiveToolsByName(["memory_read"]);
+
     await h.session.prompt(
       `First call memory_read with items=[{"ref":"U2","task_id":"${task.task_id}"}]. Then call memory_read explicitly on the attachment R reference it returns (do not guess it). The current Session has never seen the picture. Only after the image has actually been returned, ${instruction}`,
     );

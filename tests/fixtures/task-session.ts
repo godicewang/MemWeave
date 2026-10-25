@@ -7,9 +7,10 @@ import type {
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import { registerMemweave } from "../../src/extension/register.ts";
+import { registerLauncher } from "../../src/extension/launcher.ts";
 import { DEFAULT_CONFIG } from "../../src/config/schema.ts";
 import { memoryPaths, type MemoryPaths } from "../../src/storage/paths.ts";
-import type { TaskService } from "../../src/task/service.ts";
+import { TaskService } from "../../src/task/service.ts";
 import type { RequestMessages } from "../../src/pi/request-lifecycle.ts";
 import type { CapacityVerifier } from "../../src/pi/model-capacity.ts";
 import { nativeSession } from "./native-session.ts";
@@ -22,6 +23,7 @@ export async function taskSession(
     manager?: SessionManager;
     extra?: (pi: ExtensionAPI) => void;
     verifyCapacity?: CapacityVerifier;
+    fullEnvironment?: boolean;
   } = {},
 ) {
   const root = await mkdtemp(join(tmpdir(), "memweave-task-"));
@@ -42,7 +44,7 @@ export async function taskSession(
     t,
     [
       (pi) => {
-        tasks = registerMemweave(pi, {
+        const runtimeOptions = {
           paths,
           imageCost: (model, image) =>
             model.provider === "memweave-test"
@@ -59,14 +61,26 @@ export async function taskSession(
           report: (error) => {
             diagnostics.push(error instanceof Error ? error.message : "ERROR");
           },
-        });
-        options.extra?.(pi);
+        } satisfies Parameters<typeof registerMemweave>[1];
+        if (options.fullEnvironment) {
+          // Read-only test inspection; business calls run in the production launcher runtime.
+          tasks = new TaskService(paths, pi);
+          registerLauncher(pi, { ...runtimeOptions, setupAgentDir: join(root, "agent") });
+          let registered = false;
+          pi.on("session_start", () => {
+            if (!registered) { registered = true; options.extra?.(pi); }
+          });
+        } else {
+          tasks = registerMemweave(pi, runtimeOptions);
+          options.extra?.(pi);
+        }
       },
     ],
     false,
     512,
     [],
     options.manager,
+    options.fullEnvironment ?? false,
   );
   return {
     ...h,

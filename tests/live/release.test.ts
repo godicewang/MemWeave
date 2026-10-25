@@ -46,6 +46,7 @@ test(
       label: "artifact-live",
     });
     assert.equal(after.version, 3);
+    assert.match(await readFile(f.paths.state(task), "utf8"), /GATE_artifact-live/);
     assert.ok(after.toolNames.includes("memory_read"));
     assert.ok(after.toolNames.includes("state_append"));
     assert.ok(

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { randomInt } from "node:crypto";
 import { Type } from "typebox";
 import { fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
-import { taskSession } from "../fixtures/task-session.ts";
+import { productionTaskSession as taskSession } from "../fixtures/production-session.ts";
 import { verifyProviderCapacity } from "../../src/pi/model-capacity.ts";
 import { loadReferences } from "../../src/memory/references.ts";
 import { scopeOf } from "../../src/pi/session-memory.ts";
@@ -31,12 +31,12 @@ async function fixture(t: TestContext, blocked = false) {
     verifyCapacity: (model, ctx, settings) => model.provider === "memweave-test"
       ? Promise.resolve(model.contextWindow) : verifyProviderCapacity(model, ctx, settings),
     extra(pi) {
-      pi.registerTool({ name: "inspect_component", label: "inspect_component", description: "Inspect the component's actual timeout and its acceptance requirement.", parameters: Type.Object({}),
-        async execute() { return result({ ...JSON.parse(await readFile(file, "utf8")), service_delay_ms: delay, required_timeout_ms: target }); } });
-      pi.registerTool({ name: "set_component_timeout", label: "set_component_timeout", description: "Set the component timeout in its real local configuration file; inspect first.",
+      pi.registerTool({ name: "inspect_component", label: "inspect_component", description: "Inspect the component. target_timeout_ms is the exact required configuration, not a minimum; acceptance requires timeout_ms === target_timeout_ms.", parameters: Type.Object({}),
+        async execute() { return result({ ...JSON.parse(await readFile(file, "utf8")), service_delay_ms: delay, target_timeout_ms: target }); } });
+      pi.registerTool({ name: "set_component_timeout", label: "set_component_timeout", description: "Set the real local timeout to EXACTLY the inspected target_timeout_ms. Other values in the allowed input range do not meet acceptance. Inspect first.",
         parameters: Type.Object({ timeout_ms: Type.Integer({ minimum: 1, maximum: 10000 }) }, { additionalProperties: false }),
         async execute(_id, input) { await writeFile(file, JSON.stringify(input)); return result(input); } });
-      pi.registerTool({ name: "verify_component", label: "verify_component", description: "Run the local component probe and check that its configured timeout meets the inspected requirement. Read passed and reason, not just tool execution status.", parameters: Type.Object({}),
+      pi.registerTool({ name: "verify_component", label: "verify_component", description: "Run the local component probe. Acceptance requires the configured timeout to equal target_timeout_ms exactly and the probe to succeed. Read passed and reason, not just tool execution status.", parameters: Type.Object({}),
         async execute() {
           const config = JSON.parse(await readFile(file, "utf8")) as { timeout_ms: number };
           if (blocked) return result({ passed: false, reason: "fixture transport blocked; verification cannot complete", timeout_ms: config.timeout_ms });
@@ -46,7 +46,7 @@ async function fixture(t: TestContext, blocked = false) {
               new Promise<boolean>((resolve) => { serviceTimer = setTimeout(() => resolve(true), delay); }),
               new Promise<boolean>((resolve) => { timeoutTimer = setTimeout(() => resolve(false), config.timeout_ms); }),
             ]);
-            return result({ passed: reached && config.timeout_ms === target, timeout_ms: config.timeout_ms, required_timeout_ms: target, service_delay_ms: delay });
+            return result({ passed: reached && config.timeout_ms === target, timeout_ms: config.timeout_ms, target_timeout_ms: target, service_delay_ms: delay });
           } finally { clearTimeout(serviceTimer); clearTimeout(timeoutTimer); }
         } });
     },

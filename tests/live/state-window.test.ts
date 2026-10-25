@@ -3,7 +3,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { taskSession } from "../fixtures/task-session.ts";
+import { productionTaskSession as taskSession } from "../fixtures/production-session.ts";
 import { verifyProviderCapacity } from "../../src/pi/model-capacity.ts";
 import { DEFAULT_CONFIG } from "../../src/config/schema.ts";
 
@@ -37,13 +37,7 @@ test(
     const model = h.runtime.getModel("deepseek", "deepseek-flash");
     assert.ok(model);
     await h.session.setModel(model);
-    h.session.setActiveToolsByName([
-      "task_create",
-      "state_append",
-      "state_remain",
-      "modify_fact",
-      "state_read",
-    ]);
+
     await h.session.prompt(
       '这是完整State工具集成测试，请严格依序执行，每一步读到成功结果后再做下一步，不要并行：1.task_create，title=State window verification，goal=验证State窗口与修正，project_name=MemWeave，summary=窗口管理验证，keywords=["窗口"]。2.state_append一次创建10条fact，正文依次为“用户要求验证条目1”至“用户要求验证条目10”，evidence均使用本条真实用户消息的U1，说明用户明确要求。3.收到State窗口管理提醒后调用state_remain，event_ids=[]，不保留候选。4.modify_fact归档F3，同时新增Fact“用户要求修正第三条测试认知”，evidence为U1并说明本次用户要求修正。5.调用state_read读取刚创建的task_id。6.回复MEMWEAVE_STATE_WINDOW_OK。不要额外新增State条目，不要重建Task，不要重复以上操作。',
     );

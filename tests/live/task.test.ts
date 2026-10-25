@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { taskSession } from "../fixtures/task-session.ts";
+import { productionTaskSession as taskSession } from "../fixtures/production-session.ts";
 import { verifyProviderCapacity } from "../../src/pi/model-capacity.ts";
 
 test(
@@ -31,7 +31,7 @@ test(
     const model = h.runtime.getModel("deepseek", "deepseek-flash");
     assert.ok(model);
     await h.session.setModel(model);
-    h.session.setActiveToolsByName(["task_create", "state_append"]);
+
     await h.session.prompt(
       '这是 MemWeave 集成测试。请先调用 task_create 创建一个任务：title 为 Phase2 verification，goal 为 验证任务记忆闭环，project_name 为 MemWeave，summary 为 验证Task与State，keywords 为 ["验证"]。读取创建结果和自动提供的 State 后，再调用 state_append 保存一条 fact，content 为 用户要求验证任务记忆闭环，evidence 使用本次用户请求的 U1 并简要说明。不要在同一批调用里创建并写入 State。保存后回复 MEMWEAVE_PHASE2_OK，不再调用工具。',
     );

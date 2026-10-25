@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { taskSession } from "../fixtures/task-session.ts";
+import { productionTaskSession as taskSession } from "../fixtures/production-session.ts";
 import { verifyProviderCapacity } from "../../src/pi/model-capacity.ts";
 
 test(
@@ -28,11 +28,7 @@ test(
     const model = h.runtime.getModel("deepseek", "deepseek-flash");
     assert.ok(model);
     await h.session.setModel(model);
-    h.session.setActiveToolsByName([
-      "task_create",
-      "update_goal",
-      "state_read",
-    ]);
+
     await h.session.prompt(
       '集成测试第一步：只调用 task_create 创建任务，title=Goal verification，goal=验证初始目标，project_name=MemWeave，summary=初始目标验证，keywords=["初始"]。成功后回复 CREATED，不要更新 Goal。',
     );

@@ -168,15 +168,17 @@ export async function legacyReleaseHost(root: string): Promise<string> {
   const hostRoot = join(root, "pi-1.3-host");
   await mkdir(join(hostRoot, "tests/fixtures"), { recursive: true });
   await cp(join(repository, "src"), join(hostRoot, "src"), { recursive: true });
-  for (const file of ["native-session.ts", "release-worker.ts", "release.ts"]) {
+  for (const file of ["native-session.ts", "production-session.ts", "task-session.ts", "release-worker.ts", "release.ts"]) {
     await cp(join(repository, "tests/fixtures", file), join(hostRoot, "tests/fixtures", file));
   }
   await writeFile(join(hostRoot, "package.json"), JSON.stringify({ type: "module", private: true }));
   const npm = process.env.npm_execpath;
   assert.ok(npm, "Run through an npm test script");
+  const manifest = JSON.parse(await readFile(join(repository, "package.json"), "utf8"));
   await run(process.execPath, [npm, "install", "--prefix", hostRoot, "--ignore-scripts", "--no-audit", "--no-fund",
     "--package-lock=false", "--cache", join(root, "npm-cache"),
-    "@earendil-works/pi-coding-agent@1.3.0", "@earendil-works/pi-ai@1.3.0", "typebox@1.3.27"],
+    "@earendil-works/pi-coding-agent@1.3.0", "@earendil-works/pi-ai@1.3.0", "typebox@1.3.27",
+    `@huggingface/tokenizers@${manifest.dependencies["@huggingface/tokenizers"]}`],
     { timeout: 120_000, maxBuffer: 1024 * 1024 });
   return hostRoot;
 }

@@ -4,7 +4,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
-import { taskSession } from "../fixtures/task-session.ts";
+import { productionTaskSession as taskSession } from "../fixtures/production-session.ts";
 import { verifyProviderCapacity } from "../../src/pi/model-capacity.ts";
 
 test("real DeepSeek reads a bounded range with the fixed truncation protocol and shared pool", { timeout: 90000 }, async t => {
@@ -38,7 +38,7 @@ test("real DeepSeek reads a bounded range with the fixed truncation protocol and
   assert.match(JSON.stringify(seeded.message.content), /TRUNCATED/);
   await h.runtime.setRuntimeApiKey("deepseek", credential.key);
   await h.session.setModel(h.runtime.getModel("deepseek", "deepseek-flash")!);
-  h.session.setActiveToolsByName(["memory_read"]);
+
   await h.session.prompt('这是功能验证。请调用一次 memory_read，参数 {"items":[{"ref":"U1","offset":900,"limit":100}],"max_total_chars":100}，核对实际返回后只回复 ELASTIC_OK。不要调用其他工具。');
   assert.deepEqual(h.diagnostics, []);
   assert.deepEqual(h.errors, []);

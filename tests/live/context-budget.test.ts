@@ -7,7 +7,7 @@ import {
   fauxAssistantMessage,
   fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
-import { taskSession } from "../fixtures/task-session.ts";
+import { productionTaskSession as taskSession } from "../fixtures/production-session.ts";
 import { verifyProviderCapacity } from "../../src/pi/model-capacity.ts";
 import { DEFAULT_CONFIG } from "../../src/config/schema.ts";
 
@@ -27,7 +27,7 @@ test("real DeepSeek: partial settings control actual output and hot restore defa
   });
   await h.runtime.setRuntimeApiKey("deepseek", credential.key);
   await h.session.setModel(h.runtime.getModel("deepseek", "deepseek-flash")!);
-  h.session.setActiveToolsByName([]);
+
   await writeFile(h.paths.config, JSON.stringify({
     context_budget: { model_percent: 50, parts_percent: { state: 15, window: 40, output: 5 } },
     read: { lifetime_messages: 3, default_total_chars: 1200 }, source_cache: { max_entries: 16 },
@@ -98,7 +98,7 @@ test(
     await h.runtime.setRuntimeApiKey("deepseek", credential.key);
     const model = h.runtime.getModel("deepseek", "deepseek-flash")!;
     await h.session.setModel(model);
-    h.session.setActiveToolsByName(["state_append"]);
+
     const source = Array.from(
       { length: 250 },
       (_, i) =>
@@ -157,7 +157,7 @@ test(
 );
 
 test('real DeepSeek: isolated text-token delta agrees with the bundled official tokenizer', {timeout:60000}, async t=>{
-  const {nativeSession}=await import('../fixtures/native-session.ts');
+  const {productionNativeSession:nativeSession}=await import('../fixtures/production-session.ts');
   const {deepseekCounter}=await import('../../src/window/tokens.ts');
   const auth=join(homedir(),'.local/share/memweave-dev/pi-agent/auth.json'),original=await readFile(auth);
   t.after(async()=>assert.ok(original.equals(await readFile(auth))));

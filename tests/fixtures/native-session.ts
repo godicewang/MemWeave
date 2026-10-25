@@ -9,7 +9,9 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { fauxProvider, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 
-export async function nativeSession(t: TestContext, factories: ExtensionFactory[] = [], enabled = false, reserveTokens = 512, additionalExtensionPaths: string[] = [], existingManager?: SessionManager) {
+// Sentinel mode is only for deterministic compatibility tests. Real API/package
+// acceptance uses production-session.ts, which enables the unmodified host prompt/tools.
+export async function nativeSession(t: TestContext, factories: ExtensionFactory[] = [], enabled = false, reserveTokens = 512, additionalExtensionPaths: string[] = [], existingManager?: SessionManager, fullEnvironment = false) {
   const root = await mkdtemp(join(tmpdir(), "memweave-stage0-"));
   let activeSession: AgentSession | undefined;
   t.after(async () => {
@@ -20,8 +22,10 @@ export async function nativeSession(t: TestContext, factories: ExtensionFactory[
   const cwd = existingManager?.getCwd() ?? join(root, "workspace");
   const agentDir = join(root, "agent");
   await mkdir(cwd, { recursive: true }); await mkdir(agentDir);
-  await writeFile(join(agentDir, "SYSTEM.md"), "NATIVE_SYSTEM");
-  await writeFile(join(agentDir, "APPEND_SYSTEM.md"), "NATIVE_APPEND {{untouched}}");
+  if (!fullEnvironment) {
+    await writeFile(join(agentDir, "SYSTEM.md"), "NATIVE_SYSTEM");
+    await writeFile(join(agentDir, "APPEND_SYSTEM.md"), "NATIVE_APPEND {{untouched}}");
+  }
   const settings = SettingsManager.inMemory({
     compaction: { enabled, reserveTokens, keepRecentTokens: 128 },
     retry: { enabled: false }, cacheWarming: "off",
@@ -43,7 +47,8 @@ export async function nativeSession(t: TestContext, factories: ExtensionFactory[
   const manager = existingManager ?? SessionManager.create(cwd, join(root, "sessions"));
   const { session, extensionsResult } = await createAgentSession({
     cwd, agentDir, modelRuntime: runtime, model: faux.getModel(),
-    settingsManager: settings, sessionManager: manager, resourceLoader: loader, noTools: "builtin", thinkingLevel: "off",
+    settingsManager: settings, sessionManager: manager, resourceLoader: loader,
+    ...(!fullEnvironment ? { noTools: "builtin" as const } : {}), thinkingLevel: "off",
   });
   activeSession = session;
   assert.deepEqual(extensionsResult.errors, []);

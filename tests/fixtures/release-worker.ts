@@ -5,7 +5,7 @@ import type { AddressInfo } from "node:net";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import { nativeSession } from "./native-session.ts";
+import { productionNativeSession as nativeSession, assertProductionPayload } from "./production-session.ts";
 import { memoryPaths } from "../../src/storage/paths.ts";
 import type { Task } from "../../src/task/model.ts";
 import type { ReleaseCase, ReleaseResult } from "./release.ts";
@@ -31,7 +31,12 @@ test(
     const manager = input.sessionFile
       ? SessionManager.open(input.sessionFile)
       : SessionManager.create(input.cwd, input.sessionDir);
-    const h = await nativeSession(t, [], false, 512, [entry], manager);
+    const h = await nativeSession(t, [pi => {
+      if (input.action === "live") pi.on("before_provider_request", (event, ctx) => {
+        try { assertProductionPayload(event.payload, true); }
+        catch (error) { ctx.abort(); throw error; }
+      });
+    }], false, 512, [entry], manager);
     const call = (name: string, args: unknown) => ({ name, args });
     const fact = (content: string) => ({
       items: [
@@ -158,7 +163,6 @@ test(
       const actual = h.runtime.getModel("deepseek", "deepseek-flash");
       assert.ok(actual);
       await h.session.setModel(actual);
-      h.session.setActiveToolsByName(["memory_read", "state_append"]);
       h.session.subscribe((event) => {
         if (
           event.type === "message_end" &&
@@ -168,9 +172,10 @@ test(
           requests++;
       });
     }
+    const releaseGate = `GATE_${input.label}`;
     const prompt =
       input.action === "live"
-        ? "After this process restart, read U1 using memory_read with offset=0, limit=24. After a successful read, append exactly one fact under 60 characters that the source user requested release recovery verification; evidence U1 explains that request. Do not change the Task or settings or repeat successful calls. Then acknowledge briefly."
+        ? `New release requirement: approval requires ${releaseGate}. Read U1 using memory_read with offset=0, limit=24. After a successful read, append exactly one FACT under 60 characters recording this NEW requirement, include ${releaseGate}, and use the current user message as evidence. Existing F1 already records the original recovery request; do not duplicate it. Do not change the Task or settings or repeat successful calls. Then acknowledge briefly.`
         : input.action === "create"
           ? "Source user requested release recovery verification; retain this original."
           : `${input.label} continue persisted work`;
@@ -186,6 +191,18 @@ test(
     assert.ok(task);
     const state = await readFile(paths.state(task), "utf8"),
       version = state.trimEnd().split("\n").length;
+    if (input.action === "live") {
+      const last = JSON.parse(state.trimEnd().split("\n").at(-1)!);
+      assert.equal(last.op, "append_fact");
+      assert.ok(last.fact.includes(releaseGate));
+      const branch = manager.getBranch();
+      const user = branch.findLast(e => e.type === "message" && e.message.role === "user");
+      const ref = branch.flatMap(e => e.type === "custom" && e.customType === "memweave.references.v1"
+        ? (e.data as {task_id:string;bindings:{ref:string;entry_id:string}[]}).task_id === task.task_id
+          ? (e.data as {bindings:{ref:string;entry_id:string}[]}).bindings : [] : [])
+        .find(b => b.entry_id === user?.id)?.ref;
+      assert.ok(ref && Object.hasOwn(last.evidence, ref), "new requirement must cite the current user");
+    }
     const results = manager
       .getBranch()
       .filter((e) => e.type === "message" && e.message.role === "toolResult");

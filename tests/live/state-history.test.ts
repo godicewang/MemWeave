@@ -7,7 +7,7 @@ import {
   fauxAssistantMessage,
   fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
-import { taskSession } from "../fixtures/task-session.ts";
+import { productionTaskSession as taskSession } from "../fixtures/production-session.ts";
 import { DEFAULT_CONFIG } from "../../src/config/schema.ts";
 import { verifyProviderCapacity } from "../../src/pi/model-capacity.ts";
 test(
@@ -90,7 +90,8 @@ test(
     const model = h.runtime.getModel("deepseek", "deepseek-flash");
     assert.ok(model);
     await h.session.setModel(model);
-    assert.equal(h.session.getActiveToolNames().length, 11);
+    for (const name of ["read", "bash", "edit", "write", "state_read", "state_append", "memory_read"])
+      assert.ok(h.session.getActiveToolNames().includes(name));
     const start = h.frames.length;
     await h.session.prompt(
       `Call state_read exactly once with task_id="${task.task_id}", event_ids=["F1","D1","F999"], max_total_chars=8000. Inspect the actual returned content, evidence and states, then briefly acknowledge which finding left the window and which decision was archived. Do not repeat a successful call or modify anything.`,

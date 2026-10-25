@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
-import { taskSession } from "../fixtures/task-session.ts";
+import { productionTaskSession as taskSession } from "../fixtures/production-session.ts";
 import { verifyProviderCapacity } from "../../src/pi/model-capacity.ts";
 import { scopeOf } from "../../src/pi/session-memory.ts";
 import { restartMetadata, restartTaskId } from "../../src/task/restart-model.ts";
@@ -25,7 +25,7 @@ async function fixture(t: TestContext) {
   assert.ok(typeof credential?.key === "string");
   await h.runtime.setRuntimeApiKey("deepseek", credential.key);
   const model = h.runtime.getModel("deepseek", "deepseek-flash"); assert.ok(model);
-  await h.session.setModel(model); h.session.setActiveToolsByName(["task_create"]);
+  await h.session.setModel(model);
   return { ...h, old, bytes };
 }
 
@@ -38,7 +38,7 @@ test("real Flash: 26000 native-format records restart without inference, survive
   const receipt = restartMetadata(h.manager.getBranch())!;
   assert.ok(receipt); assert.equal(scopeOf(h.manager.getBranch()).task_id, null);
   await h.session.reload();
-  h.session.setActiveToolsByName(["task_create"]);
+
   await h.session.prompt("接下来开展新的订单批次校验工作，请先确立新的工作目标即可，不执行外部操作。");
   const id = scopeOf(h.manager.getBranch()).task_id;
   assert.equal(id, restartTaskId(h.manager.getSessionId(), receipt.data.restart_id));

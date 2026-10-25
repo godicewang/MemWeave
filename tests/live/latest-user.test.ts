@@ -4,12 +4,12 @@ import { readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
-import { taskSession } from "../fixtures/task-session.ts";
+import { productionTaskSession as taskSession } from "../fixtures/production-session.ts";
 import { verifyProviderCapacity } from "../../src/pi/model-capacity.ts";
 import { CURRENT_USER_MARKER } from "../../src/window/render.ts";
 import { ordinaryText } from "../../src/window/budget.ts";
 
-for (const variant of ["bundle", "legacy-rule", "with-State"]) {
+for (const variant of ["bundle", "reload", "with-State"]) {
   test("real DeepSeek: cancelled-request priority recovery, " + variant, { timeout: 120_000 }, async (t) => {
     const authPath = process.env.MEMWEAVE_DEEPSEEK_AUTH
       ?? join(homedir(), ".local/share/memweave-dev/pi-agent/auth.json");
@@ -23,12 +23,7 @@ for (const variant of ["bundle", "legacy-rule", "with-State"]) {
       verifyCapacity: (model, ctx, settings) => model.provider === "memweave-test"
         ? Promise.resolve(model.contextWindow) : verifyProviderCapacity(model, ctx, settings),
     });
-    if (variant === "legacy-rule") {
-      const rule = await readFile(h.paths.rule, "utf8");
-      const priority = rule.split("\n\n").find((paragraph) => paragraph.startsWith("同一权限层级"));
-      assert.ok(priority);
-      await writeFile(h.paths.rule, rule.replace(priority + "\n\n", ""));
-    }
+    if (variant === "reload") await h.session.reload();
     if (variant === "with-State") {
       h.faux.setResponses([
         fauxAssistantMessage([fauxToolCall("task_create", {
@@ -43,7 +38,7 @@ for (const variant of ["bundle", "legacy-rule", "with-State"]) {
     const model = h.runtime.getModel("deepseek", "deepseek-flash");
     assert.ok(model);
     await h.session.setModel(model);
-    h.session.setActiveToolsByName([]);
+
     const initial = h.frames.length;
     await writeFile(h.paths.config, JSON.stringify({
       recent_turns: 200, evict_turns: 40,

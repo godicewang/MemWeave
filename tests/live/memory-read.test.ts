@@ -7,7 +7,7 @@ import {
   fauxAssistantMessage,
   fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
-import { taskSession } from "../fixtures/task-session.ts";
+import { productionTaskSession as taskSession } from "../fixtures/production-session.ts";
 import { verifyProviderCapacity } from "../../src/pi/model-capacity.ts";
 
 test(
@@ -59,7 +59,7 @@ test(
     assert.ok(model);
     await h.session.setModel(model);
     const framesBefore = h.frames.length;
-    h.session.setActiveToolsByName(["memory_read", "state_append"]);
+
     await h.session.prompt(
       `Integration test: call memory_read exactly once with items=[{"ref":"U1","task_id":"${source.task_id}","offset":7,"limit":1},{"ref":"U999"},{"ref":"U1","task_id":"${source.task_id}","offset":0,"limit":6}], max_total_chars=7. Then use its returned R alias as evidence in one state_append fact stating that the source user requested original text verification. Do not guess new IDs, do not repeat successful calls. Finish with a brief acknowledgement after both tools succeed.`,
     );

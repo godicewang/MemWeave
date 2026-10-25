@@ -8,7 +8,7 @@ import {
   fauxAssistantMessage,
   fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
-import { taskSession } from "../fixtures/task-session.ts";
+import { productionTaskSession as taskSession } from "../fixtures/production-session.ts";
 import { verifyProviderCapacity } from "../../src/pi/model-capacity.ts";
 import { DEFAULT_CONFIG } from "../../src/config/schema.ts";
 import { windowMetadata } from "../../src/pi/window-service.ts";
@@ -76,11 +76,7 @@ test(
     const model = h.runtime.getModel("deepseek", "deepseek-flash");
     assert.ok(model);
     await h.session.setModel(model);
-    h.session.setActiveToolsByName([
-      "recent_window_set",
-      "memory_read",
-      "state_append",
-    ]);
+
     const start = h.frames.length;
     await h.session.prompt(
       'Integration test. First call recent_window_set exactly once with turns=4, evict_turns=2. After its success, call memory_read exactly once with items=[{"ref":"U1","offset":0,"limit":16}]. After reading the actual result, call state_append exactly once with one fact, under 60 characters, that the original user requested bounded-window recovery verification; evidence U1 must explain that user request. Use separate successive tool rounds. Do not guess additional IDs, repeat successful operations or change any other settings. Then finish with a brief acknowledgement.',
