@@ -22,7 +22,11 @@
 
 真实 CLI PTY 从磁盘生产入口启动，在系统临时目录隔离 HOME 和 agentDir：普通模式全局 true、不创建 memory；重新启动再次选择，启用确认后生成 Rule 和标记、全局 false、底部状态正确；原生 reload 与 `/new` 保持模式。首次发现 `/new` 会替换 SessionManager，已修复并补真实 AgentSessionRuntime 集成。此 PTY 未配置认证，不将界面验收算作真实模型调用。
 
-完整发布测试入口、Pi 1.3.0 和真实供应商结果将在完成后追加；以上结果不代替这些验收。
+候选 `ffa088895c6e872f60bc795ab46c4eb1a85f3817` 的完整测试已完成：Pi 1.4.0 上 `npm run test:release -- --full` 通过 200 项常规回归、5 项入口/归档测试、3 项 npm/Git 分发测试、1 项真实 DeepSeek 产物恢复用例（3 次真实模型请求）。Git 分发明确使用该候选，独立进程通过新的 launcher 路径恢复 Task/原文/State。
+
+另在系统临时目录克隆同一候选，依赖链接到真实 Pi 1.3.0，运行 `npm run test:release`：200 项回归和 5 项入口/归档测试通过，类型与构建通过。它是基础入口，不冒充该旧宿主上的完整发布门槛。两个宿主生成的 60 文件归档 sha512 一致。详见 `../发布测试/执行记录/2026-10-25_启动模式.md`。
+
+从本机真实全局 Package 声明再启动 Pi 1.4.0，选择未启用后使用官方 DeepSeek Flash 完成 1 次真实请求，返回 NATIVE_MODE_OK；核验原生 Session 用户/assistant 消息、无 MemWeave custom 记录及认证文件哈希不变。该次调用与产物冒烟的 3 次分开计数，测试 Session 随后清理。日常配置的既有默认模型保持不变，全局压缩现为 true，用户下次启动可以自行选择启用记忆。
 
 ## 本机入口调整
 

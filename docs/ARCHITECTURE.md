@@ -58,6 +58,8 @@ resources/rule.md           # 从独立 Rule 模板生成并校验，支持 Git 
 
 ## 3. 核心数据流
 
+以下记忆数据流只在启动时选择“启用 MemWeave”后注册。选择“MemWeave 未启用”时全局恢复压缩并原生 reload，仅保留模式选择、状态显示及原生 Session 替换时的进程内选择传递；不加载下述记忆工具或请求处理器。两个模式共用既有 Pi 配置、认证与 Session，详细契约见 Rule 技术稿 §14，验收见 STARTUP_MODE_VALIDATION.md。
+
 ```text
 Pi Session（唯一原始交互历史）
    ↓ Session Adapter
