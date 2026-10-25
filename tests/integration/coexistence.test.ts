@@ -13,7 +13,7 @@ import { taskSession } from "../fixtures/task-session.ts";
 import { nativeSession } from "../fixtures/native-session.ts";
 import { releaseFixture } from "../fixtures/release.ts";
 import { registerMemweave } from "../../src/extension/register.ts";
-test("production Runtime reload retains one handler and Task State", async (t) => {
+test("production Runtime reload retains stable handler counts and Task State", async (t) => {
   const h = await taskSession(t);
   h.faux.setResponses([
     fauxAssistantMessage([
@@ -29,6 +29,9 @@ test("production Runtime reload retains one handler and Task State", async (t) =
   ]);
   await h.session.prompt("create Task before reload");
   const scope = h.tasks.scope(h.session.extensionRunner!.createContext());
+  const handlerCounts = () => h.loader.getExtensions().extensions.map(extension =>
+    [...extension.handlers].map(([event, handlers]) => [event, handlers.length]));
+  const initialHandlers = handlerCounts();
   for (let i = 0; i < 3; i++) {
     await h.session.reload();
     const before = h.frames.length;
@@ -39,9 +42,7 @@ test("production Runtime reload retains one handler and Task State", async (t) =
       h.tasks.scope(h.session.extensionRunner!.createContext()).task_id,
       scope.task_id,
     );
-    for (const extension of h.loader.getExtensions().extensions)
-      for (const handlers of extension.handlers.values())
-        assert.equal(handlers.length, 1);
+    assert.deepEqual(handlerCounts(), initialHandlers, "reload must not accumulate business or UI handlers");
     const last = h.frames.at(-1)!;
     assert.equal(
       last.filter(

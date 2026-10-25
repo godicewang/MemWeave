@@ -45,6 +45,8 @@
 
 本机日常 Pi 改用正常官方全局安装及原生更新；固定开发依赖只用于显式开发/验证入口，不提供新的运行时安装器、版本管理器或两套模式目录。
 
+2026-10-25 用户确认简化上下文显示：启用模式通过公开 setFooter 直接复用宿主 FooterComponent 的原生样式，仅用只读展示适配替换上下文数据源。百分比始终为上一次成功主会话请求的 API 输入（含缓存）加输出，除以该次已核验完整容量；新输入、工具结果和新请求执行中不追加估算。没有匹配成功请求时显示原生未知值；Session/分支/模型切换及 reload 清除旧值，不新增持久化或额外网络请求。累计用量等其他字段保留原生语义，未启用和非 TUI 不接管底栏。另一扩展的自定义 footer 使用同一槽位，须单独验收。完整契约见 Rule 技术稿 §16。
+
 2026-10-24 用户确认额外发布 GitHub Packages 镜像 `@godicewang/memweave@0.1.0`，npm 包名保持 `@godice/memweave`，主页推荐 npm。镜像从已发布 npm 归档生成，仅修改包名与发布 registry，运行文件不变；使用仅响应精确首发 tag 或手动运行的 Actions，不因普通 push 发布。认证、原归档校验与公开验收见 [GitHub Packages 首发](specs/发布与适配/github_packages.md)。本次不发布 npm 新版本。
 
 使用显式 manifest，让 Pi 直接加载 TypeScript 源入口，避免 Git 安装依赖开发编译步骤。npm 包名为 `@godice/memweave`，首次版本为 `0.1.0`；原名称被他人占用，用户已明确确认 scoped 名称。只有用户主动要求才发布，默认连续增加补丁号并发布到 `next`，明确要求稳定版才使用 `latest`，完整规则见 [npm 发布规范](specs/发布与适配/npm.md)。当前首次发布验收见 [Pi 1.4.0 记录](PI_1_4_VALIDATION.md)，manifest 示意如下：

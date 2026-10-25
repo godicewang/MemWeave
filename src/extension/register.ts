@@ -34,6 +34,7 @@ import { StateReadSchema, historyReadRanges } from "../state/read.ts";
 import { WindowService, type WindowOptions } from "../pi/window-service.ts";
 import { READ_TRUNCATION_TAG } from "../window/read-budget.ts";
 import { registerSetup } from "./setup.ts";
+import { registerContextFooter } from "../pi/context-footer.ts";
 export interface MemweaveOptions extends WindowOptions {
   paths?: MemoryPaths;
   setupAgentDir?: string;
@@ -75,6 +76,7 @@ export function registerMemweaveRuntime(
     },
   });
   const setup = existingSetup ?? registerSetup(pi, paths, report, options.setupAgentDir, options.setupPackageVersion);
+  const footer = registerContextFooter(pi);
   const lifecycle = registerRequestLifecycle(pi, { ...services, ...setup, report });
   pi.on("before_provider_request", (event, ctx) => {
     try {
@@ -85,7 +87,9 @@ export function registerMemweaveRuntime(
         !isDeepStrictEqual(frame.model, ctx.model)
       )
         throw Error("OUTPUT_BUDGET_UNVERIFIED: request snapshot changed");
-      return alignOutput(event.payload, frame.model, frame.output);
+      const aligned = alignOutput(event.payload, frame.model, frame.output);
+      footer.prepare(ctx, frame.contextWindow);
+      return aligned;
     } catch (error) {
       ctx.abort();
       report(error, ctx);
@@ -292,5 +296,5 @@ export function registerMemweaveRuntime(
       };
     }
   });
-  return { tasks, startup: lifecycle.startup };
+  return { tasks, startup: async (ctx: ExtensionContext) => { await lifecycle.startup(ctx); footer.startup(ctx); } };
 }

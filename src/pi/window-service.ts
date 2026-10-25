@@ -148,7 +148,7 @@ export class WindowService {
       output: outputReserve(model, thinkingLevel, limit, providerCap, settings),
     });
   }
-  outputFrame?: { model: Model<Api>; sessionId: string; output: number };
+  outputFrame?: { model: Model<Api>; sessionId: string; output: number; contextWindow: number };
   async prepare(
     prepared: PreparedRule,
     snapshot: TaskSnapshot,
@@ -332,6 +332,7 @@ Recent Window N/B：${prepared.frame.config.recent_turns}/${prepared.frame.confi
       model: structuredClone(model),
       sessionId: ctx.sessionManager.getSessionId(),
       output: output.output,
+      contextWindow: prepared.frame.capacity.contextWindow,
     };
     ctx.signal?.throwIfAborted();
     if (!previous || selected.metadata.stage === "reset" || pending.length)

@@ -39,7 +39,7 @@ async function fixture(t: TestContext, options: { accept?: boolean; projectEnabl
   const { session } = await createAgentSession({ cwd, agentDir, settingsManager: settings,
     modelRuntime: runtime, model: faux.getModel(), sessionManager: manager, resourceLoader: loader, noTools: "builtin", thinkingLevel: "off" });
   t.after(async () => { await session.abort(); session.dispose(); await rm(root, { recursive: true, force: true }); });
-  const ui = { confirm: async (_title: string, message: string) => { prompts.push(message); return options.confirm ? options.confirm() : accept; }, notify: () => {} } as unknown as ExtensionUIContext;
+  const ui = { confirm: async (_title: string, message: string) => { prompts.push(message); return options.confirm ? options.confirm() : accept; }, notify: () => {}, setFooter: () => {} } as unknown as ExtensionUIContext;
   const bind = () => session.bindExtensions({ mode: options.mode ?? "tui", ...(options.mode === "print" ? {} : { uiContext: ui }),
     onError: error => errors.push(error.error), commandContextActions: {
       waitForIdle: () => session.waitForIdle(), newSession: async () => ({ cancelled: true }),

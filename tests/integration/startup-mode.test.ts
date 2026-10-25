@@ -26,7 +26,7 @@ async function fixture(t: TestContext, options: { choice?: "on" | "off" | "cance
   const faux = fauxProvider({ provider: "mode-fixture", models: [{ id: "test", contextWindow: 1000000, maxTokens: 1024 }], tokensPerSecond: Infinity });
   runtime.registerNativeProvider(faux.provider);
   const diagnostics: string[] = [], errors: string[] = [], statuses: string[] = [];
-  let selections = 0, confirmations = 0, reloads = 0, choice = options.choice ?? "off";
+  let selections = 0, confirmations = 0, reloads = 0, footers = 0, choice = options.choice ?? "off";
   const makeLoader = () => new DefaultResourceLoader({ cwd, agentDir, settingsManager: settings,
     noExtensions: true, noSkills: true, noThemes: true, noPromptTemplates: true,
     extensionFactories: [pi => registerLauncher(pi, { paths, setupAgentDir: agentDir, setupPackageVersion: "0.1.0",
@@ -48,6 +48,7 @@ async function fixture(t: TestContext, options: { choice?: "on" | "off" | "cance
   t.after(async () => { await host.dispose(); await rm(root, { recursive: true, force: true }); });
   const ui = { select: async (_title: string, items: string[]) => { selections++; return choice === "cancel" ? undefined : items[choice === "on" ? 0 : 1]; },
     confirm: async () => { confirmations++; return options.confirm ?? true; },
+    setFooter: () => { footers++; },
     setStatus: (_key: string, status: string) => { statuses.push(status); }, notify: () => {} } as unknown as ExtensionUIContext;
   if (options.invalidSettings) await writeFile(join(agentDir, "settings.json"), "{");
   const bind = async (active: AgentSession) => active.bindExtensions({ mode: options.headless ? "print" : "tui", ...(options.headless ? {} : { uiContext: ui }),
@@ -63,7 +64,7 @@ async function fixture(t: TestContext, options: { choice?: "on" | "off" | "cance
     get loader() { return host.services.resourceLoader; }, newSession: () => host.newSession(),
     switchSession: (file: string) => host.switchSession(file), fork: (id: string) => host.fork(id, { position: "at" }),
     choose: (next: typeof choice) => { choice = next; }, get selections() { return selections; },
-    get confirmations() { return confirmations; }, get reloads() { return reloads; } };
+    get confirmations() { return confirmations; }, get reloads() { return reloads; }, get footers() { return footers; } };
 }
 async function settled(done: () => boolean) {
   const deadline = Date.now() + 5000;
@@ -76,6 +77,7 @@ test("plain mode restores compaction, exposes no memory hooks/tools and uses the
   assert.equal(h.selections, 1); assert.equal(h.confirmations, 0);
   assert.equal(h.settings.getCompactionEnabled(), true);
   assert.equal(h.statuses.at(-1), "MemWeave 未启用");
+  assert.equal(h.footers, 0);
   const extension = h.loader.getExtensions().extensions[0]!;
   assert.deepEqual([...extension.tools.keys()], []);
   assert.deepEqual([...extension.handlers.keys()].sort(), ["session_shutdown", "session_start"]);
@@ -139,6 +141,7 @@ test("enabled mode initializes once, registers memory and retains mode across na
   assert.equal(h.selections, 1); assert.equal(h.confirmations, 1);
   assert.equal(h.loader.getExtensions().extensions[0]!.tools.size, 11);
   assert.equal(h.statuses.at(-1), "MemWeave 已启用");
+  assert.equal(h.footers, 1);
   await writeFile(h.paths.rule, "USER EDIT {{recent_turns}}");
   await h.session.reload();
   assert.equal(h.selections, 1);
