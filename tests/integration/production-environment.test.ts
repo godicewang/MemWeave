@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFile, access } from "node:fs/promises";
+import { readFile, writeFile, access } from "node:fs/promises";
 import { join } from "node:path";
 import { getSystemMessageText } from "@earendil-works/pi-ai";
 import { productionTaskSession, assertProductionPayload } from "../fixtures/production-session.ts";
@@ -19,12 +19,36 @@ test("production fixture retains native System, builtins, all memory tools and t
   assert.ok(system?.role === "system");
   const text = getSystemMessageText(system);
   assert.match(text, /You are an expert coding assistant operating inside pi/);
+  assert.match(text, /- state_append: Save important new facts\/decisions needed to continue the Task/);
+  const append = h.session.getAllTools().find(tool => tool.name === "state_append")!;
+  assert.ok(append.description.startsWith("Before delivering a stage result"));
+  assert.equal(append.description.split("Before delivering a stage result").length - 1, 1);
   assert.doesNotMatch(text, /NATIVE_SYSTEM|NATIVE_APPEND/);
   assert.ok(text.includes(renderRule(await readFile(h.paths.rule, "utf8"), DEFAULT_CONFIG)));
   assert.match(JSON.stringify(h.frames.at(-1)!.at(-1)), /本次预算快照/);
   await h.session.reload();
   assert.deepEqual(h.session.getActiveToolNames().sort(), active.sort());
   await h.session.prompt("continue with the full production environment");
+  const reloaded = h.frames.at(-1)![0];
+  assert.ok(reloaded?.role === "system");
+  assert.match(getSystemMessageText(reloaded), /- state_append: Save important new facts\/decisions needed to continue the Task/);
+  assert.deepEqual(h.errors, []);
+  assert.deepEqual(h.diagnostics, []);
+});
+
+test("custom native System retains the full Rule and state_append description without forcing a default tool summary", async (t) => {
+  const h = await productionTaskSession(t);
+  await writeFile(join(h.agentDir, "SYSTEM.md"), "USER_CUSTOM_SYSTEM");
+  await h.session.reload();
+  await h.session.prompt("custom System fixture request");
+  const system = h.frames.at(-1)![0];
+  assert.ok(system?.role === "system");
+  const text = getSystemMessageText(system);
+  assert.match(text, /USER_CUSTOM_SYSTEM/);
+  assert.doesNotMatch(text, /You are an expert coding assistant operating inside pi/);
+  assert.doesNotMatch(text, /- state_append:/);
+  assert.ok(text.includes(renderRule(await readFile(h.paths.rule, "utf8"), DEFAULT_CONFIG)));
+  assert.ok(h.session.getAllTools().find(tool => tool.name === "state_append")!.description.startsWith("Before delivering a stage result"));
   assert.deepEqual(h.errors, []);
   assert.deepEqual(h.diagnostics, []);
 });
