@@ -44,6 +44,7 @@
 | `SETUP_VALIDATION.md` | 首次 TUI 确认、直接替换 Rule、全局关闭压缩、完成标记和原生 reload 验收 |
 | `CONFIGURATION_PROPOSAL.md` | 已批准的两层配置、策略覆盖、旧配置/模板兼容与权限边界 |
 | `SOURCE_VERIFICATION.md` | 已批准的有界来源定位缓存、直接比较、按需原生投影及验收 |
+| `SCENARIO_STRESS_VALIDATION_2026-10-25.md` | 当前源码的真实 DeepSeek 多场景/多负载/极限与并发测试，问题分级及改进建议 |
 | `ELASTIC_BUDGET_VALIDATION.md` | 弹性分池、回读续读/截断、双宿主/分发/真实 DeepSeek 与性能验收 |
 | `ELASTIC_BUDGET_DESIGN.md` | 2026-10-25 确认的分池、事件权重、回读截断与配置契约 |
 | `CONTEXT_BUDGET_DESIGN.md` | 已确认 60% 预算、500 条 State、自动窗口与提交准入契约 |
