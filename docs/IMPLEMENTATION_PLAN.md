@@ -196,3 +196,9 @@
 ## 2026-10-25 最新用户优先与请求准备优化（已完成）
 
 用户已授权 REQUEST_PRIORITY_PERFORMANCE.md：固定 Rule 与真实最新用户定位已同步，请求内复用等值计数，保持分池、最终预算和历史语义。233 项常规检查、5 项产物入口、真实解包恢复与专项通过，旧宿主类型及 148 项相关检查通过；官方同输出样例约减少 21% 本机分配/渲染时间。积压的新 Task 冷启动与阶段记忆闭环只提交方案，见 RESTART_AND_MEMORY_CHECKPOINT_PROPOSAL.md，尚不实现。
+
+## 2026-10-25 近期新 Task 与阶段收尾（已完成）
+
+用户已确认 RESTART_AND_MEMORY_CHECKPOINT_PROPOSAL.md 和 RESTART_WIRING_PROPOSAL.md。先同步直接规范；测试并实现显式命令、原事件种子、新 Goal 部分提交恢复，以及固定 Rule 的业务/记忆双检查。保持旧 Task/State、已有分池、Goal/F/D、独立窗口提交和宿主边界；不增加自动启停判定、工作流或总结 Agent。
+
+246 项常规回归、5 项入口/产物检查、解包产物真实 DeepSeek 恢复与 5 项新增真实 Flash 场景通过；Pi 1.3.0 类型及 161 项相关检查通过。临时解包驱动额外验证了命令、最近用户补入、磁盘重开和新 Goal，见 RESTART_AND_CHECKPOINT_VALIDATION.md。未发布 npm，也未将模型语义测试表述为每次必然写入记忆的保证。

@@ -33,6 +33,7 @@ import { SetWindowSchema } from "../window/model.ts";
 import { StateReadSchema, historyReadRanges } from "../state/read.ts";
 import { WindowService, type WindowOptions } from "../pi/window-service.ts";
 import { READ_TRUNCATION_TAG } from "../window/read-budget.ts";
+import { registerRestart } from "./restart.ts";
 import { registerSetup } from "./setup.ts";
 import { registerContextFooter } from "../pi/context-footer.ts";
 export interface MemweaveOptions extends WindowOptions {
@@ -75,6 +76,7 @@ export function registerMemweaveRuntime(
       return prepared.messages;
     },
   });
+  registerRestart(pi, window, report);
   const setup = existingSetup ?? registerSetup(pi, paths, report, options.setupAgentDir, options.setupPackageVersion);
   const footer = registerContextFooter(pi);
   const lifecycle = registerRequestLifecycle(pi, { ...services, ...setup, report });
@@ -129,7 +131,7 @@ export function registerMemweaveRuntime(
   }
   tool(
     "task_create",
-    "Create a new Task with required title, goal, project_name, summary and nonempty keywords; bind this Session branch. context is optional. Initial goal is limited to state_event_max_chars Unicode code points in the request snapshot (bundle default 100); keep it concise and put detail in summary. Overlong input is rejected with actual/max lengths.",
+    "Create a new Task with required title, goal, project_name, summary and nonempty keywords; bind this Session branch. context is optional. Before substantial ongoing work, reuse a valid Task for the same goal; create if unbound or starting a different independent goal. Short Q&A needs no Task. During a restart, ask first if the latest user has not chosen an objective; do not create placeholder goals like clarify the goal or wait for the user. Initial goal is limited to state_event_max_chars Unicode code points in the request snapshot (bundle default 100); keep it concise and put detail in summary. Overlong input is rejected with actual/max lengths.",
     CreateSchema,
     (p, ctx, id) => tasks.create(p, ctx, id),
   );
@@ -159,7 +161,7 @@ export function registerMemweaveRuntime(
   );
   tool(
     "state_append",
-    "Append a nonempty batch. EVERY item requires type (fact or decision), content and nonempty evidence mapping existing Task-scoped refs to explanations. Do not omit type. Body limit: state_event_max_chars Unicode code points in the request snapshot (bundle default 100). Minimal example: {\"items\":[{\"type\":\"fact\",\"content\":\"Verified fact\",\"evidence\":{\"U1\":\"Supporting user statement\"}}]}. Replace U1 with an actual existing supporting ref; never guess IDs from this batch. Invalid/overlong input is rejected, never filled or truncated. Returns only State updated: vN.",
+    "Append a nonempty batch. EVERY item requires type (fact or decision), content and nonempty evidence mapping existing Task-scoped refs to explanations. Do not omit type. Body limit: state_event_max_chars Unicode code points in the request snapshot (bundle default 100). Minimal example: {\"items\":[{\"type\":\"fact\",\"content\":\"Verified fact\",\"evidence\":{\"U1\":\"Supporting user statement\"}}]}. Replace U1 with an actual existing supporting ref; never guess IDs from this batch. Invalid/overlong input is rejected, never filled or truncated. Before delivering a stage result, changing approach or pausing, save only important new verified facts/decisions not already in State. A tool turn ending alone is not stage completion. Returns only State updated: vN.",
     AppendSchema,
     (p, ctx, id) => tasks.append(p.items, ctx, id),
   );

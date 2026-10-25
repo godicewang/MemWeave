@@ -13,6 +13,7 @@ import {
   SessionMemory,
 } from "../pi/session-memory.ts";
 import type { Task } from "../task/model.ts";
+import { RESTART_TYPE, RestartSchema } from "../task/restart-model.ts";
 
 export interface LocatedReference {
   ref: string;
@@ -39,6 +40,10 @@ export function messageOwners(
   let task: string | null = null,
     assistantTask: string | null = null;
   for (const entry of entries) {
+    if (entry.type === "custom" && entry.customType === RESTART_TYPE) {
+      if (!Check(RestartSchema, entry.data)) throw Error("CORRUPT_RESTART_METADATA");
+      task = null;
+    }
     if (entry.type === "custom" && entry.customType === SCOPE_TYPE) {
       if (!Check(ScopeSchema, entry.data)) throw Error("CORRUPT_SESSION_SCOPE");
       task = entry.data.task_id;

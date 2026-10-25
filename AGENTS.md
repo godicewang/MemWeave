@@ -68,6 +68,7 @@
 - 用户运行中重新启用压缩时，Pi 可能先追加恢复用 `context_edit` 再触发取消 hook；不得将“取消摘要”表述为“从未改变有效会话视图”，也不得自动删除这些原生记录。本项目自身的窗口裁剪仍不改写原始消息。
 - 明确声明第三方扩展共存范围；强制整段 system 覆盖、自动整理历史、虚拟模型路由和动态工具声明组合分别验收，不承诺任意组合兼容或固定缓存命中率。
 - 保留原生 tool call ID、arguments、tool result 配对、供应商要求的 reasoning/signature 字段和多模态结构。
+- 显式 `/memweave-restart` 从近期完整事件准备新 Task，只退出当前分支旧绑定，保留旧 Task/State；不自动根据停用判断任务变化，不主动调用模型，等待下一条真实输入后设置新 Goal。轻量 `memweave.restart.v1` 及同一候选的部分提交恢复见 Task §11、Window §19、State §23 和 `docs/RESTART_WIRING_PROPOSAL.md`。阶段收尾由 Agent 按用户可交付目标检查业务/认知，不以 turn_end 自动写入或新增工作流。
 - `memory_read` 读取已知引用；`task_find` 模糊查找 Task；`state_read` 只读取 State；`task_resume` 才切换当前 Task。
 - State 类型仅 Goal / Fact / Decision，不新增 Plan、Hypothesis 或知识图谱。
 

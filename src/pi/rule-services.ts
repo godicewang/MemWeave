@@ -69,7 +69,8 @@ export function createRuleRequestServices(
     frames.set(ctx.sessionManager, frame);
     return frame;
   }
-  if (options.tasks)
+  if (options.tasks) {
+    options.tasks.resolveCommandBudget = capture;
     options.tasks.resolveBudget = async (ctx) => {
       const old = frames.get(ctx.sessionManager);
       return old &&
@@ -78,6 +79,7 @@ export function createRuleRequestServices(
         ? old
         : capture(ctx);
     };
+  }
   return {
     reset: () => options.window?.resetSources(),
     report: reportRequestError,
@@ -91,6 +93,7 @@ export function createRuleRequestServices(
         capacity.maxOutputTokens,
         settingsFor(config),
       );
+      options.window?.validateRestart(ctx);
       const task = options.tasks
         ? await options.tasks.snapshot(ctx, config, captured)
         : undefined;

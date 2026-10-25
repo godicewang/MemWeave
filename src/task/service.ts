@@ -37,6 +37,8 @@ import {
   RemainSchema,
   type ModifyFactInput,
 } from "../state/model.ts";
+import { restartMetadata, restartTaskId } from "./restart-model.ts";
+import { readOptional } from "../storage/files.ts";
 import { withLock } from "../storage/files.ts";
 import { now, stableId } from "../storage/identity.ts";
 import type { MemoryPaths } from "../storage/paths.ts";
@@ -70,6 +72,7 @@ export interface TaskSnapshot {
   activeCount?: number;
   task: Task | null;
   state: string | null;
+  restarting?: boolean;
   references: Map<string, LocatedReference>;
   entries: SessionEntry[];
 }
@@ -89,6 +92,7 @@ export class TaskService {
     this.reader = new MemoryService(paths, this.index, this.memory);
   }
   resolveBudget?: (ctx: ExtensionContext) => Promise<TaskBudget>;
+  resolveCommandBudget?: (ctx: ExtensionContext) => Promise<TaskBudget>;
   async configuration(ctx: ExtensionContext) {
     if (!this.resolveBudget) throw Error("STATE_BUDGET_UNVERIFIED");
     return (await this.resolveBudget(ctx)).config;
@@ -119,7 +123,9 @@ export class TaskService {
     );
   }
   checkCalls(ctx: ExtensionContext, callId: string): void {
-    const source = sourceAssistant(ctx, callId);
+    this.checkSourceCalls(sourceAssistant(ctx, callId));
+  }
+  private checkSourceCalls(source: Extract<SessionEntry, { type: "message" }>): void {
     if (source.message.role !== "assistant") throw Error("TOOL_SOURCE_MISSING");
     const calls = source.message.content.filter((p) => p.type === "toolCall");
     const switches = calls.filter(
@@ -200,7 +206,13 @@ export class TaskService {
     if (!Check(CreateSchema, input)) throw Error("INVALID_TASK_CREATE");
     await this.memory.verify(ctx);
     this.checkCalls(ctx, callId);
-    const assistant = sourceAssistant(ctx, callId);
+    return this.createAt(input, ctx, callId, sourceAssistant(ctx, callId));
+  }
+  private async createAt(
+    input: CreateInput, ctx: ExtensionContext, callId: string,
+    assistant: Extract<SessionEntry, { type: "message" }>, recovering = false,
+  ) {
+    this.checkSourceCalls(assistant);
     if (
       assistant.message.role !== "assistant" ||
       !assistant.message.content.some(
@@ -212,20 +224,25 @@ export class TaskService {
       )
     )
       throw Error("OPERATION_INPUT_MISMATCH");
-    const taskId = `task_${stableId(ctx.sessionManager.getSessionId(), assistant.id, callId).slice(0, 32)}`;
-    const location = { task_id: taskId, workspace: workspaceKey(ctx.cwd) };
+    const branch = ctx.sessionManager.getBranch(assistant.id), sourcePosition = branch.findIndex((entry) => entry.id === assistant.id);
+    if (sourcePosition < 0) throw Error("TOOL_SOURCE_MISSING");
+    const before = branch.slice(0, sourcePosition + 1), restart = scopeOf(before).task_id === null ? restartMetadata(before) : null;
+    if (restart && !before.slice(restart.position + 1).some((entry) => entry.type === "message" && entry.message.role === "user"))
+      throw Error("RESTART_INPUT_REQUIRED: send a real user request after /memweave-restart");
+    const taskId = restart ? restartTaskId(ctx.sessionManager.getSessionId(), restart.data.restart_id)
+      : `task_${stableId(ctx.sessionManager.getSessionId(), assistant.id, callId).slice(0, 32)}`;
+    const location = { task_id: taskId, workspace: workspaceKey(restart ? ctx.sessionManager.getCwd() : ctx.cwd) };
     return withLock(
       this.paths.taskLock(location),
       async () => {
         const scope = this.scope(ctx),
           config = await this.configuration(ctx);
-        assertStateContent(input.goal, config.state_event_max_chars, "task_create.goal");
-        const state = await this.state.initialize(
-          location,
-          input.goal,
-          this.operation(ctx, callId, taskId),
-          this.admission(ctx),
+        if (!recovering) assertStateContent(input.goal, config.state_event_max_chars, "task_create.goal");
+        const operation = stableId(taskId, ctx.sessionManager.getSessionId(), assistant.id, callId);
+        const state = recovering ? await this.state.read(location) : await this.state.initialize(
+          location, input.goal, operation, this.admission(ctx),
         );
+        if (state.events[0]?.op_id !== operation) throw Error("RESTART_SOURCE_MISMATCH");
         let task: Task | undefined;
         try {
           task = (await this.index.read()).find((t) => t.task_id === taskId);
@@ -257,15 +274,13 @@ export class TaskService {
           task = await this.derivatives(task, state);
           const bootstrap = new Set<string>();
           if (scope.task_id === null) {
-            const branch = ctx.sessionManager.getBranch();
-            const pos = branch.findIndex((e) => e.id === assistant.id);
+            const current = ctx.sessionManager.getBranch(), owners = messageOwners(current);
+            const trigger = branch.findLast((entry) => entry.type === "message" && entry.message.role === "user");
             bootstrap.add(assistant.id);
-            for (let i = pos - 1; i >= 0; i--) {
-              const e = branch[i]!;
-              if (e.type === "message" && e.message.role === "user") {
-                bootstrap.add(e.id);
-                break;
-              }
+            if (trigger && owners.get(trigger.id) === null) bootstrap.add(trigger.id);
+            if (recovering) {
+              const latest = current.findLast((entry) => entry.type === "message" && entry.message.role === "user");
+              if (latest && owners.get(latest.id) === null) bootstrap.add(latest.id);
             }
           }
           await synchronizeReferences(task, ctx, this.memory, bootstrap);
@@ -591,18 +606,56 @@ export class TaskService {
       ctx.signal,
     );
   }
+  pendingRestart(ctx: ExtensionContext) {
+    this.memory.check();
+    const branch = ctx.sessionManager.getBranch();
+    const restart = restartMetadata(branch);
+    return restart && this.scope(ctx).task_id === null ? restart : null;
+  }
+  /** Repair a committed initial Goal before allowing another model attempt to create it. */
+  private async recoverRestart(ctx: ExtensionContext): Promise<void> {
+    const restart = this.pendingRestart(ctx);
+    if (!restart) return;
+    const branch = ctx.sessionManager.getBranch();
+    const scope = this.scope(ctx);
+    if (!branch.slice(restart.position + 1).some((entry) => entry.type === "custom" && entry.customType === SCOPE_TYPE))
+      await this.memory.append(ctx, SCOPE_TYPE, scope);
+    const location = { workspace: workspaceKey(ctx.sessionManager.getCwd()), task_id: restartTaskId(ctx.sessionManager.getSessionId(), restart.data.restart_id) };
+    if (await readOptional(this.paths.state(location)) === undefined) return;
+    const state = await this.state.read(location), initial = state.events[0];
+    if (initial?.op !== "update_goal") throw Error("CORRUPT_STATE: restart initial Goal is missing");
+    const file = ctx.sessionManager.getSessionFile();
+    if (!file) throw Error("PERSISTENT_SESSION_REQUIRED");
+    const originals = await this.memory.files.readView(file, ctx.sessionManager.getSessionId());
+    for (const entry of originals.entries) {
+      if (entry.type !== "message" || entry.message.role !== "assistant") continue;
+      for (const call of entry.message.content) {
+        if (call.type !== "toolCall" || call.name !== "task_create"
+          || stableId(location.task_id, ctx.sessionManager.getSessionId(), entry.id, call.id) !== initial.op_id) continue;
+        const origin = ctx.sessionManager.getBranch(entry.id), sourceRestart = restartMetadata(origin);
+        if (!sourceRestart || sourceRestart.data.restart_id !== restart.data.restart_id
+          || scopeOf(origin).task_id !== null || !Check(CreateSchema, call.arguments) || call.arguments.goal !== initial.goal)
+          throw Error("RESTART_SOURCE_MISMATCH");
+        await this.createAt(call.arguments, ctx, call.id, entry, true);
+        return;
+      }
+    }
+    throw Error("RESTART_SOURCE_MISSING: committed Goal has no matching native task_create call");
+  }
   async snapshot(
     ctx: ExtensionContext,
     config: MemoryConfig,
     budget?: TaskBudget,
   ): Promise<TaskSnapshot> {
     await this.memory.verify(ctx);
+    await this.recoverRestart(ctx);
     const scope = this.scope(ctx);
     await this.syncBranch(ctx);
     if (!scope.task_id)
       return {
         task: null,
         state: null,
+        restarting: this.pendingRestart(ctx) !== null,
         references: new Map(),
         entries: structuredClone(ctx.sessionManager.getBranch()),
       };

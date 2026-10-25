@@ -156,3 +156,11 @@ manifest 使用公开的 `pi.extensions`，优先指向可直接加载的 `src/e
 2026-10-24 来源核验：src/pi/source-verification.ts 保存有界原生位置提示（最多 8192 项、约 16 MiB），命中也比较本次快照中的完整消息；miss 批量补查，必要时才读取 Pi 原生投影。Session/分支/reload 清空，不保存正文、投影、通过结论或磁盘缓存。预算与各模块持久化协议不变，见 SOURCE_VERIFICATION.md。
 
 2026-10-24 配置开放：包内 src/config/defaults.json、可选运行时 config.json、原六字段分支覆盖依次生效；新策略不扩展 scope 格式，Agent 仍只调整 N/B。所有请求模块使用同一配置快照，策略和模板兼容见 CONFIGURATION_PROPOSAL.md。
+
+## 显式冷启动与阶段收尾（2026-10-25 用户确认）
+
+新增原生命令 /memweave-restart，不新增模型工具或自动启停判断。Pi custom memweave.restart.v1 仅保存初始种子/锚点/旧绑定/N/B；当前分支退出旧绑定，等待新真实输入，由原 task_create 建新 Goal。旧 Task State 共享关系、原始历史和六字段配置保持。种子可能非连续，但仅解释既有 Window 的初始范围；原边界越过种子或实际 N/B 重选后恢复普通选取，不增加永久用户锚点。
+
+Goal 已提交但索引/绑定未完成时，按原始创建调用和稳定候选修复；原调用可在同一 Session 的其他分支，不能因 tree 回退丢弃已提交 Goal 或重复建 Task。候选存储位置使用原生 Session cwd 身份，不因后来 SDK 上下文 cwd 不同重复生成文件。新 Goal 及证据/原子提交协议保持，完整接线见 RESTART_WIRING_PROPOSAL.md、Task §11、Window §19、State §23。
+
+阶段由用户可交付目标界定，由 Agent 执行业务/认知两层检查；不增加 Workflow Engine、Plan、阶段状态机、独立总结 Agent 或 turn_end 自动写入。规则正文及工具说明同步；无重要变化不写，失败/暂停不得伪装完成。见 Rule §18。

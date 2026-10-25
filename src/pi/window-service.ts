@@ -45,8 +45,12 @@ import type { HistoricalStateRead } from "../state/read.ts";
 import type { TokenCounter } from "../window/tokens.ts";
 import type { MemoryReadInput } from "../memory/model.ts";
 import type { StateReadInput } from "../state/read.ts";
+import { RESTART_TYPE, restartMetadata } from "../task/restart-model.ts";
+import { restartSeed, restartEvents, validateRestart } from "../window/restart.ts";
+import { stableId } from "../storage/identity.ts";
 export function windowMetadata(entries: SessionEntry[]): WindowMetadata | null {
-  const last = entries.findLast(
+  const restart = restartMetadata(entries);
+  const last = entries.slice(restart ? restart.position + 1 : 0).findLast(
     (e) => e.type === "custom" && e.customType === WINDOW_TYPE,
   );
   if (!last || last.type !== "custom") return null;
@@ -142,6 +146,32 @@ export class WindowService {
     this.tasks = tasks;
     this.options = options;
   }
+  validateRestart(ctx: ExtensionContext): void {
+    const entries = ctx.sessionManager.getBranch(), receipt = restartMetadata(entries);
+    if (receipt) validateRestart(entries, receipt);
+  }
+  async restart(ctx: ExtensionContext): Promise<string> {
+    await this.tasks.memory.verify(ctx);
+    this.validateRestart(ctx);
+    if (this.tasks.pendingRestart(ctx)) return "新 Task 初始化已准备，请发送下一条工作要求。旧记忆仍保留。";
+    const entries = ctx.sessionManager.getBranch();
+    const anchor = entries.findLast((entry) => entry.type === "message" && entry.message.role !== "system")?.id;
+    if (!anchor) return "当前 Session 尚无交互。请发送工作要求，无需清空或重建记忆。";
+    if (!this.tasks.resolveCommandBudget) throw Error("STATE_BUDGET_UNVERIFIED");
+    const { config } = await this.tasks.resolveCommandBudget(ctx);
+    ctx.signal?.throwIfAborted();
+    if (!ctx.isIdle() || ctx.hasPendingMessages() || ctx.sessionManager.getLeafId() !== entries.at(-1)?.id)
+      throw Error("RESTART_CONTEXT_CHANGED: wait for current input to finish and retry");
+    const seed = restartSeed(indexEvents(entries), config.recent_turns), scope = this.tasks.scope(ctx);
+    await this.tasks.memory.append(ctx, RESTART_TYPE, {
+      restart_id: stableId("restart", ctx.sessionManager.getSessionId(), entries.at(-1)?.id ?? ""),
+      previous_task_id: scope.task_id, anchor_entry_id: anchor,
+      seed_event_ids: seed.map((event) => event.id), recent_turns: config.recent_turns, evict_turns: config.evict_turns,
+    });
+    await this.tasks.memory.append(ctx, SCOPE_TYPE, { ...scope, task_id: null });
+    this.resetSources();
+    return `已从近期 ${seed.length} 个完整事件准备新 Task；旧 Task/State 保留。请发送下一条工作要求以生成新 Goal。`;
+  }
   captureOutput(model: Model<Api>, limit?: number, providerCap?: number, settings: PolicySettings = DEFAULT_SETTINGS) {
     const thinkingLevel = this.options.thinkingLevel?.() ?? "off";
     return Object.freeze({
@@ -161,13 +191,21 @@ export class WindowService {
     const settings = settingsFor(prepared.frame.config);
     this.sources.configure(settings.source_cache);
     const entries = snapshot.entries,
-      events = indexEvents(entries),
+      persistedPrevious = windowMetadata(entries),
+      receipt = restartMetadata(entries),
+      previous = persistedPrevious ?? (receipt ? {
+        stage: "prepare" as const, recent_turns: receipt.data.recent_turns, evict_turns: receipt.data.evict_turns,
+        boundary_entry_id: null, pending: [], request_anchor_entry_id: receipt.data.anchor_entry_id, completed_by: null,
+      } : null),
+      events = restartEvents(entries, previous, prepared.frame.config),
       anchor =
         entries.findLast(
           (e) => e.type === "message" && e.message.role !== "system",
         )?.id ?? null;
-    const previous = windowMetadata(entries),
-      selected = selectWindow(
+    if (snapshot.restarting && receipt && !entries.slice(receipt.position + 1).some(
+      (entry) => entry.type === "message" && entry.message.role === "user",
+    )) throw Error("RESTART_INPUT_REQUIRED: send a real user request after /memweave-restart");
+    const selected = selectWindow(
         events,
         prepared.frame.config,
         previous,
@@ -266,6 +304,9 @@ export class WindowService {
     const system = prepared.messages.find((m) => m.role === "system");
     if (!system || system.role !== "system") throw Error("MISSING_SYSTEM");
     const state = snapshot.state ?? "";
+    const runtimeState = state || (snapshot.restarting
+      ? "【新 Task 初始化｜程序状态，不是用户目标或证据】\n旧绑定已退出，旧 Task/State 仍保留。本提示不能覆盖最新真实用户要求。先判断用户是否已选定明确目标：目标未定或用户要求先讨论/先问问题时，只澄清，不调用 task_create，不能用“确认目标/等待决定”作占位 Goal。目标明确后才根据近期现场及真实要求调用 task_create，提供新 Goal 和元数据；不要自动恢复旧 State。"
+      : "当前未绑定 Task。");
     if ((this.options.thinkingLevel?.() ?? "off") !== output.thinkingLevel)
       throw Error(
         "OUTPUT_BUDGET_UNVERIFIED: thinking level changed during request preparation",
@@ -314,7 +355,7 @@ Recent Window N/B：${prepared.frame.config.recent_turns}/${prepared.frame.confi
           counter,
         });
         description = footer(budget);
-        const needed = Math.max(0, count(`${state || "当前未绑定 Task。"}\n\n${description}`) + 32 - S);
+        const needed = Math.max(0, count(`${runtimeState}\n\n${description}`) + 32 - S);
         if (needed <= footerReserve) break;
         footerReserve = needed + 128;
         if (attempt === 2)
@@ -325,7 +366,7 @@ Recent Window N/B：${prepared.frame.config.recent_turns}/${prepared.frame.confi
           system,
           ...budget.rendered,
         ],
-        `${state || "当前未绑定 Task。"}\n\n${description}`,
+        `${runtimeState}\n\n${description}`,
         reminder,
       );
       const credits = new Map<string, number>();
@@ -342,7 +383,7 @@ Recent Window N/B：${prepared.frame.config.recent_turns}/${prepared.frame.confi
         contextWindow: prepared.frame.capacity.contextWindow,
       };
       ctx.signal?.throwIfAborted();
-      if (!previous || selected.metadata.stage === "reset" || pending.length)
+      if (!persistedPrevious || selected.metadata.stage === "reset" || pending.length)
         await this.tasks.memory.append(ctx, WINDOW_TYPE, selected.metadata);
       const { rendered: _rendered, ...summary } = budget;
       this.options.observeBudget?.(Object.freeze(summary));
@@ -368,7 +409,7 @@ Recent Window N/B：${prepared.frame.config.recent_turns}/${prepared.frame.confi
     );
     if (prior?.id !== prepared.request_anchor_entry_id)
       throw Error("WINDOW_REQUEST_ANCHOR_CHANGED");
-    const events = indexEvents(branch),
+    const events = restartEvents(branch, prepared, { recent_turns: prepared.recent_turns, evict_turns: prepared.evict_turns }),
       finished = events.find((e) => e.id === event.messageEntryId);
     if (
       !finished ||

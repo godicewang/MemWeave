@@ -12,6 +12,7 @@ import { CONFIG_SCHEMA } from "../config/schema.ts";
 import { StateBatchSchema } from "../state/window.ts";
 import { WINDOW_TYPE, WindowSchema } from "../window/model.ts";
 import { TaskIdSchema } from "../task/model.ts";
+import { RESTART_TYPE, RestartSchema } from "../task/restart-model.ts";
 import {
   ALIAS_TYPE,
   ORIGINAL_TYPE,
@@ -63,11 +64,16 @@ export function workspaceKey(cwd: string): string {
 }
 export function scopeOf(entries: SessionEntry[]): Scope {
   let scope: Scope = { task_id: null, overrides: {} };
-  for (const e of entries)
+  for (const e of entries) {
+    if (e.type === "custom" && e.customType === RESTART_TYPE) {
+      if (!Check(RestartSchema, e.data)) throw Error("CORRUPT_RESTART_METADATA");
+      scope = { ...scope, task_id: null };
+    }
     if (e.type === "custom" && e.customType === SCOPE_TYPE) {
       if (!Check(ScopeSchema, e.data)) throw Error("CORRUPT_SESSION_SCOPE");
       scope = e.data;
     }
+  }
   return structuredClone(scope);
 }
 interface CachedSession {
@@ -227,6 +233,7 @@ export class SessionMemory {
             e.customType === REF_TYPE ||
             e.customType === STATE_REQUEST_TYPE ||
             e.customType === WINDOW_TYPE ||
+            e.customType === RESTART_TYPE ||
             e.customType === ALIAS_TYPE ||
             e.customType === ORIGINAL_TYPE),
       );
@@ -256,6 +263,7 @@ export class SessionMemory {
       (kind === REF_TYPE && !Check(ReferencesSchema, data)) ||
       (kind === STATE_REQUEST_TYPE && !Check(StateBatchSchema, data)) ||
       (kind === WINDOW_TYPE && !Check(WindowSchema, data)) ||
+      (kind === RESTART_TYPE && !Check(RestartSchema, data)) ||
       (kind === ALIAS_TYPE && !Check(AliasesSchema, data)) ||
       (kind === ORIGINAL_TYPE && !Check(OriginalsSchema, data))
     )
