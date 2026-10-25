@@ -25,7 +25,7 @@ export function reportRequestError(error: unknown, ctx: ExtensionContext): void 
   else console.error(`[MemWeave] ${message}`);
 }
 
-export function registerRequestLifecycle(pi: ExtensionAPI, services?: RequestServices): () => void {
+export function registerRequestLifecycle(pi: ExtensionAPI, services?: RequestServices) {
   const report = services?.report ?? reportRequestError;
   const check = () => {
     assertSupportedHost(VERSION);
@@ -34,15 +34,16 @@ export function registerRequestLifecycle(pi: ExtensionAPI, services?: RequestSer
       throw new Error("COMPACTION_ENABLED: effective Pi compaction.enabled must be false; a project override can re-enable it; adjust settings and reload");
     }
   };
+  const startup = async (ctx: ExtensionContext) => {
+    try {
+      services?.reset?.();
+      assertSupportedHost(VERSION);
+      if (services?.startup && !await services.startup(ctx)) return;
+      check();
+    } catch (error) { report(error, ctx); }
+  };
   const subscriptions = [
-    pi.on("session_start", async (_event, ctx) => {
-      try {
-        services?.reset?.();
-        assertSupportedHost(VERSION);
-        if (services?.startup && !await services.startup(ctx)) return;
-        check();
-      } catch (error) { report(error, ctx); }
-    }),
+    pi.on("session_start", (_event, ctx) => startup(ctx)),
     pi.on("session_before_compact", () => ({ cancel: true })),
     pi.on("context_with_system", async (event, ctx) => {
       try {
@@ -58,5 +59,5 @@ export function registerRequestLifecycle(pi: ExtensionAPI, services?: RequestSer
       }
     }),
   ];
-  return () => { for (const unsubscribe of subscriptions) unsubscribe(); };
+  return { startup, dispose: () => { for (const unsubscribe of subscriptions) unsubscribe(); } };
 }

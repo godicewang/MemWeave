@@ -21,9 +21,12 @@ test(
       entry = join(input.root, `entry-${input.label}.ts`);
     // Execute installed product code with isolated memoryRoot and Pi setup profile paths.
     // Capacity, request lifecycle, SDK loop and provider paths are production implementations.
+    const startup = (await readFile(join(input.artifact, "src/extension/index.ts"), "utf8")).includes("registerLauncher")
+      ? { module: "launcher.ts", factory: "registerLauncher" }
+      : { module: "register.ts", factory: "registerMemweave" };
     await writeFile(
       entry,
-      `import {registerMemweave} from ${JSON.stringify(join(input.artifact, "src/extension/register.ts"))};\nimport {memoryPaths} from ${JSON.stringify(join(input.artifact, "src/storage/paths.ts"))};\nexport default pi=>registerMemweave(pi,{paths:memoryPaths(${JSON.stringify(input.memory)}),setupAgentDir:${JSON.stringify(join(input.root, "setup-agent"))}});\n`,
+      `import {${startup.factory}} from ${JSON.stringify(join(input.artifact, "src/extension", startup.module))};\nimport {memoryPaths} from ${JSON.stringify(join(input.artifact, "src/storage/paths.ts"))};\nexport default pi=>${startup.factory}(pi,{paths:memoryPaths(${JSON.stringify(input.memory)}),setupAgentDir:${JSON.stringify(join(input.root, "setup-agent"))}});\n`,
     );
     const manager = input.sessionFile
       ? SessionManager.open(input.sessionFile)

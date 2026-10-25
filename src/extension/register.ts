@@ -45,6 +45,15 @@ export function registerMemweave(
   pi: ExtensionAPI,
   options: MemweaveOptions = {},
 ): TaskService {
+  return registerMemweaveRuntime(pi, options).tasks;
+}
+
+/** Late activation uses the same native startup check as ordinary extension loading. */
+export function registerMemweaveRuntime(
+  pi: ExtensionAPI,
+  options: MemweaveOptions = {},
+  existingSetup?: ReturnType<typeof registerSetup>,
+) {
   const paths = options.paths ?? memoryPaths(),
     tasks = new TaskService(paths, pi),
     window = new WindowService(tasks, {
@@ -64,8 +73,8 @@ export function registerMemweave(
       return prepared.messages;
     },
   });
-  const setup = registerSetup(pi, paths, report, options.setupAgentDir, options.setupPackageVersion);
-  registerRequestLifecycle(pi, { ...services, ...setup, report });
+  const setup = existingSetup ?? registerSetup(pi, paths, report, options.setupAgentDir, options.setupPackageVersion);
+  const lifecycle = registerRequestLifecycle(pi, { ...services, ...setup, report });
   pi.on("before_provider_request", (event, ctx) => {
     try {
       const frame = window.outputFrame;
@@ -277,5 +286,5 @@ export function registerMemweave(
       };
     }
   });
-  return tasks;
+  return { tasks, startup: lifecycle.startup };
 }

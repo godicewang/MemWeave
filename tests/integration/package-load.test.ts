@@ -30,7 +30,18 @@ async function assertPackageLoads(packageRoot: string, temporaryRoot: string) {
   const extension = result.extensions[0];
   assert.ok(extension);
   assert.equal(extension.resolvedPath, join(packageRoot, "src/extension/index.ts"));
-  const phase2 = (await readFile(join(packageRoot, "src/extension/index.ts"), "utf8")).includes("registerMemweave");
+  const entry = await readFile(join(packageRoot, "src/extension/index.ts"), "utf8");
+  const launcher = entry.includes("registerLauncher");
+  if (launcher) {
+    assert.deepEqual([...extension.tools.keys()], [], "memory is registered only after native startup chooses enabled mode");
+    assert.deepEqual([...extension.commands.keys()], ["memweave-setup"]);
+    assert.deepEqual([...extension.handlers.keys()].sort(), ["context_with_system", "session_shutdown", "session_start"]);
+    for (const handlers of extension.handlers.values()) assert.equal(handlers.length, 1);
+    assert.deepEqual(await readdir(workspace), []);
+    assert.deepEqual(await readdir(agentDir), []);
+    return;
+  }
+  const phase2 = entry.includes("registerMemweave");
   const expectedTools = phase2 ? ["state_append", "task_create", "task_find", "task_resume", "task_status"] : [];
   const registration = phase2 ? await readFile(join(packageRoot, "src/extension/register.ts"), "utf8") : "";
   if (registration.includes('"update_goal"')) expectedTools.push("update_goal", "state_read");

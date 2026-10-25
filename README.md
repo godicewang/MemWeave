@@ -41,4 +41,6 @@ pi
 
 首次启动时回车确认，扩展会创建或替换 `~/.pi/memory/rule.md`，全局关闭 Pi 自动压缩并重新加载。后续升级扩展会再次覆盖 Rule，自定义内容请先备份。
 
+仓库开发版新增启动模式选择：可启用 MemWeave，或选择“MemWeave 未启用”恢复全局自动压缩，底部显示当前模式。两种模式共用 Pi 配置与 Session；该功能尚未发布到 npm 0.1.0。本地开发使用 `pi install /absolute/path/to/MemWeave`，确认 `pi list` 只有一个 MemWeave 来源。
+
 在 Pi 中配置模型与 API 密钥，然后用文字请求创建任务，例如：“为当前工作创建一个 Task，目标是完成……”。当前真实模型验收使用官方 DeepSeek Flash；完整配置、升级与卸载说明见[使用指南](USER_GUIDE.md)。

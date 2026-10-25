@@ -64,7 +64,7 @@
 - 保留 Pi 原生 SYSTEM/APPEND/AGENTS 的发现、信任和优先级，不修改或静默屏蔽用户文件。
 - 请求语义顺序为 Rule → Recent Window → State；末尾 State 同时附预算快照，Window 提醒在它之前。State、预算和提醒是请求级临时内容，不写入 Session、不参与真实交互事件计数。
 - Rule 渲染、Window 预算与 State 注入统一接在 `context_with_system`，使用同一请求快照；仅额外使用公开 before_provider_request 对齐已预留的输出上限，不重新处理历史；不先按旧 Rule 计算预算再补写，不包装 `session.agent.prepareRequest`。模板、配置或预算失败时先调用 `ctx.abort()`，再报告；不得仅依赖抛异常或返回空消息阻止发送。
-- 自动 compaction 通过 Pi 配置关闭：首次 Pi TUI 启用时经用户确认，直接替换独立 Rule 并全局关闭压缩，使用 `/memweave-setup`、完成标记和原生 reload；具体顺序、恢复及实例范围见 Rule 技术稿 §13 和 PACKAGING.md。每次请求仍检查 `pi.getSettings()` 的有效值，用 `session_before_compact` 取消手动压缩；不覆盖项目显式设置。接受同配置范围内其他 Pi 受影响、卸载后保留；不承诺进程隔离，不生成历史摘要兜底。
+- Pi TUI 每次进程启动通过原生选择框选择 MemWeave 启用/未启用，使用同一 agentDir、认证与原生 Session；显示当前模式，不提供运行中切换。启用后才注册记忆业务，全局关闭自动压缩，每次请求检查 `pi.getSettings()` 并取消手动压缩；选择未启用则全局恢复自动压缩，不注册记忆业务。通过既有 `/memweave-setup` 命令原生 reload，不覆盖项目显式设置；无界面保留既有行为。具体顺序、实例范围和原生压缩后的恢复限制见 Rule 技术稿 §13–14 和 PACKAGING.md。接受同配置范围其他进程受影响；完全卸载/取消加载扩展时仍保留设置，不承诺进程隔离，不生成历史摘要兜底。
 - 用户运行中重新启用压缩时，Pi 可能先追加恢复用 `context_edit` 再触发取消 hook；不得将“取消摘要”表述为“从未改变有效会话视图”，也不得自动删除这些原生记录。本项目自身的窗口裁剪仍不改写原始消息。
 - 明确声明第三方扩展共存范围；强制整段 system 覆盖、自动整理历史、虚拟模型路由和动态工具声明组合分别验收，不承诺任意组合兼容或固定缓存命中率。
 - 保留原生 tool call ID、arguments、tool result 配对、供应商要求的 reasoning/signature 字段和多模态结构。
