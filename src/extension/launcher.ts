@@ -29,8 +29,7 @@ export function registerLauncher(pi: ExtensionAPI, options: MemweaveOptions = {}
   });
   function status(ctx: ExtensionContext, mode: Mode) {
     if (!ctx.hasUI) return;
-    const compression = pi.getSettings().compaction?.enabled === false ? "关闭" : "开启";
-    ctx.ui.setStatus("memweave", `${mode === "on" ? "MemWeave 已启用" : "MemWeave 未启用"} · 自动压缩：${compression}`);
+    ctx.ui.setStatus("memweave", mode === "on" ? "MemWeave 已启用" : "MemWeave 未启用");
   }
   pi.registerCommand("memweave-setup", {
     description: "Choose this Pi instance's startup mode, initialize MemWeave if enabled, and reload native settings",

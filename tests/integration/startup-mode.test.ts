@@ -75,7 +75,7 @@ test("plain mode restores compaction, exposes no memory hooks/tools and uses the
   await settled(() => h.reloads === 1);
   assert.equal(h.selections, 1); assert.equal(h.confirmations, 0);
   assert.equal(h.settings.getCompactionEnabled(), true);
-  assert.match(h.statuses.at(-1)!, /MemWeave 未启用.*自动压缩.*开启/);
+  assert.equal(h.statuses.at(-1), "MemWeave 未启用");
   const extension = h.loader.getExtensions().extensions[0]!;
   assert.deepEqual([...extension.tools.keys()], []);
   assert.deepEqual([...extension.handlers.keys()].sort(), ["session_shutdown", "session_start"]);
@@ -138,7 +138,7 @@ test("enabled mode initializes once, registers memory and retains mode across na
   assert.equal(h.settings.getCompactionEnabled(), false);
   assert.equal(h.selections, 1); assert.equal(h.confirmations, 1);
   assert.equal(h.loader.getExtensions().extensions[0]!.tools.size, 11);
-  assert.match(h.statuses.at(-1)!, /MemWeave 已启用/);
+  assert.equal(h.statuses.at(-1), "MemWeave 已启用");
   await writeFile(h.paths.rule, "USER EDIT {{recent_turns}}");
   await h.session.reload();
   assert.equal(h.selections, 1);
@@ -171,12 +171,12 @@ test("cancelled selection writes nothing, blocks inference and retries the exist
   assert.equal(h.reloads, 1);
 });
 
-test("plain mode preserves explicit project compression settings and displays the effective state", async t => {
+test("plain mode preserves explicit project compression settings and displays only its mode", async t => {
   const h = await fixture(t, { projectEnabled: false });
   await settled(() => h.reloads === 1);
   assert.equal(JSON.parse(await readFile(join(h.agentDir, "settings.json"), "utf8")).compaction.enabled, true);
   assert.equal(h.settings.getCompactionEnabled(), false);
-  assert.match(h.statuses.at(-1)!, /自动压缩.*关闭/);
+  assert.equal(h.statuses.at(-1), "MemWeave 未启用");
   assert.deepEqual(JSON.parse(await readFile(join(h.cwd, ".pi/settings.json"), "utf8")), { compaction: { enabled: false } });
 });
 
