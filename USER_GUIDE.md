@@ -6,9 +6,9 @@ MemWeave 在原生 `pi` 内提供长程任务记忆。你仍使用 Pi 的界面�
 
 ## 安装与首次启用
 
-本指南对应待发布稳定候选 **0.1.1**，尚未上传 npm，当前公网仍为 0.1.0 测试版。以下稳定渠道安装说明在发布后适用。候选包含启动选择、实际用量显示、弹性预算、显式重开 Task 和阶段收尾指引；旧测试版 0.1.0 沿用此前的直接启用与首次初始化流程。
+**开发版启动选择尚未发布到 npm 0.1.0。** 以下“启动模式”说明适用于当前仓库/本地安装；公网 0.1.0 仍沿用直接启用与首次初始化流程。
 
-### 启动模式
+### 启动模式（当前仓库）
 
 每次运行交互式 `pi` 会出现原生选择框，底部持续显示模式。选择“启用 MemWeave”后按下文首次初始化；以后启动会再次选择，但同版本不会重复覆盖 Rule。选择“MemWeave 未启用”则全局恢复自动压缩并原生 reload，不加载记忆工具/Rule/Window/State，正常使用 Pi 原生 Session、上下文与压缩。
 
@@ -20,22 +20,22 @@ MemWeave 在原生 `pi` 内提供长程任务记忆。你仍使用 Pi 的界面�
 
 日常 Pi 建议用官方全局 npm 安装，`pi update` 更新宿主；`pi update --extensions` 更新非固定版本的扩展。MemWeave 不捆绑或锁定宿主，未验证宿主会在启用记忆时诊断，普通模式继续交给 Pi。固定开发环境应使用显式开发命令，避免占用日常 `pi`。
 
-### 稳定版安装
+### 已发布 0.1.0 的安装
 
-当前稳定包为 `@godice/memweave@0.1.1`，渠道为 `latest`。安装操作在你的**业务项目目录**运行，不要把 Package 安装目录当工作目录。
+首版 npm 测试包为 `@godice/memweave@0.1.0`，渠道为 `next`。安装操作在你的**业务项目目录**运行，不要把 Package 安装目录当工作目录。
 
 已有 Pi 1.3.0 或 1.4.0 时，直接安装扩展：
 
 ```sh
 pi --version
-pi install npm:@godice/memweave@latest
+pi install npm:@godice/memweave@0.1.0
 pi list
 pi
 ```
 
 没有 Pi 时，先安装 Node.js 22.19.0 或以上，再运行 `npm install -g --ignore-scripts @earendil-works/pi-coding-agent@1.4.0`，然后执行上面的扩展安装与启动命令。只有其他 Pi 版本时，请按原安装方式切换到已支持版本并核验 `pi --version`；MemWeave 不自动升级或降级宿主。
 
-以上默认是用户范围安装；仅在当前项目启用可使用 `pi install npm:@godice/memweave@latest --local`，项目声明受 Pi 原生信任控制。固定本版使用 `npm:@godice/memweave@0.1.1`；`next` 是独立测试渠道，本次仍指向旧测试版，不代表稳定版更新。使用公开 npm 包不需要 GitHub 仓库权限，也不需要用户构建开发 SDK。
+以上默认是用户范围安装；仅在当前项目启用可使用 `pi install npm:@godice/memweave@0.1.0 --local`，项目声明受 Pi 原生信任控制。跟随测试渠道安装可使用 `pi install npm:@godice/memweave@next`；尚未提供稳定版时，不使用 `@latest`。使用公开 npm 包不需要 GitHub 仓库权限，也不需要用户构建开发 SDK。
 
 Git 来源仍可使用 `pi install 'git:git@github.com:godicewang/MemWeave.git@<commit>' --local`，SSH 需要仓库读取权限。Pi 原生也支持 HTTPS Git 来源，但此前本机克隆遇到网络错误。已有本地 checkout 可使用 `pi install /absolute/path/to/MemWeave --local`，其运行依赖由 checkout 维护者准备。
 
@@ -82,7 +82,7 @@ Task 保存目标和当前认知，Pi Session 保存原始交互。你可直接�
 
 `recent_window_set({"turns": 8, "evict_turns": 2})` 仅调整当前分支；下一请求重新选取原始历史。扩大窗口能恢复该范围的原文，但显示仍受统一预算约束。Rule → Recent Window → State 是请求语义顺序；State 和提醒不写入 Session、不计交互事件。固定内容放不下时会取消，官方 DeepSeek Flash 使用匹配的 V4.1 tokenizer；其他未匹配组合明确使用保守估算。预算快照与 State 位于末尾。
 
-## 从近期现场重新开始
+## 从近期现场重新开始（当前仓库）
 
 启用 MemWeave 后，在空闲且没有排队输入时运行：
 
@@ -94,7 +94,7 @@ Task 保存目标和当前认知，Pi Session 保存原始交互。你可直接�
 
 旧 Task/State 和原始 Session 保留，其他会话继续使用旧任务；这里不是删除记忆。初始近期范围没有用户消息时，用最近真实用户加末尾 N-1 个完整事件，总数不超过 N；加入新消息后仍按正常 N/B 滑动，不建立永久锚点。空 Session 直接等待首次输入。已有不可裁剪内容本身超预算时仍会明确取消，不能保证任何输入都放得下。
 
-准备记录、原始 Goal 与同一候选 Task 支持重启/部分失败恢复；请勿手工删除恢复元数据。显式调整 N/B 会按原规则从历史重选。此流程从 0.1.1 提供，不宣称旧扩展版本能读取新的冷启动记录；使用后回退旧版前须核对兼容性并保留备份。
+准备记录、原始 Goal 与同一候选 Task 支持重启/部分失败恢复；请勿手工删除恢复元数据。显式调整 N/B 会按原规则从历史重选。该新流程尚未发布到 npm 0.1.0，不宣称旧扩展版本能读取新的冷启动记录；继续使用完成此功能的版本或更高兼容版本。
 
 ## 阶段交付与认知保存
 
@@ -145,7 +145,7 @@ Task 保存目标和当前认知，Pi Session 保存原始交互。你可直接�
 
 **升级 npm 包会覆盖 `~/.pi/memory/rule.md` 的自定义内容。** 扩展从实际安装包的 `package.json.version` 判断版本；加载不同版本时自动对齐该包默认模板，旧 v1 标记首次加载也会覆盖并迁移。需要保留的定制内容请在升级前自行备份；config.json、Task/State、Session 和压缩设置不因模板升级重置。Git/本地包共用版本规则，同版本修改包内模板不会触发升级同步；开发新协议时也要递增包版本。
 
-采用 npm 固定版本时，需要 `pi install npm:@godice/memweave@<新版本>` 显式安装新版本；项目安装继续加 `--local`。Pi v1.3.0/1.4.0 的 update 会跳过精确 npm 版本，即使手动改了声明也不会据此重装。跟随稳定渠道使用 `npm:@godice/memweave@latest`，测试渠道使用 `npm:@godice/memweave@next`；从旧测试渠道转稳定版应显式安装 `@latest`。更新后重启或 reload，并用 `pi list` 确认只有一个生效来源。
+采用 npm 固定版本时，需要 `pi install npm:@godice/memweave@<新版本>` 显式安装新版本；项目安装继续加 `--local`。Pi v1.3.0/1.4.0 的 update 会跳过精确 npm 版本，即使手动改了声明也不会据此重装。跟随测试渠道时使用原来源 `npm:@godice/memweave@next`，更新后重启或 reload，并用 `pi list` 确认生效来源。
 
 使用 `pi config --local` 禁用或重新启用扩展，再 reload；移除使用：
 
@@ -153,7 +153,7 @@ Task 保存目标和当前认知，Pi Session 保存原始交互。你可直接�
 pi remove '<pi list 中的完整来源>' --local
 ```
 
-卸载移除受管 Package 和安装声明；`~/.pi/memory/`（含初始化完成标记）、Pi Session、认证、用户 SYSTEM/APPEND/AGENTS 和共享压缩设置保留。重新安装同版本保留 Rule，加载不同版本自动对齐该版本默认 Rule。可在卸载前重新启动并选择“MemWeave 未启用”恢复全局压缩；已经完全卸载时须自行合并修改有效设置。
+卸载移除受管 Package 和安装声明；`~/.pi/memory/`（含初始化完成标记）、Pi Session、认证、用户 SYSTEM/APPEND/AGENTS 和共享压缩设置保留。重新安装同版本保留 Rule，加载不同版本自动对齐该版本默认 Rule。开发版可在卸载前重新启动并选择“MemWeave 未启用”恢复全局压缩；已经完全卸载时须自行合并修改有效设置。
 
 ## 常见诊断与兼容范围
 
