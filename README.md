@@ -4,7 +4,7 @@ MemWeave 是运行在原生 [Pi](https://github.com/earendil-works/pi) 中的长
 
 ## 安装
 
-当前稳定版：`@godice/memweave@0.1.1`，渠道为 `latest`。**推荐通过 npm 安装。**
+稳定候选：`@godice/memweave@0.1.1`，计划发布到 `latest`，**尚未上传 npm**。当前公网仍为 0.1.0 测试版；以下 0.1.1/稳定渠道说明用于候选，发布状态见[验收记录](https://github.com/godicewang/MemWeave/blob/main/docs/RELEASE_0_1_1_BLOCKERS.md)。**推荐通过 npm 安装。**
 
 需要 **Node.js ≥ 22.19.0**；已支持 **Pi 1.3.0 和 1.4.0**，推荐安装 1.4.0，其他 Pi 版本尚未验证。
 

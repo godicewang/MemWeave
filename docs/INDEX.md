@@ -48,6 +48,7 @@
 | `RESTART_WIRING_PROPOSAL.md` | 已确认的显式命令、轻量定位与新 Goal 恢复接线 |
 | `RESTART_AND_MEMORY_CHECKPOINT_PROPOSAL.md` | 已确认的近期新 Task 与阶段记忆收尾规则 |
 | `RESTART_AND_CHECKPOINT_VALIDATION.md` | 显式命令、种子/恢复、阶段两层验收、双宿主与真实 DeepSeek 验证 |
+| `RELEASE_0_1_1_BLOCKERS.md` | 0.1.1 稳定候选的实际验收、真实模型阻断及待确认的最小提示修复 |
 | `STATE_PERFORMANCE_FIX.md` | 用户授权的有界 State 复用、增量重放、工具约束诊断及验收 |
 | `SOURCE_VERIFICATION.md` | 已批准的有界来源定位缓存、直接比较、按需原生投影及验收 |
 | `SCENARIO_STRESS_VALIDATION_2026-10-25.md` | 当前源码的真实 DeepSeek 多场景/多负载/极限与并发测试，问题分级及改进建议 |
