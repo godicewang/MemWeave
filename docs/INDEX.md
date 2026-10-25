@@ -26,7 +26,8 @@
 | `../发布测试/README.md` | 发布回归入口、功能/兼容/分发矩阵、适配方法与验收记录 |
 | `PACKAGING.md` | npm/Git 分发、宿主依赖、四项副作用及兼容验收 |
 | `STARTUP_MODE_VALIDATION.md` | 启动模式、共享压缩恢复、原生 Session 替换和本机日常 Pi 入口验收 |
-| `CONTEXT_DISPLAY_AUDIT.md` | 当前终端三档负荷、66 万 token 实测、显示偏差及尚未修复问题 |
+| `CONTEXT_DISPLAY_AUDIT.md` | 修复前终端三档负荷、66 万 token 实测与显示偏差历史证据 |
+| `CONTEXT_DISPLAY_VALIDATION.md` | 原生底栏显示上次实际请求用量、双宿主及真实终端复测 |
 | `PI_1_4_VALIDATION.md` | Pi 1.4.0 接口核查、双版本兼容与首版 npm 发布验收 |
 | `GITHUB_PACKAGES_VALIDATION.md` | GitHub 0.1.0 镜像实际发布、原归档一致性与简版主页验收 |
 | `IMPLEMENTATION_PLAN.md` | 当前进度、阶段依赖、交付范围和进入条件 |
