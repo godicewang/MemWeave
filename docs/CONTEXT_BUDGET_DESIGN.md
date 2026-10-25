@@ -1,3 +1,5 @@
+> 2026-10-25 增量确认：本文旧 60% 请求总上限、统一 Q、闲置全给 Window 和活跃回读完整保护由 [ELASTIC_BUDGET_DESIGN.md](ELASTIC_BUDGET_DESIGN.md) 取代。保留基础规划、State 准入、自动 N/B、输出及原有配置兼容。新增 elastic_budget 部分覆盖组；其他契约不变。
+
 # 上下文预算调整（2026-10-23 用户确认）
 
 ## 一、目的、范围与影响

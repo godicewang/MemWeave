@@ -13,6 +13,8 @@
 | `specs/发布与适配/github_packages.md` | 用户确认的 GitHub 镜像包名、原归档一致性、首发与可见性验收 | GitHub Packages 首发 |
 | `specs/发布与适配/pi_version_update.md` | 用户要求新 Pi 适配后的自主执行边界、旧宿主兼容、设计讨论与优化建议 | Pi 版本适配、兼容范围调整与新宿主机制评估 |
 
+2026-10-25 用户确认弹性预算：基础 60%＋额外最多 20%；必需成本后按 40% 回读/40% Window/20% 安全分池，回读超限可截断且不借 Window，固定 Rule 始终提示 offset 续读。当前算法以 Recent Window §5/17 和 ELASTIC_BUDGET_DESIGN.md 为准，取代本文历史统一 Q/60% 总上限描述。
+
 ## 工程文档与已确认接入方式
 
 2026-10-25 用户确认启动模式与本机宿主解耦：同一 Pi 配置目录，TUI 启动选择启用/未启用并显示状态，未启用恢复全局自动压缩且仅保留启动接线；详细行为以 Rule 技术稿 §14 与 PACKAGING.md 启动模式节为准，取代早期对启动框禁用时不恢复压缩的约定。
@@ -41,6 +43,7 @@
 | `SETUP_VALIDATION.md` | 首次 TUI 确认、直接替换 Rule、全局关闭压缩、完成标记和原生 reload 验收 |
 | `CONFIGURATION_PROPOSAL.md` | 已批准的两层配置、策略覆盖、旧配置/模板兼容与权限边界 |
 | `SOURCE_VERIFICATION.md` | 已批准的有界来源定位缓存、直接比较、按需原生投影及验收 |
+| `ELASTIC_BUDGET_DESIGN.md` | 2026-10-25 确认的分池、事件权重、回读截断与配置契约 |
 | `CONTEXT_BUDGET_DESIGN.md` | 已确认 60% 预算、500 条 State、自动窗口与提交准入契约 |
 | `CONTEXT_BUDGET_VALIDATION.md` | Token 校准、实际输出、State 准入、恢复与分发验收 |
 | `AUDIT_FOLLOWUP_VALIDATION.md` | 历史 State 查询、10 条消息回读期限、真实 API Schema 修正及审计遗留问题 |

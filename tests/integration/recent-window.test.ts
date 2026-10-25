@@ -80,8 +80,11 @@ test("native reminders keep complete events, coexist with State reminders, and c
   assert.match(raw, /INVALID_EVIDENCE/);
   assert.doesNotMatch(
     raw,
-    /Recent Window 移出提醒|State 窗口管理|\[TRUNCATED\]/,
+    /Recent Window 移出提醒|State 窗口管理/,
   );
+  // Native system entries persist tool descriptions, including the documented tag spelling.
+  assert.doesNotMatch(JSON.stringify(h.manager.getEntries().filter(e =>
+    e.type === "message" && e.message.role !== "system")), /\[TRUNCATED\]/);
   for (const frame of h.frames) {
     const state = frame.filter(
       (m) => m.role === "custom" && m.customType === "memweave.state",
@@ -250,17 +253,17 @@ test("cancelled model response retains batch; disk reopening retries the same ca
   assert.equal(windowMetadata(b.manager.getBranch())!.pending.length, 0);
   assert.deepEqual(b.diagnostics, []);
 });
-test("fixed costs exceeding half context abort before the provider even when full model capacity would fit", async (t) => {
+test("fixed costs exceeding the 80% peak abort before provider even when the full model would fit", async (t) => {
   const h = await taskSession(t, { verifyCapacity: async () => 100_000 });
   await writeFile(h.paths.rule, "minimal rule {{recent_turns}}");
   h.faux.setResponses([fauxAssistantMessage("must not send")]);
-  await h.session.prompt("x".repeat(60_000));
+  await h.session.prompt("x".repeat(80_000));
   assert.equal(h.faux.state.callCount, 0);
   assert.ok(h.diagnostics.some((d) => d.startsWith("CONTEXT_BUDGET_EXCEEDED")));
   assert.equal(h.frames.length, 0);
   assert.match(
     await readFile(h.manager.getSessionFile()!, "utf8"),
-    new RegExp("x{60000}"),
+    new RegExp("x{80000}"),
   );
 });
 test("memory_read full range survives tool continuation and expires after ten newer messages without changing Session", async (t) => {
@@ -394,7 +397,7 @@ test("conflicting settings and omitted invalid B are rejected; a preparation dis
   assert.equal(failing.faux.state.callCount, 0);
   assert.match(failing.diagnostics.at(-1) ?? "", /SESSION_WRITE_FAILED/);
 });
-test("production Window HTTP retries preserve payload and batch; half-budget cancellation adds no HTTP request", async (t) => {
+test("production Window HTTP retries preserve payload and batch; peak-budget cancellation adds no HTTP request", async (t) => {
   const h = await taskSession(t);
   await writeFile(h.paths.rule, "stable {{recent_turns}}");
   await writeFile(
@@ -468,7 +471,7 @@ test("production Window HTTP retries preserve payload and batch; half-budget can
   await h.session.prompt("next logical request");
   assert.equal(bodies.length, 3);
   assert.match(JSON.stringify(bodies[2]), /changed 4/);
-  await h.session.prompt("x".repeat(60000));
+  await h.session.prompt("x".repeat(80000));
   assert.equal(bodies.length, 3);
   assert.match(h.diagnostics.at(-1) ?? "", /CONTEXT_BUDGET_EXCEEDED/);
 });

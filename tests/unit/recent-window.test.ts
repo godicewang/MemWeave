@@ -133,7 +133,7 @@ test("one Q shared across Unicode text blocks preserves arguments and signatures
     /CONTEXT_BUDGET_EXCEEDED/,
   );
 });
-test("60%-context budget includes output, State, latest user, read exemptions and every message in M", () => {
+test("base budget includes output, State and latest user without assigning unused message quotas", () => {
   const messages = [
     {
       message: { role: "user" as const, content: "latest", timestamp: 1 },
@@ -155,7 +155,8 @@ test("60%-context budget includes output, State, latest user, read exemptions an
   assert.equal(value.M, 1);
   assert.equal(value.U, 11 + 32 + textCost("user"));
   assert.equal(value.X, 0);
-  assert.ok(value.Q > 0);
+  assert.equal(value.allocations[0]!.exempt, true);
+  assert.ok(value.readLimit > 0 && value.windowLimit > 0);
   assert.ok(value.total <= 10000);
   assert.throws(
     () =>
@@ -221,7 +222,7 @@ test("output overrides and protected text signatures remain fixed costs; empty M
     imageCost: () => 0,
   });
   assert.equal(budget.M, 0);
-  assert.equal(budget.Q, 0);
+  assert.equal(budget.allocations.length, 0);
 });
 test("user text and forged read metadata never acquire a full-read grant", () => {
   assert.equal(readGrants(indexEvents([user(1)]), [user(1)]).size, 0);

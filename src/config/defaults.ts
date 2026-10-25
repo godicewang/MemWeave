@@ -15,6 +15,10 @@ export const POLICY_SCHEMA = object({
     state: percent(), window: percent(), output: percent(), system: percent(),
     user: percent(), read: percent(), protocol: percent(), safety: percent(),
   }) }),
+  elastic_budget: object({ extra_model_percent: Type.Number({ minimum: 0, maximum: 20 }),
+    pool_percent: object({ read: percent(), window: percent(), safety: percent() }),
+    window_weights: object({ current: percent(), recent: percent(), older: percent() }),
+    recent_events: integer(), expired_read_percent: percent() }),
   window_auto: object({ min_events: integer(), max_events: integer(), event_step: integer(),
     messages_per_event: integer(), tokens_per_message: integer(), evict_percent: percent() }),
   state_policy: object({ token_warning_percent: percent() }),
@@ -36,10 +40,15 @@ export const percentOf = (total: number, percent: number) => Number(BigInt(total
 export function validateSettings(value: unknown): asserts value is PolicySettings {
   if (!Check(POLICY_SCHEMA, value)) throw Error("INVALID_CONFIG: invalid policy settings");
   const p = value.context_budget.parts_percent;
+  const elastic = value.elastic_budget;
   const percentages = [value.context_budget.model_percent, ...Object.values(p),
+    elastic.extra_model_percent, ...Object.values(elastic.pool_percent),
+    ...Object.values(elastic.window_weights), elastic.expired_read_percent,
     value.window_auto.evict_percent, value.state_policy.token_warning_percent];
   if (percentages.some(n => Math.abs(n * 100 - percentUnits(n)) > 1e-8) ||
       Object.values(p).reduce((sum, n) => sum + percentUnits(n), 0) !== 10000 ||
+      [elastic.pool_percent, elastic.window_weights].some(group =>
+        Object.values(group).reduce((sum, n) => sum + percentUnits(n), 0) !== 10000) ||
       value.window_auto.min_events > value.window_auto.max_events)
     throw Error("INVALID_CONFIG: policy percentages or window bounds");
 }
@@ -60,6 +69,7 @@ export const DEFAULT_STATE = freeze({ state_max_events: document.state_max_event
 export function settingsFor(config?: Partial<PolicySettings>): PolicySettings {
   return Object.freeze({
     context_budget: config?.context_budget ?? DEFAULT_SETTINGS.context_budget,
+    elastic_budget: config?.elastic_budget ?? DEFAULT_SETTINGS.elastic_budget,
     window_auto: config?.window_auto ?? DEFAULT_SETTINGS.window_auto,
     state_policy: config?.state_policy ?? DEFAULT_SETTINGS.state_policy,
     read: config?.read ?? DEFAULT_SETTINGS.read,

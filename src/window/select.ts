@@ -15,6 +15,14 @@ export interface InteractionEvent {
   id: string;
   messages: WindowMessage[];
 }
+/** Assign temporal groups without changing the selected event range or message order. */
+export function eventGroups(events: InteractionEvent[], recentCount: number) {
+  const last = events.at(-1), message = last?.messages[0]?.message,
+    current = message?.role === "assistant" && message.content.some(p => p.type === "toolCall") ? last!.id : undefined,
+    recent = new Set(events.slice(0, current ? -1 : undefined).slice(-recentCount).map(e => e.id));
+  return new Map(events.map(event => [event.id, event.id === current ? "current" as const :
+    recent.has(event.id) ? "recent" as const : "older" as const]));
+}
 /** Native entry identity, never request labels or serialized provider messages, defines events. */
 export function indexEvents(entries: SessionEntry[]): InteractionEvent[] {
   const events: InteractionEvent[] = [];

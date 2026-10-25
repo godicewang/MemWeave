@@ -59,7 +59,7 @@
 - 源代码放在独立的 MemWeave 开发仓库，与业务项目和 Package 安装目录分开。
 - 运行时数据放在 `~/.pi/memory/`，不得写入业务项目仓库。
 - `src/config/defaults.json` 保存包内默认值；可选 `~/.pi/memory/config.json` 保存用户部分覆盖；Session/分支运行时覆盖必须隔离，避免多个 Pi 进程互相覆盖设置。
-- Agent 总预算默认实际调用模型最大上下文的 `floor(C_model * 3 / 5)`，可配置降低但不得超过 60%，包含输入、输出预留及协议开销；Recent Window 缺省 N/B 按模型预算自动计算（最高默认 200/40），已有显式值优先，State 默认 500 个事件、每批管理 100 个，单事件正文 100 字符与最多保留 20 个的既定限制不变。State 规划 12.5%、普通 Window 37.5%、系统/工具 15%；其余比例与精确容量见 Recent Window §14，§5.1，配置见 Rule 技术稿 §3、§12 和 CONFIGURATION_PROPOSAL.md。
+- 基础预算默认实际模型最大上下文的 `floor(C_model * 3 / 5)`，可配置降低但不得超过 60%。2026-10-25 用户确认额外开放最多模型容量的 1/5；先扣必需系统、State、最新用户、协议、输出和基础安全，再将余量按 40% 回读/40% Window/20% 安全分池；回读不借 Window，超池可截断并附 tag。完整公式、事件权重、到期读 10% 子限额及可选配置见 `docs/ELASTIC_BUDGET_DESIGN.md` 和 Recent Window §5/17。State 准入、默认输出、基础安全和自动 N/B 仍按基础预算计算；已有显式 N/B 优先，默认最高 200/40；State 500/100/100/20 不变。固定 Rule 始终说明回读可能截断和 offset 续读，不按发生情况临时追加提醒。
 - `rule.md` 独立维护并在请求准备阶段读取；首次确认初始化及后续包版本变化时以包内默认模板覆盖，版本标记最后提交，同版本重启/reload 不重复覆盖，旧初始化标记兼容迁移。仅支持白名单 `{{variable}}` 替换；禁止 eval、表达式、递归模板，禁止处理用户自己的 SYSTEM/APPEND 文本。
 - 保留 Pi 原生 SYSTEM/APPEND/AGENTS 的发现、信任和优先级，不修改或静默屏蔽用户文件。
 - 请求语义顺序为 Rule → Recent Window → State；末尾 State 同时附预算快照，Window 提醒在它之前。State、预算和提醒是请求级临时内容，不写入 Session、不参与真实交互事件计数。

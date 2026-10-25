@@ -1,3 +1,5 @@
+> 2026-10-25 弹性预算增量：基础 60%＋额外最多 20%，必需成本后 40% 回读/40% Window/20% 安全；取代本文历史 60% 总上限/统一 Q/活跃回读无条件完整保护。当前公式、配置、工具返回截断与固定 Rule 提醒见 [ELASTIC_BUDGET_DESIGN.md](ELASTIC_BUDGET_DESIGN.md)。Task/State/Session 持久化与提交点不变。
+
 # 架构与文件系统
 
 ## 1. 三种位置，严格分开

@@ -30,7 +30,8 @@ test("native request consumes partial policies, hot updates effective budgets, a
   assert.equal(h.budgets.at(-1)!.plan.state, 75000);
   assert.equal(h.budgets.at(-1)!.plan.system, 75000);
   const tail = JSON.stringify(h.frames.at(-1)!.at(-1));
-  assert.match(tail, /总上限 500000 token/);
+  assert.match(tail, /基础 500000 token/);
+  assert.match(tail, /额外 200000，总上限 700000/);
   assert.match(tail, /State 75000（15%）/);
   assert.match(tail, /0.01% 管理线 7/);
   assert.match(tail, /回读期限：3/);
@@ -51,7 +52,7 @@ test("native request consumes partial policies, hot updates effective budgets, a
   h.faux.setResponses([fauxAssistantMessage("hot default restore")]);
   await h.session.prompt("Use defaults for omitted policies");
   assert.equal(observedTimeouts.at(-1), 15000);
-  assert.match(JSON.stringify(h.frames.at(-1)!.at(-1)), /总上限 600000 token/);
+  assert.match(JSON.stringify(h.frames.at(-1)!.at(-1)), /基础 600000 token.*总上限 800000/);
   assert.match(JSON.stringify(h.frames.at(-1)!.at(-1)), /N\/B：12\/2/);
   assert.ok(stateBefore.equals(await readFile(h.paths.state(task))));
   assert.doesNotMatch(await readFile(h.manager.getSessionFile()!, "utf8"), /本次预算快照/);

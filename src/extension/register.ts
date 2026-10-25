@@ -32,6 +32,7 @@ import { MemoryReadSchema } from "../memory/model.ts";
 import { SetWindowSchema } from "../window/model.ts";
 import { StateReadSchema, historyReadRanges } from "../state/read.ts";
 import { WindowService, type WindowOptions } from "../pi/window-service.ts";
+import { READ_TRUNCATION_TAG } from "../window/read-budget.ts";
 import { registerSetup } from "./setup.ts";
 export interface MemweaveOptions extends WindowOptions {
   paths?: MemoryPaths;
@@ -168,17 +169,20 @@ export function registerMemweaveRuntime(
     name: "state_read",
     label: "state_read",
     description:
-      "Read State for task_id without switching Tasks. Omit event_ids for the current State. Supply 1-50 known F/D IDs for active, evicted or archived original entries and evidence; max_total_chars applies only to historical queries, uses the configured default shown in the request snapshot (bundle default 8000), at most 50000, counting body and evidence. Per-item status/truncation is explicit. Does not search or return Session history.",
+      "Read State for task_id without switching Tasks. Omit event_ids for the current State. Supply 1-50 known F/D IDs for active, evicted or archived original entries and evidence; max_total_chars applies only to historical queries, uses the configured default shown in the request snapshot (bundle default 8000), at most 50000, counting body and evidence. Results also share the token read pool shown in the request snapshot; limited body/evidence is flagged with [TRUNCATED]. Use fewer IDs for more detail. Per-item status/truncation is explicit. Does not search or return Session history.",
     parameters: StateReadSchema,
-    async execute(_id, input, signal, _update, ctx) {
+    async execute(id, input, signal, _update, ctx) {
       signal?.throwIfAborted();
-      const value = await tasks.readState(input, ctx);
+      const original = await tasks.readState(input, ctx);
+      const bounded = typeof original === "string" ? undefined : window.boundHistory(original, ctx, id, input);
+      const value = bounded?.value ?? original;
       return {
         content: [
           {
             type: "text" as const,
             text: typeof value === "string" ? value : JSON.stringify(value),
           },
+          ...(bounded?.truncated ? [{ type: "text" as const, text: READ_TRUNCATION_TAG }] : []),
         ],
         details:
           typeof value === "string"
@@ -205,15 +209,17 @@ export function registerMemweaveRuntime(
     name: "memory_read",
     label: "memory_read",
     description:
-      "Read known U/A/T/R originals in order, never search or switch Task. items[].task_id reads an explicit other Task U/A/T and returns a reusable current-Task R. offset/limit use Unicode code points. max_total_chars uses the configured default shown in the request snapshot (bundle default 8000), at most 50000. Failures/completeness are per item. Read attachment R explicitly for supported images, never use character ranges on images.",
+      "Read known U/A/T/R originals in order, never search or switch Task. items[].task_id reads an explicit other Task U/A/T and returns a reusable current-Task R. offset/limit use Unicode code points. max_total_chars uses the configured default shown in the request snapshot (bundle default 8000), at most 50000. Results also share the token read pool shown in the request snapshot; token-limited bodies end with [TRUNCATED]. Continue text using offset/limit. Failures/completeness are per item. Read attachment R explicitly for supported images, never use character ranges on images.",
     parameters: MemoryReadSchema,
     async execute(id, input, signal, _update, ctx) {
       signal?.throwIfAborted();
-      const output = await tasks.readMemory(input, ctx, id);
+      const original = await tasks.readMemory(input, ctx, id);
+      const bounded = window.boundMemory(original, ctx, id, input), output = bounded.value;
       return {
         content: [
           { type: "text" as const, text: JSON.stringify(output.result) },
           ...output.images,
+          ...(bounded.truncated ? [{ type: "text" as const, text: READ_TRUNCATION_TAG }] : []),
         ],
         details: {
           memweave_read: {

@@ -106,7 +106,7 @@ MemWeave 在 Session 启动/恢复及每次请求前检查 `pi.getSettings()` �
 
 编译通过不等于版本兼容。每个宣称支持的版本必须通过 smoke/integration tests。
 
-模型兼容验收还须核验实际容量：Agent 总预算为精确模型容量的 60%（含输出预留），不能仅依赖“1M”等展示名称或过期的宿主目录值。模型切换、容量冲突诊断及最终请求成本按 Recent Window §5.1 验收；不通过时不得静默使用完整模型容量。Recent Window 缺省按模型计算（1M 档 200/40）、State 默认 500/100 的加载与窗口行为在功能测试中覆盖，不因 npm/Git 渠道而改变。
+模型兼容验收还须核验实际容量：基础规划为精确模型容量的 60%，额外最多 20%，实际分池和各层预留见 ELASTIC_BUDGET_DESIGN.md（含输出预留），不能仅依赖“1M”等展示名称或过期的宿主目录值。模型切换、容量冲突诊断及最终请求成本按 Recent Window §5.1 验收；不通过时不得静默使用完整模型容量。Recent Window 缺省按模型计算（1M 档 200/40）、State 默认 500/100 的加载与窗口行为在功能测试中覆盖，不因 npm/Git 渠道而改变。
 
 阶段 0 的历史证据见 `PHASE_0_VALIDATION.md`；阶段 1 已通过累计 45 项常规检查及 2 项独立真实 DeepSeek 测试，证据见 `PHASE_1_VALIDATION.md`。SDK 使用根导出的公开重放函数，避免 v1.3.0 扩展加载器对子路径的别名解析限制；npm 归档与当前代码 Git commit 均已重新加载验证。生产 peer 仅声明实际导入的 coding-agent、pi-ai 和 typebox，不捆绑另一份 SDK。
 

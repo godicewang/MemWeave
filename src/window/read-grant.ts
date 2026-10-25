@@ -5,13 +5,17 @@ import { StateReadSchema, historyReadRanges } from "../state/read.ts";
 import type { InteractionEvent } from "./select.ts";
 import { DEFAULT_SETTINGS } from "../config/defaults.ts";
 /** Raw branch messages determine age; injected context and retries cannot advance it. */
-export function readGrants(
+export function readKinds(
   events: InteractionEvent[],
   entries: SessionEntry[],
   lifetimeMessages = DEFAULT_SETTINGS.read.lifetime_messages,
-): Set<string> {
-  const granted = new Set<string>(),
+) {
+  const granted = new Set<string>(), active = new Set<string>(), expired = new Set<string>(),
     recent = new Set<string>();
+  const accept = (id: string, complete: boolean) => {
+    (recent.has(id) ? active : expired).add(id);
+    if (complete && recent.has(id)) granted.add(id);
+  };
   for (
     let i = entries.length - 1;
     i >= 0 && recent.size < lifetimeMessages;
@@ -26,13 +30,11 @@ export function readGrants(
   }
   for (let i = events.length - 1; i >= 0; i--) {
     const event = events[i]!;
-    if (!event.messages.some((item) => recent.has(item.entryId))) break;
     const assistant = event.messages[0]?.message;
     if (assistant?.role !== "assistant") continue;
     for (const item of event.messages.slice(1)) {
       const result = item.message;
       if (
-        !recent.has(item.entryId) ||
         result.role !== "toolResult" ||
         !["memory_read", "state_read"].includes(result.toolName) ||
         result.isError
@@ -71,11 +73,8 @@ export function readGrants(
           )
             continue;
           if (
-            JSON.stringify(ranges) ===
-              JSON.stringify(marker.memweave_read.ranges) &&
-            ranges.some((r) => r.range_complete)
-          )
-            granted.add(item.entryId);
+            JSON.stringify(ranges) === JSON.stringify(marker.memweave_read.ranges)
+          ) accept(item.entryId, ranges.some((r) => r.range_complete));
           continue;
         }
         if (!Check(MemoryReadSchema, call.arguments)) continue;
@@ -102,12 +101,16 @@ export function readGrants(
           JSON.stringify(ranges) !== JSON.stringify(marker.memweave_read.ranges)
         )
           continue;
-        if (ranges.some((r) => r.status === "ok" && r.range_complete === true))
-          granted.add(item.entryId);
+        accept(item.entryId, ranges.some((r) => r.status === "ok" && r.range_complete === true));
       } catch {
         /* Malformed or untrusted marker never grants an exemption. */
       }
     }
   }
-  return granted;
+  return { active, expired, full: granted };
+}
+
+/** Compatibility helper for callers interested in complete, unexpired original ranges. */
+export function readGrants(events: InteractionEvent[], entries: SessionEntry[], lifetimeMessages = DEFAULT_SETTINGS.read.lifetime_messages) {
+  return readKinds(events, entries, lifetimeMessages).full;
 }

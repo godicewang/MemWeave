@@ -2,7 +2,7 @@
 
 MemWeave 在原生 `pi` 内提供长程任务记忆。你仍使用 Pi 的界面、模型、工具与 Session；扩展管理 Task、结构化认知和请求中的近期窗口。
 
-支持 **Pi v1.3.0 和 v1.4.0**，Node 最低版本为 **22.19.0**；本机测试使用 Node 24.22.0。其他 Pi 版本不在支持范围。真实模型验收使用官方 DeepSeek `deepseek-flash`，精确上下文容量 1,048,576 tokens，MemWeave 默认总预算为其中 60% 即 629,145，包含输出预留。
+支持 **Pi v1.3.0 和 v1.4.0**，Node 最低版本为 **22.19.0**；本机测试使用 Node 24.22.0。其他 Pi 版本不在支持范围。真实模型验收使用官方 DeepSeek `deepseek-flash`，精确上下文容量 1,048,576 tokens，MemWeave 基础规划为其中 60% 即 629,145 token，额外最多开放 20% 即 209,715 token；两者总上限 838,860，包含输出与各项预留。
 
 ## 安装与首次启用
 
@@ -90,7 +90,7 @@ Task 保存目标和当前认知，Pi Session 保存原始交互。你可直接�
 
 跨 Task 的 U/A/T 必须同时提供来源 `task_id`，成功时返回当前 Task 可复用的 R。每项独立报告来源、范围、原件完整性和截断状态。
 
-默认情况下，完整回读结果在其后新增不足 10 条真实消息时保持完整呈现；用户、assistant、每条工具结果各计一条，不计结果本身、system、State 或提醒。第 10 条到来后恢复普通窗口预算；不是 10 轮对话。插话按新用户消息计数，不立即取消保护；重启/分支依据原始记录恢复年龄。结果若已被 Recent Window 正常移出，不会额外常驻；完整呈现仍受 60% 总预算，放不下时取消请求。期限内重复呈现会增加输入量。
+默认回读期限为其后不足 10 条真实消息，用户、assistant、每条工具结果各计一条；不是 10 轮。期限内使用独立回读池，超过池额度仍会截断并在末尾标记 `[TRUNCATED]`；memory_read 可用原引用和 offset/limit 续读，历史 state_read 没有 offset，可减少 event_ids 或字符预算。第 10 条到来后进入普通 Window，全部到期回读合计最多占普通池 10%。回读未用额度不借普通正文；图片只整体保留或显示原件引用。重启/分支按原始记录恢复年龄，被正常移出的结果不会额外常驻；原始 Session 不因展示截断被改写。
 
 追溯已知历史认知用 `state_read`，例如：
 
@@ -145,7 +145,7 @@ pi remove '<pi list 中的完整来源>' --local
 
 普通 SYSTEM/APPEND/AGENTS 的发现、信任与内容保留。原生普通 Bash/read、受控动态工具描述和隐藏声明已测试。第三方扩展**强制整段 system 覆盖**会在 MemWeave hook 后覆盖 Rule，明确不兼容；虚拟路由的受控测试因无法核验容量而取消，尚不支持。自动整理历史、任意 MCP/codemode 组合、第三方 custom 消息、用户 `!` Bash 表示、其他模型图片费用和其他 Pi 版本不在当前验收范围。不能由某个受控组合通过推断任意第三方兼容或固定缓存命中率。
 
-2026-10-23 预算调整：Agent 使用模型总容量的 60%，State 默认 500 条/每批候选 100/正文 100 字符。State 12.5%、Window 37.5%、系统工具 15%、输出 10%、最新输入 5%、完整回读 10%、协议 5%、安全 5%。config.json 省略 N/B 才按模型自动计算，已有显式数值不覆盖。输出上限落实到请求；末尾 State 附实际预算快照。State 达到 token 管理线会提前提醒，超准入预算的增长在提交前拒绝。详见开发仓库 docs/CONTEXT_BUDGET_DESIGN.md。
+2026-10-25 预算调整：先以模型的 60% 计算基础规划、State 准入、默认输出和基础安全，再允许额外最多 20%。扣除实际必需成本后的 F 按 40% 回读、40% 普通 Window、20% 池内安全分配；模型外层至少 20%、基础安全和输出预留均保留。普通正文按当前工具轮/最近 3 个事件/其他事件的 50/35/15 权重按需分配，空组/短内容的闲置在普通组之间回收，不强行填满。State 默认 500/100/100/20、N/B 自动计算和旧显式值不变；末尾预算快照显示实际池与限额。详见开发仓库 docs/ELASTIC_BUDGET_DESIGN.md。
 
 ## 配置参数
 
@@ -156,10 +156,15 @@ pi remove '<pi list 中的完整来源>' --local
 | recent_turns / evict_turns | 自动 | 正整数，B≤N；缺省按模型预算计算 |
 | state_max_events / state_event_max_chars | 500 / 100 | 活动认知条数、每条正文 Unicode 字符上限 |
 | state_evict_batch / state_keep_limit | 100 / 20 | 每批候选数、最多保留数；保留仍受 1/10 比例限制 |
-| context_budget.model_percent | 60 | 占模型容量百分比，可降低但不得超过 60 |
+| context_budget.model_percent | 60 | 基础规划占模型容量百分比，可降低但不得超过 60 |
 | context_budget.parts_percent | 见下表 | 正数，最多两位小数，八项合计 100 |
+| elastic_budget.extra_model_percent | 20 | 额外开放模型容量百分比，0–20；总上限为基础加额外 |
+| elastic_budget.pool_percent | read=40, window=40, safety=20 | 必需成本后剩余的分池比例，正数且和为 100 |
+| elastic_budget.window_weights | current=50, recent=35, older=15 | 普通组按需权重，正数且和为 100 |
+| elastic_budget.recent_events | 3 | 最近组事件数，正整数 |
+| elastic_budget.expired_read_percent | 10 | 全部到期回读合计最多占普通池的百分比，0<值≤100 |
 | window_auto.min_events / max_events / event_step | 20 / 200 / 10 | 自动窗口最小/最大事件数、向下取整步长；min≤max |
-| window_auto.messages_per_event / tokens_per_message | 2 / 256 | 计算自动 N 的规划值，不改变事件定义或实际逐请求 Q |
+| window_auto.messages_per_event / tokens_per_message | 2 / 256 | 计算自动 N 的规划值，不改变事件定义或实际按需配额 |
 | window_auto.evict_percent | 20 | 缺省 B 占有效 N 的百分比，向上取整，0<值≤100 |
 | state_policy.token_warning_percent | 80 | 完整 State 达到规划预算的此百分比时提醒管理 |
 | read.lifetime_messages | 10 | 完整回读保留期限，按其后的真实逐条消息计数 |
@@ -171,8 +176,8 @@ pi remove '<pi list 中的完整来源>' --local
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | 默认百分比 | 12.5 | 37.5 | 10 | 15 | 5 | 10 | 5 | 5 |
 
-自动 N 使用 `floor(C×window%)/(messages_per_event×tokens_per_message)`，向下取整到 event_step 后限制在 min/max；自动 B 按有效 N×evict_percent 向上取整。已有显式 N/B 优先。预算分区整数余数仍归普通 Window，安全/输出不借出，实际成本扣除、State 提交准入和唯一 Q 规则保持一致。
+自动 N 使用 `floor(C×window%)/(messages_per_event×tokens_per_message)`，向下取整到 event_step 后限制在 min/max；自动 B 按有效 N×evict_percent 向上取整。已有显式 N/B 优先。基础规划取整余数仍归基础 Window 规划；实际分池取整余数留在池内安全。安全/输出不借出，State 提交准入不变，不再采用统一 Q。
 
-默认 Rule 增加四个纯数值占位符：`{{agent_context_percent}}`、`{{state_token_warning_percent}}`、`{{read_lifetime_messages}}`、`{{read_default_total_chars}}`，加上原六项共十项；不支持表达式、嵌套配置路径或任意变量。六变量旧模板在原默认策略下仍可用。改变对应策略而旧模板缺少相应占位符时，会报 `RULE_CONFIG_MISMATCH` 并取消；备份后将兼容默认模板合并到独立 `rule.md` 再重试。扩展不会自动覆盖你的模板。仅调整缓存、超时、自动窗口规则或既有六字段，无须因此更新模板。
+默认 Rule 增加四个纯数值占位符：`{{agent_context_percent}}`、`{{state_token_warning_percent}}`、`{{read_lifetime_messages}}`、`{{read_default_total_chars}}`，加上原六项共十项；不支持表达式、嵌套配置路径或任意变量。六变量旧模板在原默认策略下仍可用。改变对应策略而旧模板缺少相应占位符时，会报 `RULE_CONFIG_MISMATCH` 并取消；备份后将兼容默认模板合并到独立 `rule.md` 再重试。首次确认和包版本变化时按初始化规则更新默认 Rule；同版本保留日常编辑。开发源码更新且版本未变时，应将 resources/rule.md 中新的固定预算/回读说明同步到运行时 Rule，保留自己的其他内容。仅调整缓存、超时、自动窗口规则或既有六字段，无须因此更新模板。
 
 配置不是密钥存储：模型/API/认证继续使用 Pi 私有配置。缓存限额变化仅清理本实例的定位缓存；State、Session、原件及当前 Task 不会被配置文件直接删除。

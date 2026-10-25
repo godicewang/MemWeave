@@ -26,6 +26,8 @@ import type { NativeMessage } from "../window/select.ts";
 export interface MemoryReadOutput {
   result: { items: MemoryItem[]; total_chars: number };
   images: ImageContent[];
+  /** Internal result-item positions only; never serialized into the public result. */
+  imageItems?: number[];
 }
 export class MemoryService {
   readonly blobs: BlobStore;
@@ -175,6 +177,7 @@ export class MemoryService {
     if (!Check(MemoryReadSchema, input)) throw Error("INVALID_MEMORY_READ");
     const aliases = await loadAliases(task, this.memory),
       images: ImageContent[] = [],
+      imageItems: number[] = [],
       items: MemoryItem[] = [];
     let remaining = input.max_total_chars ?? defaultChars,
       imageBytes = 0;
@@ -233,6 +236,7 @@ export class MemoryService {
           if (imageBytes + original.bytes > CONFIG_LIMITS.image_bytes)
             throw Error("IMAGE_BUDGET_EXCEEDED");
           images.push(original.image);
+          imageItems.push(items.length - 1);
           imageBytes += original.bytes;
           Object.assign(item, {
             resolved_ref: request.ref,
@@ -331,6 +335,7 @@ export class MemoryService {
         total_chars: (input.max_total_chars ?? defaultChars) - remaining,
       },
       images,
+      imageItems,
     };
   }
 }

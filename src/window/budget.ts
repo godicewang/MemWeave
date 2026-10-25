@@ -1,4 +1,4 @@
-import type { PolicySettings } from "../config/defaults.ts";
+import { settingsFor, percentOf, percentUnits, type PolicySettings } from "../config/defaults.ts";
 import type { NativeMessage } from "./select.ts";
 import { conservativeCounter, type TokenCounter } from "./tokens.ts";
 import { budgetPlan } from "./policy.ts";
@@ -21,6 +21,8 @@ export interface BudgetMessage {
   head: string;
   exempt: boolean;
   read?: boolean;
+  group?: "current" | "recent" | "older" | "expired";
+  event?: string;
 }
 /** Counts transmitted structural content, not local Session/usage/timestamp/details metadata. */
 export function protocolCost(
@@ -53,78 +55,134 @@ export function protocolCost(
     }
   return result;
 }
+/** Bounded integer water filling; saturated/empty demands return their share to peers. */
+export function distribute(capacity: number, demand: number[], weights = demand.map(() => 1)): number[] {
+  const result = demand.map(() => 0);
+  let remaining = capacity;
+  while (remaining > 0) {
+    const active = demand.map((n, i) => n > result[i]! && weights[i]! > 0 ? i : -1).filter(i => i >= 0);
+    if (!active.length) break;
+    const total = active.reduce((n, i) => n + BigInt(weights[i]!), 0n);
+    let spent = 0;
+    for (const i of active) {
+      const share = Number(BigInt(remaining) * BigInt(weights[i]!) / total);
+      const add = Math.min(demand[i]! - result[i]!, share);
+      result[i]! += add;
+      spent += add;
+    }
+    if (!spent) {
+      for (const i of active.slice(0, remaining)) { result[i]!++; spent++; }
+    }
+    remaining -= spent;
+  }
+  return result;
+}
+export interface MessageAllocation {
+  tokens: number;
+  used: number;
+  keepImages: boolean[];
+  forceTag: boolean;
+  exempt: boolean;
+}
+export function renderAllocated(item: BudgetMessage, allocation: MessageAllocation, counter: TokenCounter = conservativeCounter): NativeMessage {
+  const message = structuredClone(item.message);
+  if (Array.isArray(message.content)) {
+    let i = 0;
+    Object.assign(message, { content: message.content.filter(p => p.type !== "image" || allocation.keepImages[i++]) });
+  }
+  return renderMessage(message, item.head, allocation.tokens, allocation.exempt, counter, allocation.forceTag);
+}
 export function allocate(input: {
-  limit: number;
-  system: number;
-  state: number;
-  output: number;
-  reminder: number;
-  messages: BudgetMessage[];
-  imageCost: (image: unknown) => number;
-  counter?: TokenCounter;
-  settings?: PolicySettings;
+  limit: number; // Base only: State admission, output, safety and automatic N/B retain this meaning.
+  capacity?: number; // Verified model capacity; no reconstruction from a rounded base.
+  system: number; state: number; output: number; reminder: number;
+  messages: BudgetMessage[]; imageCost: (image: unknown) => number;
+  counter?: TokenCounter; settings?: PolicySettings;
 }) {
-  const counter = input.counter ?? conservativeCounter,
-    plan = budgetPlan(input.limit, input.settings);
-  const M = input.messages.length,
-    R = input.system,
-    S = input.state,
-    O = input.output,
-    A = plan.safety;
-  let P = input.reminder,
-    U = 0,
-    X = 0;
-  for (const item of input.messages) {
-    const m = item.message,
-      text = counter.count(
-        (item.head ? item.head + "\n" : "") + ordinaryText(m),
-      );
-    let images = 0;
-    if (Array.isArray(m.content))
-      for (const part of m.content)
-        if (part.type === "image") images += input.imageCost(part);
-    const envelope = protocolCost(m, counter);
-    if (item.read) X += text + images + envelope;
-    else if (item.exempt) U += text + images + envelope;
+  const counter = input.counter ?? conservativeCounter, settings = settingsFor(input.settings),
+    policy = settings.elastic_budget, plan = budgetPlan(input.limit, settings);
+  if (input.capacity !== undefined && (!Number.isSafeInteger(input.capacity) || input.capacity < 2 ||
+    percentOf(input.capacity, settings.context_budget.model_percent) !== input.limit)) throw budgetError();
+  const extra = input.capacity === undefined ? 0 : percentOf(input.capacity, policy.extra_model_percent),
+    peak = input.limit + extra, R = input.system, S = input.state, O = input.output, A = plan.safety;
+  let P = input.reminder, U = 0;
+  const data = input.messages.map(item => {
+    const lead = item.head ? item.head + "\n" : "", text = counter.count(lead + ordinaryText(item.message)),
+      imageCosts = Array.isArray(item.message.content) ? item.message.content.filter(p => p.type === "image").map(input.imageCost) : [],
+      images = imageCosts.reduce((n, v) => n + v, 0), envelope = protocolCost(item.message, counter),
+      minimum = Math.min(text, counter.count(lead + tag));
+    if (item.exempt && !item.read) U += text + images + envelope;
     else {
       P += envelope;
-      if (images) throw Error("UNREFERENCED_WINDOW_IMAGE");
+      if (!item.read && images) throw Error("UNREFERENCED_WINDOW_IMAGE");
     }
-  }
-  const H = P + A,
-    fixed = R + S + O + H + U + X;
-  if (
-    !Number.isSafeInteger(fixed) ||
-    fixed > input.limit ||
-    [R, S, O, P, A, U, X].some((n) => !Number.isSafeInteger(n) || n < 0)
-  )
-    throw budgetError();
-  const Q = M ? Math.floor((input.limit - fixed) / M) : 0;
-  for (const item of input.messages)
-    if (!item.exempt) {
-      const lead = item.head ? item.head + "\n" : "";
-      if (
-        counter.count(lead + ordinaryText(item.message)) > Q &&
-        counter.count(lead + tag) > Q
-      )
-        throw budgetError();
-    }
-  return Object.freeze({
-    R,
-    S,
-    O,
-    P,
-    A,
-    H,
-    U,
-    X,
-    M,
-    Q,
-    total: fixed + M * Q,
-    limit: input.limit,
-    plan,
-    estimator: counter.estimator,
+    return { text, imageCosts, images, minimum: images ? counter.count(lead + tag) : minimum,
+      demand: images ? Math.max(text, counter.count(lead + tag)) + images : text };
   });
+  const K = R + S + U + P + O + A;
+  if (![input.limit, peak, K, R, S, U, P, O, A, ...data.flatMap(d => [d.text, ...d.imageCosts])]
+    .every(n => Number.isSafeInteger(n) && n >= 0) || K > peak) throw budgetError();
+  const F = peak - K, readLimit = percentOf(F, policy.pool_percent.read),
+    windowLimit = percentOf(F, policy.pool_percent.window), poolSafety = F - readLimit - windowLimit,
+    expiredLimit = percentOf(windowLimit, policy.expired_read_percent), quotas = data.map(() => 0);
+  const indices = input.messages.map((_, i) => i),
+    reads = indices.filter(i => input.messages[i]!.read),
+    expired = indices.filter(i => !input.messages[i]!.exempt && !input.messages[i]!.read && input.messages[i]!.group === "expired"),
+    ordinary = indices.filter(i => !input.messages[i]!.exempt && !input.messages[i]!.read && input.messages[i]!.group !== "expired");
+  const sum = (ids: number[], field: "demand" | "minimum") => ids.reduce((n, i) => n + data[i]![field], 0);
+  // First retain each reference/tag, then share within events and messages. No preliminary rendering pass.
+  function assign(ids: number[], capacity: number) {
+    const minimum = sum(ids, "minimum");
+    if (!Number.isSafeInteger(minimum) || minimum > capacity) throw budgetError();
+    const events = new Map<string, number[]>();
+    for (const i of ids) {
+      quotas[i] = data[i]!.minimum;
+      const key = input.messages[i]!.event ?? String(i);
+      events.set(key, [...(events.get(key) ?? []), i]);
+    }
+    const groups = [...events.values()], demands = groups.map(group => sum(group, "demand") - sum(group, "minimum"));
+    const allocations = distribute(capacity - minimum, demands);
+    groups.forEach((group, j) => {
+      const perMessage = distribute(allocations[j]!, group.map(i => data[i]!.demand - data[i]!.minimum));
+      group.forEach((i, k) => { quotas[i]! += perMessage[k]!; });
+    });
+  }
+  assign(reads, readLimit);
+  assign(expired, Math.min(expiredLimit, sum(expired, "demand")));
+  const expiredQuota = expired.reduce((n, i) => n + quotas[i]!, 0), available = windowLimit - expiredQuota,
+    keys = ["current", "recent", "older"] as const,
+    groups = keys.map(key => ordinary.filter(i => (input.messages[i]!.group ?? "older") === key)),
+    minima = groups.map(ids => sum(ids, "minimum")), minTotal = minima.reduce((n, v) => n + v, 0);
+  if (!Number.isSafeInteger(minTotal) || minTotal > available) throw budgetError();
+  const shares = distribute(available - minTotal, groups.map((ids, i) => sum(ids, "demand") - minima[i]!),
+    keys.map(key => percentUnits(policy.window_weights[key])));
+  groups.forEach((ids, i) => assign(ids, minima[i]! + shares[i]!));
+  const allocations: MessageAllocation[] = data.map((d, i) => {
+    const item = input.messages[i]!, exempt = item.exempt && !item.read;
+    if (exempt) return { tokens: d.text, used: d.text + d.images, keepImages: d.imageCosts.map(() => true), forceTag: false, exempt: true };
+    let remaining = quotas[i]!;
+    const keepImages = d.imageCosts.map(cost => {
+      if (cost > remaining - d.minimum) return false;
+      remaining -= cost;
+      return true;
+    });
+    return { tokens: remaining, used: 0, keepImages, forceTag: keepImages.some(keep => !keep), exempt: false };
+  });
+  let X = 0, windowUsed = 0, expiredUsed = 0;
+  input.messages.forEach((item, i) => {
+    if (allocations[i]!.exempt) return;
+    const shown = renderAllocated(item, allocations[i]!, counter),
+      used = counter.count(ordinaryText(shown)) + data[i]!.imageCosts.reduce((n, cost, j) => n + (allocations[i]!.keepImages[j] ? cost : 0), 0);
+    allocations[i]!.used = used;
+    if (item.read) X += used;
+    else { windowUsed += used; if (item.group === "expired") expiredUsed += used; }
+  });
+  if (X > readLimit || windowUsed > windowLimit || expiredUsed > expiredLimit) throw budgetError();
+  allocations.forEach(value => { Object.freeze(value.keepImages); Object.freeze(value); });
+  return Object.freeze({ R, S, O, P, A, H: P + A, U, X, M: input.messages.length,
+    allocations: Object.freeze(allocations), K, F, extra, peak, readLimit, windowLimit, poolSafety,
+    windowUsed, expiredLimit, expiredUsed,
+    total: K + X + windowUsed, limit: input.limit, plan, estimator: counter.estimator });
 }
 /** Search at code-point boundaries and verify the result; BPE prefix counts need not be monotone. */
 function fit(
@@ -156,10 +214,11 @@ export function renderMessage<T extends NativeMessage>(
   Q: number,
   exempt: boolean,
   counter: TokenCounter = conservativeCounter,
+  forceTag = false,
 ): T {
   const lead = head ? head + "\n" : "",
     body = ordinaryText(message),
-    truncated = !exempt && counter.count(lead + body) > Q;
+    truncated = !exempt && (forceTag || counter.count(lead + body) > Q);
   const shown = truncated ? fit(body, lead, tag, Q, counter) : body;
   const copy = structuredClone(message);
   if (typeof copy.content === "string")

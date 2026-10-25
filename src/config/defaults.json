@@ -16,6 +16,13 @@
       "safety": 5
     }
   },
+  "elastic_budget": {
+    "extra_model_percent": 20,
+    "pool_percent": { "read": 40, "window": 40, "safety": 20 },
+    "window_weights": { "current": 50, "recent": 35, "older": 15 },
+    "recent_events": 3,
+    "expired_read_percent": 10
+  },
   "window_auto": {
     "min_events": 20,
     "max_events": 200,
