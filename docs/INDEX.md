@@ -44,6 +44,8 @@
 | `CONFIGURATION_VALIDATION.md` | 两层配置、策略生效、真实 API 与分发验收 |
 | `SETUP_VALIDATION.md` | 首次 TUI 确认、直接替换 Rule、全局关闭压缩、完成标记和原生 reload 验收 |
 | `CONFIGURATION_PROPOSAL.md` | 已批准的两层配置、策略覆盖、旧配置/模板兼容与权限边界 |
+| `REQUEST_PRIORITY_PERFORMANCE.md` | 最新真实用户要求定位、请求内计数复用和验收 |
+| `RESTART_AND_MEMORY_CHECKPOINT_PROPOSAL.md` | 近期历史新 Task 冷启动与阶段记忆闭环的待确认方案 |
 | `STATE_PERFORMANCE_FIX.md` | 用户授权的有界 State 复用、增量重放、工具约束诊断及验收 |
 | `SOURCE_VERIFICATION.md` | 已批准的有界来源定位缓存、直接比较、按需原生投影及验收 |
 | `SCENARIO_STRESS_VALIDATION_2026-10-25.md` | 当前源码的真实 DeepSeek 多场景/多负载/极限与并发测试，问题分级及改进建议 |

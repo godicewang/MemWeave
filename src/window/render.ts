@@ -1,5 +1,8 @@
 import type { RequestMessages } from "../pi/request-lifecycle.ts";
 import type { WindowMetadata } from "./model.ts";
+export const CURRENT_USER_MARKER = "[CURRENT_USER_MESSAGE]";
+export const CURRENT_USER_HEAD = CURRENT_USER_MARKER + "\n"
+  + "Latest real user request: supersede conflicting earlier user requests; compatible requirements still apply.";
 export function windowReminder(
   pending: WindowMetadata["pending"],
   boundary: string,

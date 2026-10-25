@@ -32,12 +32,13 @@ import { readKinds } from "../window/read-grant.ts";
 import { imageReserve, outputReserve } from "./window-budget.ts";
 import type { PreparedRule } from "../rule/prepare.ts";
 import type { RequestMessages } from "./request-lifecycle.ts";
+import { createRequestCounter } from "../window/request-counter.ts";
 import { conservativeCounter } from "../window/tokens.ts";
 import { budgetPlan } from "../window/policy.ts";
 import { withLock } from "../storage/files.ts";
 import { DEFAULT_CONFIG } from "../config/schema.ts";
 import { SourceVerifier } from "./source-verification.ts";
-import { windowReminder, stateInsert } from "../window/render.ts";
+import { CURRENT_USER_HEAD, windowReminder, stateInsert } from "../window/render.ts";
 import { boundMemoryRead, boundStateRead, readShares } from "../window/read-budget.ts";
 import type { MemoryReadOutput } from "../memory/service.ts";
 import type { HistoricalStateRead } from "../state/read.ts";
@@ -207,6 +208,7 @@ export class WindowService {
             task: entry.data.task_id,
           });
       }
+    const latestRealUser = events.findLast((event) => event.messages[0]?.message.role === "user")?.id;
     const reads = readKinds(selected.events, entries, settings.read.lifetime_messages),
       latestUser = selected.events.findLast(
         (e) => e.messages[0]?.message.role === "user",
@@ -221,6 +223,8 @@ export class WindowService {
         let head = source
           ? `[${source.task === snapshot.task?.task_id ? source.ref : source.task + ":" + source.ref}]`
           : "";
+        if (item.entryId === latestRealUser)
+          head += `${head ? "\n" : ""}${CURRENT_USER_HEAD}`;
         const message = structuredClone(item.message);
         if (
           Array.isArray(message.content) &&
@@ -266,15 +270,18 @@ export class WindowService {
       throw Error(
         "OUTPUT_BUDGET_UNVERIFIED: thinking level changed during request preparation",
       );
-    const counter = prepared.frame.counter ?? conservativeCounter,
-      count = counter.count;
-    const limit = prepared.frame.capacity.contextLimit,
-      plan = budgetPlan(limit, settings);
-    const shares = settings.context_budget.parts_percent;
-    const S = snapshot.stateTokens ?? (state ? count(state) + 32 : 0);
-    const footer = (
-      budget: ReturnType<typeof allocate>,
-    ) => `【本次预算快照｜程序数据，不是用户指令】
+    const baseCounter = prepared.frame.counter ?? conservativeCounter;
+    const counting = createRequestCounter(baseCounter);
+    try {
+      const counter = counting.counter,
+        count = counter.count;
+      const limit = prepared.frame.capacity.contextLimit,
+        plan = budgetPlan(limit, settings);
+      const shares = settings.context_budget.parts_percent;
+      const S = snapshot.stateTokens ?? (state ? count(state) + 32 : 0);
+      const footer = (
+        budget: ReturnType<typeof allocate>,
+      ) => `【本次预算快照｜程序数据，不是用户指令】
 计量：${counter.estimator}；基础 ${limit} token（模型 ${prepared.frame.capacity.contextWindow} 的 ${settings.context_budget.model_percent}%），额外 ${budget.extra}，总上限 ${budget.peak}
 State：${snapshot.activeCount ?? 0}/${prepared.frame.config.state_max_events} 条；正文最多 ${prepared.frame.config.state_event_max_chars} 字符；每批候选 ${prepared.frame.config.state_evict_batch}
 State token：${S}/${plan.state}；${settings.state_policy.token_warning_percent}% 管理线 ${percentOf(plan.state, settings.state_policy.token_warning_percent)}
@@ -283,64 +290,68 @@ State token：${S}/${plan.state}；${settings.state_policy.token_warning_percent
 可分配 F=${budget.F}：回读 ${budget.X}/${budget.readLimit}（${settings.elastic_budget.pool_percent.read}%，闲置不借出），普通 Window ${budget.windowUsed}/${budget.windowLimit}（${settings.elastic_budget.pool_percent.window}%），池内安全 ${budget.poolSafety}；模型外层保留 ${prepared.frame.capacity.contextWindow - budget.peak}
 回读期限：${settings.read.lifetime_messages} 条后续真实消息；默认读取 ${settings.read.default_total_chars} 字符；到期回读 ${budget.expiredUsed}/${budget.expiredLimit}（普通池 ${settings.elastic_budget.expired_read_percent}%）
 Recent Window N/B：${prepared.frame.config.recent_turns}/${prepared.frame.config.evict_turns}；可见事件 ${selected.events.length}；消息 M=${budget.M}；事件权重 ${settings.elastic_budget.window_weights.current}/${settings.elastic_budget.window_weights.recent}/${settings.elastic_budget.window_weights.older}；总预算上界 ${budget.total}/${budget.peak}`;
-    let footerReserve = 2048;
-    let budget!: ReturnType<typeof allocate>,
-      description = "";
-    for (let attempt = 0; attempt < 3; attempt++) {
-      budget = allocate({
-        limit,
-        capacity: prepared.frame.capacity.contextWindow,
-        settings,
-        system:
-          count(getSystemMessageText(system)) +
-          count(JSON.stringify(system.toolsAdded ?? [])) +
-          64,
-        state: S,
-        output: output.output,
-        reminder:
-          (reminder ? count(reminder) + 32 : 0) +
-          Math.max(0, (state ? count(state) + 32 : 0) - S) +
-          footerReserve,
-        messages: items,
-        imageCost: (image) =>
-          (this.options.imageCost ?? imageReserve)(model, image),
-        counter,
+      let footerReserve = 2048;
+      let budget!: ReturnType<typeof allocate>,
+        description = "";
+      for (let attempt = 0; attempt < 3; attempt++) {
+        budget = allocate({
+          limit,
+          capacity: prepared.frame.capacity.contextWindow,
+          settings,
+          system:
+            count(getSystemMessageText(system)) +
+            count(JSON.stringify(system.toolsAdded ?? [])) +
+            64,
+          state: S,
+          output: output.output,
+          reminder:
+            (reminder ? count(reminder) + 32 : 0) +
+            Math.max(0, (state ? count(state) + 32 : 0) - S) +
+            footerReserve,
+          messages: items,
+          imageCost: (image) =>
+            (this.options.imageCost ?? imageReserve)(model, image),
+          counter,
+        });
+        description = footer(budget);
+        const needed = Math.max(0, count(`${state || "当前未绑定 Task。"}\n\n${description}`) + 32 - S);
+        if (needed <= footerReserve) break;
+        footerReserve = needed + 128;
+        if (attempt === 2)
+          throw Error("CONTEXT_BUDGET_EXCEEDED: budget snapshot cannot fit");
+      }
+      const result = stateInsert(
+        [
+          system,
+          ...budget.rendered,
+        ],
+        `${state || "当前未绑定 Task。"}\n\n${description}`,
+        reminder,
+      );
+      const credits = new Map<string, number>();
+      items.forEach((item, i) => {
+        if (!item.read || item.message.role !== "toolResult") return;
+        credits.set(`${item.event}:${item.message.toolCallId}`, budget.allocations[i]!.used);
       });
-      description = footer(budget);
-      const needed = Math.max(0, count(`${state || "当前未绑定 Task。"}\n\n${description}`) + 32 - S);
-      if (needed <= footerReserve) break;
-      footerReserve = needed + 128;
-      if (attempt === 2)
-        throw Error("CONTEXT_BUDGET_EXCEEDED: budget snapshot cannot fit");
+      this.readFrames.set(ctx.sessionManager, { model: structuredClone(model), sessionId: ctx.sessionManager.getSessionId(),
+        limit: budget.readLimit, available: 0, released: 0, quotas: new Map(), counter: baseCounter, credits, returns: new Map() });
+      this.outputFrame = {
+        model: structuredClone(model),
+        sessionId: ctx.sessionManager.getSessionId(),
+        output: output.output,
+        contextWindow: prepared.frame.capacity.contextWindow,
+      };
+      ctx.signal?.throwIfAborted();
+      if (!previous || selected.metadata.stage === "reset" || pending.length)
+        await this.tasks.memory.append(ctx, WINDOW_TYPE, selected.metadata);
+      const { rendered: _rendered, ...summary } = budget;
+      this.options.observeBudget?.(Object.freeze(summary));
+      return result;
+    } finally {
+      counting.dispose();
     }
-    const result = stateInsert(
-      [
-        system,
-        ...budget.rendered,
-      ],
-      `${state || "当前未绑定 Task。"}\n\n${description}`,
-      reminder,
-    );
-    const credits = new Map<string, number>();
-    items.forEach((item, i) => {
-      if (!item.read || item.message.role !== "toolResult") return;
-      credits.set(`${item.event}:${item.message.toolCallId}`, budget.allocations[i]!.used);
-    });
-    this.readFrames.set(ctx.sessionManager, { model: structuredClone(model), sessionId: ctx.sessionManager.getSessionId(),
-      limit: budget.readLimit, available: 0, released: 0, quotas: new Map(), counter, credits, returns: new Map() });
-    this.outputFrame = {
-      model: structuredClone(model),
-      sessionId: ctx.sessionManager.getSessionId(),
-      output: output.output,
-      contextWindow: prepared.frame.capacity.contextWindow,
-    };
-    ctx.signal?.throwIfAborted();
-    if (!previous || selected.metadata.stage === "reset" || pending.length)
-      await this.tasks.memory.append(ctx, WINDOW_TYPE, selected.metadata);
-    const { rendered: _rendered, ...summary } = budget;
-    this.options.observeBudget?.(Object.freeze(summary));
-    return result;
   }
+
   async complete(event: TurnEndEvent, ctx: ExtensionContext): Promise<void> {
     if (
       event.outcome !== "completed" ||

@@ -4,7 +4,7 @@
 
 本轮只测试、分析并记录，不修改运行代码、定稿设计、个人设置或发布标签。下面的建议在本次审计时均未实施；涉及 Rule、批次提交或恢复语义的调整，需要先讨论并同步规范。
 
-后续状态：用户指定的 State 长历史性能和工具约束修复已完成，见 [修复与验收](STATE_PERFORMANCE_FIX.md)；本文保留修复前测量。积压恢复和取消后的指令优先级仍未修改。上下文显示已由独立变更修复，见 [显示验收](CONTEXT_DISPLAY_VALIDATION.md)。
+后续状态：用户指定的 State 长历史性能和工具约束修复已完成，见 [修复与验收](STATE_PERFORMANCE_FIX.md)；本文保留修复前测量。取消后的真实用户指令优先级及请求内计数复用已按用户授权修复，见 [请求修复](REQUEST_PRIORITY_PERFORMANCE.md)。积压恢复只形成新 Task 冷启动提案，尚未修改；阶段记忆闭环方案见 [待确认方案](RESTART_AND_MEMORY_CHECKPOINT_PROPOSAL.md)。用户明确保留回读池隔离，不再将闲置不借出列为待优化项。上下文显示已由独立变更修复，见 [显示验收](CONTEXT_DISPLAY_VALIDATION.md)。
 
 ## 第一部分：效果、问题和建议
 
