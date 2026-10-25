@@ -9,6 +9,8 @@ import {
   activeEntries,
   type UpdateGoalInput,
   reduceState,
+  extendState,
+  cloneState,
   renderState,
   type State,
   type StateEvent,
@@ -19,12 +21,19 @@ import { atomicWrite, readOptional } from "../storage/files.ts";
 import { now, stableId } from "../storage/identity.ts";
 import type { MemoryPaths, TaskLocation } from "../storage/paths.ts";
 import type { StateGuard } from "./budget.ts";
+import { assertStateContent } from "./content.ts";
+import {
+  SnapshotCache,
+  stateSnapshot,
+  type StateSnapshot,
+} from "./snapshot-cache.ts";
 type EvidenceReferences = Set<string> | (() => Promise<Set<string>>);
 const resolveReferences = (refs: EvidenceReferences) =>
   typeof refs === "function" ? refs() : Promise.resolve(refs);
 /** Mutations require the caller to hold the Task write lock. */
 export class StateStore {
   readonly paths: MemoryPaths;
+  private readonly snapshots = new SnapshotCache();
   constructor(paths: MemoryPaths) {
     this.paths = paths;
   }
@@ -32,26 +41,59 @@ export class StateStore {
     try {
       await atomicWrite(this.paths.state(task), bytes);
     } catch (error) {
+      this.snapshots.delete(this.paths.state(task));
       throw Error(
         `STATE_WRITE_FAILED: ${task.task_id}; ${error instanceof Error ? error.message : "unknown write failure"}`,
       );
     }
   }
-  async read(task: TaskLocation): Promise<State> {
-    const bytes = await readOptional(this.paths.state(task));
-    if (bytes === undefined) throw Error(`STATE_MISSING: ${task.task_id}`);
-    if (!bytes.endsWith("\n"))
-      throw Error(`CORRUPT_STATE: incomplete JSONL for ${task.task_id}`);
+  private async load(task: TaskLocation): Promise<StateSnapshot> {
+    const file = this.paths.state(task);
     try {
-      return reduceState(
-        bytes
-          .trimEnd()
-          .split("\n")
-          .map((line) => JSON.parse(line) as unknown),
-      );
-    } catch {
-      throw Error(`CORRUPT_STATE: ${task.task_id}`);
+      const bytes = await readOptional(file);
+      if (bytes === undefined) throw Error(`STATE_MISSING: ${task.task_id}`);
+      if (!bytes.endsWith("\n"))
+        throw Error(`CORRUPT_STATE: incomplete JSONL for ${task.task_id}`);
+      const cached = this.snapshots.get(file);
+      if (cached?.bytes === bytes) return cached;
+      let state: State;
+      try {
+        const parse = (text: string): unknown[] => text.trimEnd().split("\n")
+          .map((line) => JSON.parse(line) as unknown);
+        state = cached?.appendable && bytes.startsWith(cached.bytes)
+          && bytes.slice(cached.bytes.length).trimEnd() !== ""
+          ? extendState(cached.state, parse(bytes.slice(cached.bytes.length)))
+          : reduceState(parse(bytes));
+      } catch {
+        throw Error(`CORRUPT_STATE: ${task.task_id}`);
+      }
+      const snapshot = stateSnapshot(bytes, state);
+      this.snapshots.set(file, snapshot);
+      return snapshot;
+    } catch (error) {
+      this.snapshots.delete(file);
+      throw error;
     }
+  }
+  async read(task: TaskLocation): Promise<State> {
+    return cloneState((await this.load(task)).state);
+  }
+  private async save(
+    task: TaskLocation,
+    old: StateSnapshot,
+    events: StateEvent[],
+    guard?: StateGuard,
+  ): Promise<State> {
+    const next = extendState(old.state, events);
+    // Admission is a validator; neither its arguments nor returned States expose cached objects.
+    await guard?.(task, cloneState(next), cloneState(old.state));
+    const bytes = old.bytes + next.events.slice(old.state.version)
+      .map((event) => JSON.stringify(event) + "\n").join("");
+    await this.commit(task, bytes);
+    if (old.appendable)
+      this.snapshots.set(this.paths.state(task), stateSnapshot(bytes, next, old));
+    else this.snapshots.delete(this.paths.state(task));
+    return cloneState(next);
   }
   async initialize(
     task: TaskLocation,
@@ -74,9 +116,11 @@ export class StateStore {
       evidence: {},
     };
     const state = reduceState([event]);
-    await guard?.(task, state);
-    await this.commit(task, JSON.stringify(event) + "\n");
-    return state;
+    await guard?.(task, cloneState(state));
+    const bytes = JSON.stringify(event) + "\n";
+    await this.commit(task, bytes);
+    this.snapshots.set(this.paths.state(task), stateSnapshot(bytes, state));
+    return cloneState(state);
   }
   async append(
     task: TaskLocation,
@@ -87,15 +131,12 @@ export class StateStore {
     guard?: StateGuard,
   ): Promise<State> {
     if (!Check(AppendSchema, { items })) throw Error("INVALID_STATE_APPEND");
-    const state = await this.read(task),
+    const snapshot = await this.load(task),
+      state = snapshot.state,
       ids = items.map((_, i) => stableId(operation, i));
-    const found = ids.map((id) => state.events.find((e) => e.op_id === id));
+    const found = ids.map((id) => snapshot.operations.get(id));
     if (found.every(Boolean)) {
-      if (
-        state.events.some(
-          (event) => event.op_id === stableId(operation, items.length),
-        )
-      )
+      if (snapshot.operations.has(stableId(operation, items.length)))
         throw Error("OPERATION_INPUT_MISMATCH");
       for (let i = 0; i < items.length; i++) {
         const item = items[i]!,
@@ -112,7 +153,7 @@ export class StateStore {
         )
           throw Error("OPERATION_INPUT_MISMATCH");
       }
-      return state;
+      return cloneState(state);
     }
     if (found.some(Boolean))
       throw Error("CORRUPT_STATE: partially committed batch");
@@ -124,8 +165,7 @@ export class StateStore {
       d = state.decisionCount;
     const events: StateEvent[] = [];
     for (const [i, item] of items.entries()) {
-      if ([...item.content].length > maxChars)
-        throw Error("STATE_CONTENT_TOO_LONG");
+      assertStateContent(item.content, maxChars, `items[${i}].content`);
       for (const ref of Object.keys(item.evidence))
         if (!evidence.has(ref)) throw Error(`INVALID_EVIDENCE: ${ref}`);
       const base = { op_id: ids[i]!, time: now(), evidence: item.evidence };
@@ -140,14 +180,7 @@ export class StateStore {
             },
       );
     }
-    const bytes = (await readOptional(this.paths.state(task)))!;
-    const result = reduceState([...state.events, ...events]);
-    await guard?.(task, result, state);
-    await this.commit(
-      task,
-      bytes + events.map((e) => JSON.stringify(e) + "\n").join(""),
-    );
-    return result;
+    return this.save(task, snapshot, events, guard);
   }
   async updateGoal(
     task: TaskLocation,
@@ -158,8 +191,9 @@ export class StateStore {
     guard?: StateGuard,
   ): Promise<State> {
     if (!Check(UpdateGoalSchema, input)) throw Error("INVALID_UPDATE_GOAL");
-    const state = await this.read(task),
-      previous = state.events.find((e) => e.op_id === operation);
+    const snapshot = await this.load(task),
+      state = snapshot.state,
+      previous = snapshot.operations.get(operation);
     if (previous) {
       if (
         previous.op !== "update_goal" ||
@@ -167,10 +201,9 @@ export class StateStore {
         !isDeepStrictEqual(previous.evidence, input.evidence)
       )
         throw Error("OPERATION_INPUT_MISMATCH");
-      return state;
+      return cloneState(state);
     }
-    if ([...input.goal].length > maxChars)
-      throw Error("STATE_CONTENT_TOO_LONG");
+    assertStateContent(input.goal, maxChars, "update_goal.goal");
     const known = new Set([
       ...(await resolveReferences(refs)),
       ...state.entries.keys(),
@@ -184,11 +217,7 @@ export class StateStore {
       goal: input.goal,
       evidence: input.evidence,
     };
-    const result = reduceState([...state.events, event]),
-      bytes = (await readOptional(this.paths.state(task)))!;
-    await guard?.(task, result, state);
-    await this.commit(task, bytes + JSON.stringify(event) + "\n");
-    return result;
+    return this.save(task, snapshot, [event], guard);
   }
   async modifyFact(
     task: TaskLocation,
@@ -199,8 +228,9 @@ export class StateStore {
     guard?: StateGuard,
   ): Promise<State> {
     if (!Check(ModifyFactSchema, input)) throw Error("INVALID_MODIFY_FACT");
-    const state = await this.read(task),
-      previous = state.events.find((e) => e.op_id === operation);
+    const snapshot = await this.load(task),
+      state = snapshot.state,
+      previous = snapshot.operations.get(operation);
     if (previous) {
       if (
         previous.op !== "modify_fact" ||
@@ -211,15 +241,14 @@ export class StateStore {
         !isDeepStrictEqual(previous.append_fact, input.append_fact)
       )
         throw Error("OPERATION_INPUT_MISMATCH");
-      return state;
+      return cloneState(state);
     }
     for (const id of input.archive) {
       const entry = state.entries.get(id);
       if (!entry) throw Error(`UNKNOWN_STATE_ID: ${id}`);
       if (entry.archived) throw Error(`ALREADY_ARCHIVED: ${id}`);
     }
-    if ([...input.append_fact.content].length > maxChars)
-      throw Error("STATE_CONTENT_TOO_LONG");
+    assertStateContent(input.append_fact.content, maxChars, "modify_fact.append_fact.content");
     const known = new Set([
       ...(await resolveReferences(refs)),
       ...state.entries.keys(),
@@ -233,11 +262,7 @@ export class StateStore {
       archive: input.archive,
       append_fact: input.append_fact,
     };
-    const result = reduceState([...state.events, event]),
-      bytes = (await readOptional(this.paths.state(task)))!;
-    await guard?.(task, result, state);
-    await this.commit(task, bytes + JSON.stringify(event) + "\n");
-    return result;
+    return this.save(task, snapshot, [event], guard);
   }
   async remain(
     task: TaskLocation,
@@ -251,17 +276,16 @@ export class StateStore {
       batch.task_id !== task.task_id
     )
       throw Error("INVALID_STATE_REMAIN");
-    const state = await this.read(task),
+    const snapshot = await this.load(task),
+      state = snapshot.state,
       selected = new Set(eventIds);
-    const previous = state.events.find((e) => e.op_id === operation);
+    const previous = snapshot.operations.get(operation);
     if (
       previous &&
       (previous.op !== "slide_window" || previous.batch_id !== batch.batch_id)
     )
       throw Error("OPERATION_INPUT_MISMATCH");
-    const committed = state.events.find(
-      (e) => e.op === "slide_window" && e.batch_id === batch.batch_id,
-    );
+    const committed = snapshot.batches.get(batch.batch_id);
     if (committed?.op === "slide_window") {
       if (
         !isDeepStrictEqual(
@@ -272,7 +296,7 @@ export class StateStore {
         throw Error(
           "STATE_BATCH_ALREADY_COMMITTED: different retention decision; refresh State",
         );
-      return state;
+      return cloneState(state);
     }
     if (eventIds.length > batch.keep_limit)
       throw Error("STATE_KEEP_LIMIT_EXCEEDED");
@@ -301,10 +325,7 @@ export class StateStore {
       retained_ids: batch.candidate_ids.filter((id) => selected.has(id)),
       status: "committed",
     };
-    const result = reduceState([...state.events, event]),
-      bytes = (await readOptional(this.paths.state(task)))!;
-    await this.commit(task, bytes + JSON.stringify(event) + "\n");
-    return result;
+    return this.save(task, snapshot, [event]);
   }
   async writeView(task: TaskLocation, state: State): Promise<string> {
     const text = renderState(task.task_id, state);

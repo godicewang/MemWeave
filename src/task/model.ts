@@ -4,7 +4,11 @@ export const TaskIdSchema = Type.String({ pattern: "^task_[A-Za-z0-9_-]+$" });
 export const CreateSchema = Type.Object(
   {
     title: text,
-    goal: text,
+    goal: Type.String({
+      minLength: 1,
+      pattern: "\\S",
+      description: "Required initial Goal. At most state_event_max_chars Unicode code points from the request snapshot (bundle default 100). Put discovery details in summary; overlong goals are rejected, never truncated.",
+    }),
     project_name: text,
     summary: text,
     keywords: Type.Array(text, { minItems: 1 }),

@@ -7,8 +7,13 @@ export const EvidenceSchema = Type.Record(
   text,
   { minProperties: 1 },
 );
+const contentText = Type.String({
+  minLength: 1,
+  pattern: "\\S",
+  description: "Required concise body. At most state_event_max_chars Unicode code points from the request snapshot (bundle default 100); never silently truncated.",
+});
 const factInput = Type.Object(
-  { content: text, evidence: EvidenceSchema },
+  { content: contentText, evidence: EvidenceSchema },
   { additionalProperties: false },
 );
 export const AppendSchema = Type.Object(
@@ -16,8 +21,10 @@ export const AppendSchema = Type.Object(
     items: Type.Array(
       Type.Object(
         {
-          type: Type.Union([Type.Literal("fact"), Type.Literal("decision")]),
-          content: text,
+          type: Type.Union([Type.Literal("fact"), Type.Literal("decision")], {
+            description: "REQUIRED on every item. Explicitly choose fact or decision; never omit this field.",
+          }),
+          content: contentText,
           evidence: EvidenceSchema,
         },
         { additionalProperties: false },
@@ -29,7 +36,7 @@ export const AppendSchema = Type.Object(
 );
 export const UpdateGoalSchema = Type.Object(
   {
-    goal: text,
+    goal: contentText,
     summary: text,
     keywords: Type.Array(text, { minItems: 1 }),
     evidence: EvidenceSchema,
@@ -137,18 +144,40 @@ export function activeEntries(state: State): StateEntry[] {
   return [...state.entries.values()].filter((e) => e.active && !e.archived);
 }
 export function reduceState(value: unknown[]): State {
-  const state: State = {
-    version: 0,
-    goal: "",
-    facts: [],
-    decisions: [],
-    entries: new Map(),
-    factCount: 0,
-    decisionCount: 0,
-    events: [],
-  };
-  const operations = new Set<string>(),
-    batches = new Set<string>();
+  return replay(value);
+}
+/** Previously validated prefix; containers and changed entries are isolated. */
+export function extendState(previous: State, value: unknown[]): State {
+  return replay(structuredClone(value), previous);
+}
+function replay(value: unknown[], previous?: State): State {
+  const state: State = previous
+    ? {
+        ...previous,
+        entries: new Map(previous.entries),
+        events: previous.events.slice(),
+      }
+    : {
+        version: 0,
+        goal: "",
+        facts: [],
+        decisions: [],
+        entries: new Map(),
+        factCount: 0,
+        decisionCount: 0,
+        events: [],
+      };
+  const operations = new Set(previous?.events.map((e) => e.op_id)),
+    batches = new Set(previous?.events.flatMap(
+      (e) => e.op === "slide_window" ? [e.batch_id] : [],
+    ));
+  function mutableEntry(id: string): StateEntry | undefined {
+    const entry = state.entries.get(id);
+    if (!entry) return undefined;
+    const copy = { ...entry };
+    state.entries.set(id, copy);
+    return copy;
+  }
   function add(
     kind: "fact" | "decision",
     content: string,
@@ -189,7 +218,7 @@ export function reduceState(value: unknown[]): State {
         break;
       case "modify_fact":
         for (const id of event.archive) {
-          const entry = state.entries.get(id);
+          const entry = mutableEntry(id);
           if (!entry || entry.archived)
             throw Error("CORRUPT_STATE: invalid archive");
           entry.archived = true;
@@ -217,7 +246,7 @@ export function reduceState(value: unknown[]): State {
         batches.add(event.batch_id);
         const retained = new Set(event.retained_ids);
         for (const entry of candidates)
-          if (!retained.has(entry.id)) entry.active = false;
+          if (!retained.has(entry.id)) mutableEntry(entry.id)!.active = false;
         break;
       }
     }
@@ -229,6 +258,43 @@ export function reduceState(value: unknown[]): State {
   state.facts = active.filter((e) => e.kind === "fact");
   state.decisions = active.filter((e) => e.kind === "decision");
   return state;
+}
+/** Public callers and admission guards must never mutate a retained snapshot. */
+export function cloneState(state: State): State {
+  const events = state.events.map((event): StateEvent => {
+    switch (event.op) {
+      case "modify_fact":
+        return {
+          ...event,
+          archive: [...event.archive],
+          append_fact: {
+            ...event.append_fact,
+            evidence: { ...event.append_fact.evidence },
+          },
+        };
+      case "slide_window":
+        return {
+          ...event,
+          evicted_range: { ...event.evicted_range },
+          retained_ids: [...event.retained_ids],
+        };
+      default:
+        return { ...event, evidence: { ...event.evidence } };
+    }
+  });
+  const entries = new Map<string, StateEntry>();
+  for (const [id, entry] of state.entries) {
+    const event = events[entry.position - 1]!;
+    const evidence = event.op === "modify_fact"
+      ? event.append_fact.evidence
+      : event.op === "slide_window" ? { ...entry.evidence } : event.evidence;
+    entries.set(id, { ...entry, evidence });
+  }
+  return {
+    ...state, events, entries,
+    facts: state.facts.map((entry) => entries.get(entry.id)!),
+    decisions: state.decisions.map((entry) => entries.get(entry.id)!),
+  };
 }
 export function renderState(taskId: string, state: State): string {
   const block = (entries: StateEntry[]) =>

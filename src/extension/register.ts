@@ -129,7 +129,7 @@ export function registerMemweaveRuntime(
   }
   tool(
     "task_create",
-    "Create a new Task with title, initial goal, project_name, summary and keywords; bind this Session branch. context is optional.",
+    "Create a new Task with required title, goal, project_name, summary and nonempty keywords; bind this Session branch. context is optional. Initial goal is limited to state_event_max_chars Unicode code points in the request snapshot (bundle default 100); keep it concise and put detail in summary. Overlong input is rejected with actual/max lengths.",
     CreateSchema,
     (p, ctx, id) => tasks.create(p, ctx, id),
   );
@@ -159,13 +159,13 @@ export function registerMemweaveRuntime(
   );
   tool(
     "state_append",
-    "Append a nonempty batch of facts/decisions. Each item needs content and evidence mapping existing Task-scoped refs to explanations. Never guess IDs from this batch. Returns only State updated: vN.",
+    "Append a nonempty batch. EVERY item requires type (fact or decision), content and nonempty evidence mapping existing Task-scoped refs to explanations. Do not omit type. Body limit: state_event_max_chars Unicode code points in the request snapshot (bundle default 100). Minimal example: {\"items\":[{\"type\":\"fact\",\"content\":\"Verified fact\",\"evidence\":{\"U1\":\"Supporting user statement\"}}]}. Replace U1 with an actual existing supporting ref; never guess IDs from this batch. Invalid/overlong input is rejected, never filled or truncated. Returns only State updated: vN.",
     AppendSchema,
     (p, ctx, id) => tasks.append(p.items, ctx, id),
   );
   tool(
     "update_goal",
-    "Update the current Goal only when its objective changes. Supply revised summary/keywords and evidence; project_name only when project affiliation changes. Returns State updated: vN.",
+    "Update the current Goal only when its objective changes. goal is limited to state_event_max_chars Unicode code points in the request snapshot (bundle default 100); overlong goals are rejected with actual/max lengths. Supply revised summary/keywords and evidence; project_name only when project affiliation changes. Returns State updated: vN.",
     UpdateGoalSchema,
     (p, ctx, id) => tasks.updateGoal(p, ctx, id),
   );
@@ -199,7 +199,7 @@ export function registerMemweaveRuntime(
   });
   tool(
     "modify_fact",
-    "Atomically archive existing unarchived F/D IDs and append one corrected Fact with explained evidence. Historical evicted IDs remain valid; already archived IDs cannot be archived again.",
+    "Atomically archive existing unarchived F/D IDs and append one corrected Fact with explained evidence. Historical evicted IDs remain valid; already archived IDs cannot be archived again. append_fact.content uses state_event_max_chars Unicode code points from the request snapshot (bundle default 100); overlong content is rejected with actual/max lengths.",
     ModifyFactSchema,
     (p, ctx, id) => tasks.modifyFact(p, ctx, id),
   );

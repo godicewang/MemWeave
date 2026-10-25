@@ -42,7 +42,9 @@ Fact 和 Decision 必须提供有效 `evidence`，引用已存在的 U/A/T/F/D/R
 
 State 只包含 Goal、Fact、Decision，用于保留任务的主要演化路径、重要事实、关键决定、约束、转折、失败原因和验证结果，不堆积流水账。
 
-出现影响后续行动的新事实或重要决定时，使用 `state_append`。同一次认知变化产生多个条目时，尽量一次批量提交。每条 State 事件正文不得超过 `{{state_event_max_chars}}` 字符；提交前应保留结论与关键限定，不要依赖程序截断来保存含义。没有重要变化就不写入，不要仅为每次普通工具操作都重复创建 Decision。
+出现影响后续行动的新事实或重要决定时，使用 `state_append`。同一次认知变化产生多个条目时，尽量一次批量提交。每条 State 事件正文（包括 task_create 的初始 goal、update_goal 的 goal）不得超过 `{{state_event_max_chars}}` 个 Unicode 字符；提交前应保留结论与关键限定，不要依赖程序截断来保存含义。没有重要变化就不写入，不要仅为每次普通工具操作都重复创建 Decision。
+
+state_append 的 items 每项都必须显式填写 type（只能是 fact 或 decision）、content 和非空 evidence；不能省略 type。最小形式：`{ "items": [ { "type": "fact", "content": "已验证的简短事实", "evidence": { "U1": "该用户消息提供的依据" } } ] }`。示例 U1 必须替换为当前 Task 实际已存在且支持结论的引用。超长错误会返回字段、实际长度和上限；按该限额缩短后重试，不忽略必填字段。
 
 已有事实被新证据修正时，使用 `modify_fact` 原子地归档相关旧条目并追加新 Fact。不得直接改写过去的事实，不得单独归档，也不得借事实更新清理无关内容。决定发生变化时，追加新的 Decision 并说明依据，不通过覆盖旧决定掩盖演化过程。
 

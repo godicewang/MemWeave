@@ -25,6 +25,7 @@ import {
   synchronizeReferences,
   type LocatedReference,
 } from "../memory/references.ts";
+import { assertStateContent } from "../state/content.ts";
 import { StateStore } from "../state/store.ts";
 import type { StateItem } from "../state/model.ts";
 import {
@@ -218,8 +219,7 @@ export class TaskService {
       async () => {
         const scope = this.scope(ctx),
           config = await this.configuration(ctx);
-        if ([...input.goal].length > config.state_event_max_chars)
-          throw Error("STATE_CONTENT_TOO_LONG: initial Goal");
+        assertStateContent(input.goal, config.state_event_max_chars, "task_create.goal");
         const state = await this.state.initialize(
           location,
           input.goal,
