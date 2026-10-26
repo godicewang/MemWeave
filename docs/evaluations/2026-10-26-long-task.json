@@ -50842,5 +50842,63 @@
     "privateAuthUnchanged": true,
     "supplementalDiagnostics": "offline; no extra model requests",
     "note": "cumulative public tests repeat across stages and are not independent samples"
+  },
+  "pricingReview": {
+    "checkedOn": "2026-10-26",
+    "sourceCNY": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+    "sourceUSD": "https://api-docs.deepseek.com/quick_start/pricing/",
+    "period": "off-peak",
+    "reason": "UTC 13:44:09–14:53:15 is outside peak 01–04 and 06–10 UTC",
+    "CNY_per_million": {
+      "input": 1,
+      "cacheRead": 0.02,
+      "output": 4
+    },
+    "USD_per_million": {
+      "input": 0.15,
+      "cacheRead": 0.003,
+      "output": 0.6
+    },
+    "accountBillRead": false,
+    "arms": {
+      "native": {
+        "CNY_components": {
+          "input": "0.44895",
+          "cacheRead": "3.44976384",
+          "output": "1.12392"
+        },
+        "CNY_total": "5.02263384",
+        "USD_total": "0.753395076"
+      },
+      "memweave": {
+        "CNY_components": {
+          "input": "1.996118",
+          "cacheRead": "0.64068096",
+          "output": "0.627348"
+        },
+        "CNY_total": "3.26414696",
+        "USD_total": "0.489622044"
+      }
+    },
+    "excludedPreflightKnownCNY": "0.05301224"
+  },
+  "memoryTimingReview": {
+    "F50": {
+      "eventStage": 56,
+      "writtenStage": 58,
+      "evidence": [
+        "T247",
+        "U56"
+      ]
+    },
+    "F59": {
+      "eventStage": 65,
+      "writtenStage": 66,
+      "evidence": [
+        "T281",
+        "T282"
+      ]
+    },
+    "conclusion": "delayed writes; both eventually present; no demonstrated storage loss"
   }
 }
