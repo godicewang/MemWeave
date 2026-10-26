@@ -141,3 +141,24 @@ def test_stopped_experiment_never_starts_another_job(tmp_path):
         pytest.raises(TimeoutError),
     ):
         execute_harbor(cfg, tmp_path, {}, time.monotonic() - 1, 20)
+
+
+def test_image_lock_includes_official_separate_verifier(tmp_path):
+    from unittest.mock import patch
+
+    from test_suites import make_task
+
+    from memweave_eval.runner import image_snapshot
+
+    task = make_task(tmp_path, "one")
+    with (task / "task.toml").open("a") as stream:
+        stream.write('\n[verifier]\nenvironment_mode="separate"\n')
+    (task / "tests/Dockerfile").write_text("FROM verifier-base")
+
+    def inspect(args, **kwargs):
+        return json.dumps([{"Id": "sha256:" + args[-1], "Os": "linux", "Architecture": "arm64"}])
+
+    with patch("subprocess.check_output", inspect):
+        images = image_snapshot([task])
+    assert set(images) == {"one", "one:verifier"}
+    assert images["one"]["reference"] != images["one:verifier"]["reference"]
