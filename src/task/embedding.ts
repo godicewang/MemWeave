@@ -110,9 +110,12 @@ export class LocalEmbedding {
     );
     return operation;
   };
-  dispose(): void {
+  dispose(): Promise<void> {
     this.disposed = true;
+    const worker = this.worker;
     this.close();
+    worker?.ref();
+    return this.stopping;
   }
   close(): void {
     if (this.idle) clearTimeout(this.idle);
@@ -153,6 +156,8 @@ export class LocalEmbedding {
     if (this.idle) clearTimeout(this.idle);
     if (!this.prepared) {
       await ensureEmbeddingModel(this.paths, settings, signal);
+      if (this.disposed) throw Error("TASK_EMBEDDING_STOPPED");
+      signal?.throwIfAborted();
       this.prepared = true;
     }
     if (!this.worker) {

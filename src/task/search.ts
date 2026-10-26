@@ -61,9 +61,10 @@ export class TaskSearch {
     this.embed = embed ?? this.local.embed;
   }
   close() {
-    this.local.dispose();
+    const stopped = this.local.dispose();
     this.rows.clear();
     this.bytes = 0;
+    return stopped;
   }
   private remember(key: string, row: Row, limit: number) {
     const old = this.rows.get(key);
