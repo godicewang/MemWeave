@@ -1,0 +1,6 @@
+schema_version: 1
+id: terminal-bench-4
+repository: https://github.com/harbor-framework/terminal-bench.git
+revision: 452bf305c6daa62fc59061d22133a7cbc7c1572e
+tasks_dir: tasks
+protocol: tb4

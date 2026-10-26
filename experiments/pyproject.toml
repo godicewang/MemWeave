@@ -1,0 +1,24 @@
+[project]
+name = "memweave-eval"
+version = "0.1.0"
+description = "Reproducible public benchmark experiments for native Pi and MemWeave"
+requires-python = ">=3.12,<3.14"
+dependencies = ["harbor==0.24.0", "pydantic>=2.12,<3", "pyyaml>=6.0.2,<7"]
+
+[project.scripts]
+memweave-eval = "memweave_eval.cli:main"
+
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = ["pytest>=8.4,<9", "ruff>=0.13,<1"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100

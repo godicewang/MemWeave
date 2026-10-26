@@ -1,0 +1,33 @@
+# This is an input template, not an automatically authorized large run.
+schema_version: 1
+experiment_id: swe-bench-pro-v2-baseline
+suite: ../suites/swe-bench-pro-v2.yaml
+subset: ../subsets/cpu-baseline.yaml
+subject:
+  commit: "<full Git commit>"
+  package: "<absolute path outside repository to frozen npm archive>"
+  sha256: "<archive SHA256>"
+runtime:
+  harbor_version: "0.24.0"
+  pi_version: "1.4.0"
+  node_version: "24.22.0"
+model:
+  provider: deepseek
+  id: deepseek-flash
+  api: openai-completions
+  auth_profile: memweave-dev
+  thinking: "off"
+variants:
+  - id: pi-native
+    memweave: false
+  - id: pi-memweave
+    memweave: true
+execution:
+  environment: docker
+  platform: linux/amd64
+  concurrency: 2
+  repetitions: 1
+  automatic_trial_retries: 0
+limits:
+  max_cost_usd: 10
+  max_elapsed_seconds: 14400

@@ -1,0 +1,6 @@
+schema_version: 1
+id: swe-bench-pro-v2
+repository: https://github.com/scaleapi/SWE-bench_Pro-os.git
+revision: 66f92766bba642462d4bbe5479e83f91f9211862
+tasks_dir: v2/tasks
+protocol: swe-pro-v2

@@ -1,0 +1,5 @@
+count: 12
+seed: memweave-public-cpu-20261027
+max_cpus: 4
+max_memory_mb: 8192
+max_storage_mb: 32768

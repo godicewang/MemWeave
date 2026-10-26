@@ -13,3 +13,11 @@ dist/
 coverage/
 *.tgz
 *.tsbuildinfo
+
+# Isolated experiment development environment (never runtime evidence)
+experiments/.venv/
+experiments/.pytest_cache/
+experiments/.ruff_cache/
+experiments/**/__pycache__/
+experiments/*.egg-info/
+experiments/src/*.egg-info/
