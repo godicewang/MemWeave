@@ -55,7 +55,7 @@ class ExperimentPi(Pi):
         bootstrap = nvm_node_install_snippet(int(self.options.node_version.split(".")[0]))
         await self.exec_as_agent(
             environment,
-            f"set -euo pipefail; {bootstrap} && nvm install {node} && nvm alias default {node} "
+            f"set -euo pipefail; export METHOD=script; {bootstrap} && nvm install {node} && nvm alias default {node} "
             "&& npm install -g --ignore-scripts @earendil-works/pi-coding-agent@1.4.0 "
             "&& node --version && pi --version",
             timeout_sec=1200,

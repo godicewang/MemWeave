@@ -51,6 +51,18 @@ def test_native_phase_durations_are_derived_without_guessing_missing_values():
     assert row["phase_seconds"]["verifier"] is None
 
 
+def test_failed_installation_is_infrastructure_not_agent_ability():
+    row = normalize_trial(
+        {
+            "exception_info": {"exception_type": "NonZeroAgentExitCodeError"},
+            "agent_setup": {"started_at": "2026-01-01T00:00:00Z"},
+            "agent_execution": None,
+        },
+        {"task_id": "x"},
+    )
+    assert row["execution_status"] == "infrastructure_error"
+
+
 def test_full_denominator_and_pairs_are_preserved():
     rows = []
     for variant, reward in [("pi-native", 0), ("pi-memweave", 1)]:

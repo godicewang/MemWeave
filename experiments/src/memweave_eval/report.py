@@ -38,7 +38,9 @@ def normalize_trial(raw: dict | None, plan: dict) -> dict:
     row["harbor_trial"] = raw.get("trial_name")
     row["error_type"] = (raw.get("exception_info") or {}).get("exception_type")
     error = row["error_type"] or ""
-    if "Cancel" in error:
+    if error and raw.get("agent_setup") and not raw.get("agent_execution"):
+        status = "infrastructure_error"
+    elif "Cancel" in error:
         status = "cancelled"
     elif "Verifier" in error or "Reward" in error:
         status = "verifier_error"
@@ -197,7 +199,9 @@ def generate_report(root: Path) -> dict:
                     if not recorded or recorded["sha256"] != patch["sha256"]:
                         row.update(execution_status="invalid_result", success=None)
                 else:
-                    row.update(execution_status="invalid_result", success=None)
+                    row["success"] = None
+                    if matches or not original["error_type"]:
+                        row["execution_status"] = "invalid_result"
             else:
                 row.update(execution_status="invalid_result", success=None)
         rows.append(row)
