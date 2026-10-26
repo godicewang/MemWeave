@@ -1,0 +1,559 @@
+{
+  "schema_version": 1,
+  "summary": {
+    "variants": {
+      "pi-native": {
+        "planned": 4,
+        "scored": 4,
+        "successes": 4,
+        "coverage_success_rate": 1.0,
+        "valid_success_rate": 1.0,
+        "cost_usd": 0.059617428,
+        "known_cost_usd": 0.059617428,
+        "missing_cost_count": 0,
+        "execution_statuses": {
+          "scored": 4
+        },
+        "agent_seconds": 1718.5915510000002
+      },
+      "pi-memweave": {
+        "planned": 4,
+        "scored": 4,
+        "successes": 3,
+        "coverage_success_rate": 0.75,
+        "valid_success_rate": 0.75,
+        "cost_usd": 0.06087816,
+        "known_cost_usd": 0.06087816,
+        "missing_cost_count": 0,
+        "execution_statuses": {
+          "scored": 4
+        },
+        "agent_seconds": 835.8145519999999
+      }
+    },
+    "pairs": {
+      "both": 3,
+      "native_only": 1,
+      "memweave_only": 0,
+      "neither": 0,
+      "missing": 0
+    },
+    "memweave_minus_native": {
+      "successful_attempts": -1,
+      "cost_usd": 0.0012607320000000005
+    },
+    "complete": true,
+    "suite": "swe-bench-pro-v2"
+  },
+  "trials": [
+    {
+      "task_id": "instance_NodeBB__NodeBB-f2082d7de85eb62a70819f4f3396dd85626a0c0a-vd59a5728dfc977f44533186ace531248c2917516",
+      "variant_id": "pi-native",
+      "repetition": 1,
+      "execution_status": "scored",
+      "native_reward": {
+        "reward": 1.0
+      },
+      "success": true,
+      "usage": {
+        "input_tokens": 1101097,
+        "cache_tokens": 1075456,
+        "output_tokens": 8686,
+        "cost_usd": 0.024568236
+      },
+      "error_type": null,
+      "harbor_trial": "instance_NodeBB__NodeBB-f2082d7d__Ws5gmcC",
+      "environment_setup": {
+        "started_at": "2026-10-26T19:05:15.268220Z",
+        "finished_at": "2026-10-26T19:05:17.822307Z"
+      },
+      "agent_setup": {
+        "started_at": "2026-10-26T19:05:17.822372Z",
+        "finished_at": "2026-10-26T19:05:17.822418Z"
+      },
+      "agent_execution": {
+        "started_at": "2026-10-26T19:05:17.822485Z",
+        "finished_at": "2026-10-26T19:05:20.505557Z"
+      },
+      "verifier": {
+        "started_at": "2026-10-26T19:05:20.815993Z",
+        "finished_at": "2026-10-26T19:05:35.183364Z"
+      },
+      "phase_seconds": {
+        "environment_setup": 2.534378,
+        "agent_setup": 124.24979,
+        "agent_execution": 157.099098,
+        "verifier": 14.367371
+      },
+      "elapsed_seconds": 294.915207,
+      "started_at": "2026-10-26T19:05:15.182476Z",
+      "finished_at": "2026-10-26T19:05:45.618886Z",
+      "score_source": "harbor/pi-native-r1-regrade/instance_NodeBB__NodeBB-f2082d7d__Ws5gmcC/result.json",
+      "original_trial": "instance_NodeBB__NodeBB-f2082d7d__iTz887v",
+      "regrade_elapsed_seconds": 30.43641,
+      "patch_source": "harbor/pi-native-r1/instance_NodeBB__NodeBB-f2082d7d__iTz887v/agent/model.patch",
+      "patch_sha256": "a23bf11c96bfb4d92d9e454f78b56bcb515831c2c5e2f1c9179c19fb115131c5",
+      "session_sources": [
+        "harbor/pi-native-r1/instance_NodeBB__NodeBB-f2082d7d__iTz887v/agent/pi/sessions/2026-10-26T18-38-25-168Z_01a17981-b18e-70cc-80f8-2559c392ea99.jsonl"
+      ],
+      "diagnostics": {
+        "model_responses_with_usage": 56,
+        "tool_calls": {
+          "bash": 54,
+          "edit": 1
+        },
+        "compaction_events": 0,
+        "invalid_lines": 0
+      },
+      "memory_tool_calls": null
+    },
+    {
+      "task_id": "instance_ansible__ansible-e22e103cdf8edc56ff7d9b848a58f94f1471a263-v1055803c3a812189a1133297f7f5468579283f86",
+      "variant_id": "pi-native",
+      "repetition": 1,
+      "execution_status": "scored",
+      "native_reward": {
+        "reward": 1.0
+      },
+      "success": true,
+      "usage": {
+        "input_tokens": 301813,
+        "cache_tokens": 282624,
+        "output_tokens": 4254,
+        "cost_usd": 0.012557244
+      },
+      "error_type": null,
+      "harbor_trial": "instance_ansible__ansible-e22e10__JBfnMZR",
+      "environment_setup": {
+        "started_at": "2026-10-26T19:05:15.304078Z",
+        "finished_at": "2026-10-26T19:05:17.826493Z"
+      },
+      "agent_setup": {
+        "started_at": "2026-10-26T19:05:17.826523Z",
+        "finished_at": "2026-10-26T19:05:17.826545Z"
+      },
+      "agent_execution": {
+        "started_at": "2026-10-26T19:05:17.826582Z",
+        "finished_at": "2026-10-26T19:05:20.595999Z"
+      },
+      "verifier": {
+        "started_at": "2026-10-26T19:05:20.918421Z",
+        "finished_at": "2026-10-26T19:07:55.220214Z"
+      },
+      "phase_seconds": {
+        "environment_setup": 2.505308,
+        "agent_setup": 100.463684,
+        "agent_execution": 41.015357,
+        "verifier": 154.301793
+      },
+      "elapsed_seconds": 155.049345,
+      "started_at": "2026-10-26T19:05:15.267742Z",
+      "finished_at": "2026-10-26T19:08:05.587355Z",
+      "score_source": "harbor/pi-native-r1-regrade/instance_ansible__ansible-e22e10__JBfnMZR/result.json",
+      "original_trial": "instance_ansible__ansible-e22e10__qe5Jedk",
+      "regrade_elapsed_seconds": 170.319613,
+      "patch_source": "harbor/pi-native-r1/instance_ansible__ansible-e22e10__qe5Jedk/agent/model.patch",
+      "patch_sha256": "3d222a4c4bc52db86b21fbf3c3b77d2dd3874732dc7b681f68418b07ebbe7ffe",
+      "session_sources": [
+        "harbor/pi-native-r1/instance_ansible__ansible-e22e10__qe5Jedk/agent/pi/sessions/2026-10-26T18-38-01-397Z_01a17981-54b3-75dc-bedd-30c7284033f3.jsonl"
+      ],
+      "diagnostics": {
+        "model_responses_with_usage": 17,
+        "tool_calls": {
+          "bash": 18
+        },
+        "compaction_events": 0,
+        "invalid_lines": 0
+      },
+      "memory_tool_calls": null
+    },
+    {
+      "task_id": "instance_element-hq__element-web-b007ea81b2ccd001b00f332bee65070aa7fc00f9-vnan",
+      "variant_id": "pi-native",
+      "repetition": 1,
+      "execution_status": "scored",
+      "native_reward": {
+        "reward": 1.0
+      },
+      "success": true,
+      "usage": {
+        "input_tokens": 237397,
+        "cache_tokens": 223360,
+        "output_tokens": 5199,
+        "cost_usd": 0.01179006
+      },
+      "error_type": null,
+      "harbor_trial": "instance_element-hq__element-web__evm2PtV",
+      "environment_setup": {
+        "started_at": "2026-10-26T19:05:45.624254Z",
+        "finished_at": "2026-10-26T19:05:47.587443Z"
+      },
+      "agent_setup": {
+        "started_at": "2026-10-26T19:05:47.587473Z",
+        "finished_at": "2026-10-26T19:05:47.587504Z"
+      },
+      "agent_execution": {
+        "started_at": "2026-10-26T19:05:47.587556Z",
+        "finished_at": "2026-10-26T19:05:50.149794Z"
+      },
+      "verifier": {
+        "started_at": "2026-10-26T19:05:50.460933Z",
+        "finished_at": "2026-10-26T19:06:03.585079Z"
+      },
+      "phase_seconds": {
+        "environment_setup": 1.956844,
+        "agent_setup": 90.657515,
+        "agent_execution": 174.129424,
+        "verifier": 13.124146
+      },
+      "elapsed_seconds": 277.916901,
+      "started_at": "2026-10-26T19:05:45.623496Z",
+      "finished_at": "2026-10-26T19:06:13.981150Z",
+      "score_source": "harbor/pi-native-r1-regrade/instance_element-hq__element-web__evm2PtV/result.json",
+      "original_trial": "instance_element-hq__element-web__ntSZmfG",
+      "regrade_elapsed_seconds": 28.357654,
+      "patch_source": "harbor/pi-native-r1/instance_element-hq__element-web__ntSZmfG/agent/model.patch",
+      "patch_sha256": "6640154ec81afc13196ce013599cabd5ae3017d28a7d2e354e7542d6305b78a6",
+      "session_sources": [
+        "harbor/pi-native-r1/instance_element-hq__element-web__ntSZmfG/agent/pi/sessions/2026-10-26T18-40-26-004Z_01a17983-8993-7513-9367-3d9f6a5c2871.jsonl"
+      ],
+      "diagnostics": {
+        "model_responses_with_usage": 17,
+        "tool_calls": {
+          "bash": 15,
+          "edit": 3
+        },
+        "compaction_events": 0,
+        "invalid_lines": 0
+      },
+      "memory_tool_calls": null
+    },
+    {
+      "task_id": "instance_flipt-io__flipt-c1fd7a81ef9f23e742501bfb26d914eb683262aa",
+      "variant_id": "pi-native",
+      "repetition": 1,
+      "execution_status": "scored",
+      "native_reward": {
+        "reward": 1.0
+      },
+      "success": true,
+      "usage": {
+        "input_tokens": 229044,
+        "cache_tokens": 216448,
+        "output_tokens": 4687,
+        "cost_usd": 0.010701888
+      },
+      "error_type": null,
+      "harbor_trial": "instance_flipt-io__flipt-c1fd7a8__Mimcr8C",
+      "environment_setup": {
+        "started_at": "2026-10-26T19:06:13.986799Z",
+        "finished_at": "2026-10-26T19:06:16.456238Z"
+      },
+      "agent_setup": {
+        "started_at": "2026-10-26T19:06:16.456269Z",
+        "finished_at": "2026-10-26T19:06:16.456298Z"
+      },
+      "agent_execution": {
+        "started_at": "2026-10-26T19:06:16.456348Z",
+        "finished_at": "2026-10-26T19:06:18.986898Z"
+      },
+      "verifier": {
+        "started_at": "2026-10-26T19:06:19.300978Z",
+        "finished_at": "2026-10-26T19:13:40.644858Z"
+      },
+      "phase_seconds": {
+        "environment_setup": 2.482091,
+        "agent_setup": 85.692088,
+        "agent_execution": 1346.347672,
+        "verifier": 441.34388
+      },
+      "elapsed_seconds": 1445.694797,
+      "started_at": "2026-10-26T19:06:13.986017Z",
+      "finished_at": "2026-10-26T19:13:51.101274Z",
+      "score_source": "harbor/pi-native-r1-regrade/instance_flipt-io__flipt-c1fd7a8__Mimcr8C/result.json",
+      "original_trial": "instance_flipt-io__flipt-c1fd7a8__BqGJ7hx",
+      "regrade_elapsed_seconds": 457.115257,
+      "patch_source": "harbor/pi-native-r1/instance_flipt-io__flipt-c1fd7a8__BqGJ7hx/agent/model.patch",
+      "patch_sha256": "3b9443df4918fa6925ab97f0159febdc4a2ca1a2236c137d858a268a64636ad8",
+      "session_sources": [
+        "harbor/pi-native-r1/instance_flipt-io__flipt-c1fd7a8__BqGJ7hx/agent/pi/sessions/2026-10-26T18-42-41-448Z_01a17985-9aa6-77be-8797-4a93419ac206.jsonl"
+      ],
+      "diagnostics": {
+        "model_responses_with_usage": 22,
+        "tool_calls": {
+          "bash": 23,
+          "edit": 3
+        },
+        "compaction_events": 0,
+        "invalid_lines": 0
+      },
+      "memory_tool_calls": null
+    },
+    {
+      "task_id": "instance_NodeBB__NodeBB-f2082d7de85eb62a70819f4f3396dd85626a0c0a-vd59a5728dfc977f44533186ace531248c2917516",
+      "variant_id": "pi-memweave",
+      "repetition": 1,
+      "execution_status": "scored",
+      "native_reward": {
+        "reward": 1.0
+      },
+      "success": true,
+      "usage": {
+        "input_tokens": 355688,
+        "cache_tokens": 330880,
+        "output_tokens": 3378,
+        "cost_usd": 0.01348128
+      },
+      "error_type": null,
+      "harbor_trial": "instance_NodeBB__NodeBB-f2082d7d__ySv6Mmf",
+      "environment_setup": {
+        "started_at": "2026-10-26T19:35:16.293175Z",
+        "finished_at": "2026-10-26T19:35:18.303432Z"
+      },
+      "agent_setup": {
+        "started_at": "2026-10-26T19:35:18.303504Z",
+        "finished_at": "2026-10-26T19:35:18.303547Z"
+      },
+      "agent_execution": {
+        "started_at": "2026-10-26T19:35:18.303620Z",
+        "finished_at": "2026-10-26T19:35:20.932682Z"
+      },
+      "verifier": {
+        "started_at": "2026-10-26T19:35:21.257764Z",
+        "finished_at": "2026-10-26T19:35:35.568507Z"
+      },
+      "phase_seconds": {
+        "environment_setup": 2.521863,
+        "agent_setup": 275.141983,
+        "agent_execution": 53.637719,
+        "verifier": 14.310743
+      },
+      "elapsed_seconds": 342.675582,
+      "started_at": "2026-10-26T19:35:16.228225Z",
+      "finished_at": "2026-10-26T19:35:45.943864Z",
+      "score_source": "harbor/pi-memweave-r1-regrade/instance_NodeBB__NodeBB-f2082d7d__ySv6Mmf/result.json",
+      "original_trial": "instance_NodeBB__NodeBB-f2082d7d__2TUozEk",
+      "regrade_elapsed_seconds": 29.715639,
+      "patch_source": "harbor/pi-memweave-r1/instance_NodeBB__NodeBB-f2082d7d__2TUozEk/agent/model.patch",
+      "patch_sha256": "76fa5cd7466e9394daa282b4abce58df5ae0dc859609c9711193e5f4e0fa9518",
+      "session_sources": [
+        "harbor/pi-memweave-r1/instance_NodeBB__NodeBB-f2082d7d__2TUozEk/agent/pi/sessions/2026-10-26T19-18-34-413Z_01a179a6-74ab-7473-a013-71bb71bced18.jsonl"
+      ],
+      "diagnostics": {
+        "model_responses_with_usage": 19,
+        "tool_calls": {
+          "bash": 19,
+          "edit": 3,
+          "state_append": 1,
+          "task_create": 1
+        },
+        "compaction_events": 0,
+        "invalid_lines": 0
+      },
+      "memory_tool_calls": {
+        "state_append": 1,
+        "task_create": 1
+      }
+    },
+    {
+      "task_id": "instance_ansible__ansible-e22e103cdf8edc56ff7d9b848a58f94f1471a263-v1055803c3a812189a1133297f7f5468579283f86",
+      "variant_id": "pi-memweave",
+      "repetition": 1,
+      "execution_status": "scored",
+      "native_reward": {
+        "reward": 1.0
+      },
+      "success": true,
+      "usage": {
+        "input_tokens": 276233,
+        "cache_tokens": 250752,
+        "output_tokens": 2974,
+        "cost_usd": 0.012717612
+      },
+      "error_type": null,
+      "harbor_trial": "instance_ansible__ansible-e22e10__5jwr76Y",
+      "environment_setup": {
+        "started_at": "2026-10-26T19:35:16.325224Z",
+        "finished_at": "2026-10-26T19:35:18.306736Z"
+      },
+      "agent_setup": {
+        "started_at": "2026-10-26T19:35:18.306757Z",
+        "finished_at": "2026-10-26T19:35:18.306778Z"
+      },
+      "agent_execution": {
+        "started_at": "2026-10-26T19:35:18.306823Z",
+        "finished_at": "2026-10-26T19:35:21.060944Z"
+      },
+      "verifier": {
+        "started_at": "2026-10-26T19:35:21.383365Z",
+        "finished_at": "2026-10-26T19:37:55.686997Z"
+      },
+      "phase_seconds": {
+        "environment_setup": 2.500674,
+        "agent_setup": 245.998593,
+        "agent_execution": 33.519792,
+        "verifier": 154.303632
+      },
+      "elapsed_seconds": 293.218778,
+      "started_at": "2026-10-26T19:35:16.292738Z",
+      "finished_at": "2026-10-26T19:38:06.042879Z",
+      "score_source": "harbor/pi-memweave-r1-regrade/instance_ansible__ansible-e22e10__5jwr76Y/result.json",
+      "original_trial": "instance_ansible__ansible-e22e10__Lsv8xSK",
+      "regrade_elapsed_seconds": 169.750141,
+      "patch_source": "harbor/pi-memweave-r1/instance_ansible__ansible-e22e10__Lsv8xSK/agent/model.patch",
+      "patch_sha256": "e3fcf1ad757d16c4ae16450d5f0fc21f2b955ecd52ee6ff8e4bb89e0a9eecf8b",
+      "session_sources": [
+        "harbor/pi-memweave-r1/instance_ansible__ansible-e22e10__Lsv8xSK/agent/pi/sessions/2026-10-26T19-18-05-198Z_01a179a6-028d-75f6-a1ec-dd12020c0f58.jsonl"
+      ],
+      "diagnostics": {
+        "model_responses_with_usage": 16,
+        "tool_calls": {
+          "bash": 6,
+          "edit": 3,
+          "read": 3,
+          "state_append": 2,
+          "task_create": 1
+        },
+        "compaction_events": 0,
+        "invalid_lines": 0
+      },
+      "memory_tool_calls": {
+        "state_append": 2,
+        "task_create": 1
+      }
+    },
+    {
+      "task_id": "instance_element-hq__element-web-b007ea81b2ccd001b00f332bee65070aa7fc00f9-vnan",
+      "variant_id": "pi-memweave",
+      "repetition": 1,
+      "execution_status": "scored",
+      "native_reward": {
+        "reward": 0.0
+      },
+      "success": false,
+      "usage": {
+        "input_tokens": 144087,
+        "cache_tokens": 122112,
+        "output_tokens": 2351,
+        "cost_usd": 0.010146372
+      },
+      "error_type": null,
+      "harbor_trial": "instance_element-hq__element-web__TJThMBy",
+      "environment_setup": {
+        "started_at": "2026-10-26T19:35:45.949151Z",
+        "finished_at": "2026-10-26T19:35:47.907507Z"
+      },
+      "agent_setup": {
+        "started_at": "2026-10-26T19:35:47.907533Z",
+        "finished_at": "2026-10-26T19:35:47.907563Z"
+      },
+      "agent_execution": {
+        "started_at": "2026-10-26T19:35:47.907616Z",
+        "finished_at": "2026-10-26T19:35:50.466448Z"
+      },
+      "verifier": {
+        "started_at": "2026-10-26T19:35:50.760342Z",
+        "finished_at": "2026-10-26T19:36:04.021302Z"
+      },
+      "phase_seconds": {
+        "environment_setup": 2.472099,
+        "agent_setup": 227.109552,
+        "agent_execution": 61.113257,
+        "verifier": 13.26096
+      },
+      "elapsed_seconds": 301.922043,
+      "started_at": "2026-10-26T19:35:45.948415Z",
+      "finished_at": "2026-10-26T19:36:14.382408Z",
+      "score_source": "harbor/pi-memweave-r1-regrade/instance_element-hq__element-web__TJThMBy/result.json",
+      "original_trial": "instance_element-hq__element-web__7K7fLN2",
+      "regrade_elapsed_seconds": 28.433993,
+      "patch_source": "harbor/pi-memweave-r1/instance_element-hq__element-web__7K7fLN2/agent/model.patch",
+      "patch_sha256": "e9bc43d2cf98d100e441b5c782bfe77ddb5cf6542d0bf278ab42fd3f98fc8731",
+      "session_sources": [
+        "harbor/pi-memweave-r1/instance_element-hq__element-web__7K7fLN2/agent/pi/sessions/2026-10-26T19-22-39-559Z_01a179aa-3246-7218-a0f3-f6d3ed925878.jsonl"
+      ],
+      "diagnostics": {
+        "model_responses_with_usage": 9,
+        "tool_calls": {
+          "bash": 4,
+          "edit": 1,
+          "read": 1,
+          "state_append": 1,
+          "task_create": 1
+        },
+        "compaction_events": 0,
+        "invalid_lines": 0
+      },
+      "memory_tool_calls": {
+        "state_append": 1,
+        "task_create": 1
+      }
+    },
+    {
+      "task_id": "instance_flipt-io__flipt-c1fd7a81ef9f23e742501bfb26d914eb683262aa",
+      "variant_id": "pi-memweave",
+      "repetition": 1,
+      "execution_status": "scored",
+      "native_reward": {
+        "reward": 1.0
+      },
+      "success": true,
+      "usage": {
+        "input_tokens": 639616,
+        "cache_tokens": 598016,
+        "output_tokens": 7054,
+        "cost_usd": 0.024532896
+      },
+      "error_type": null,
+      "harbor_trial": "instance_flipt-io__flipt-c1fd7a8__cZMgdnY",
+      "environment_setup": {
+        "started_at": "2026-10-26T19:36:14.387733Z",
+        "finished_at": "2026-10-26T19:36:16.862651Z"
+      },
+      "agent_setup": {
+        "started_at": "2026-10-26T19:36:16.862683Z",
+        "finished_at": "2026-10-26T19:36:16.862716Z"
+      },
+      "agent_execution": {
+        "started_at": "2026-10-26T19:36:16.862765Z",
+        "finished_at": "2026-10-26T19:36:19.383978Z"
+      },
+      "verifier": {
+        "started_at": "2026-10-26T19:36:19.708791Z",
+        "finished_at": "2026-10-26T19:43:34.924403Z"
+      },
+      "phase_seconds": {
+        "environment_setup": 2.48361,
+        "agent_setup": 239.361089,
+        "agent_execution": 687.543784,
+        "verifier": 435.215612
+      },
+      "elapsed_seconds": 940.416462,
+      "started_at": "2026-10-26T19:36:14.386937Z",
+      "finished_at": "2026-10-26T19:43:45.360202Z",
+      "score_source": "harbor/pi-memweave-r1-regrade/instance_flipt-io__flipt-c1fd7a8__cZMgdnY/result.json",
+      "original_trial": "instance_flipt-io__flipt-c1fd7a8__ou9i4Fw",
+      "regrade_elapsed_seconds": 450.973265,
+      "patch_source": "harbor/pi-memweave-r1/instance_flipt-io__flipt-c1fd7a8__ou9i4Fw/agent/model.patch",
+      "patch_sha256": "3343ccd8aa40beb74d86f52936324e4e96ce42f7dc9023f6fd6fc1f606f48e6a",
+      "session_sources": [
+        "harbor/pi-memweave-r1/instance_flipt-io__flipt-c1fd7a8__ou9i4Fw/agent/pi/sessions/2026-10-26T19-23-41-194Z_01a179ab-2308-7072-be62-601fe1f3660c.jsonl"
+      ],
+      "diagnostics": {
+        "model_responses_with_usage": 28,
+        "tool_calls": {
+          "bash": 20,
+          "edit": 8,
+          "read": 4,
+          "task_create": 1,
+          "write": 6
+        },
+        "compaction_events": 0,
+        "invalid_lines": 0
+      },
+      "memory_tool_calls": {
+        "task_create": 1
+      }
+    }
+  ]
+}

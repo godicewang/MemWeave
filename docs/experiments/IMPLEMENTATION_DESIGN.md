@@ -6,7 +6,7 @@
 
 范围：当前 MemWeave 项目的公开评测实验部分
 
-状态：2026-10-27 已实现配置、Pro V2 执行与离线报告，Pro 单题/双变体真实链路通过；TB Dockerfile 镜像冻结适配待用户对齐，不能视为已验收。实际范围见 `VALIDATION.md`，待确认方案见 `DOCKERFILE_FREEZE_PROPOSAL.md`。
+状态：2026-10-27 已实现配置、Pro V2 执行与离线报告，完成单题链路验收及四题双变体真实对照；TB Dockerfile 镜像冻结适配待用户对齐，不能视为已验收。实际范围见 `VALIDATION.md`、结果见 `PUBLIC_BASELINE_2026-10-27.md`，待确认方案见 `DOCKERFILE_FREEZE_PROPOSAL.md`。
 
 ## 第一部分 目标和已确认决策
 

@@ -33,6 +33,7 @@
 | `IMPLEMENTATION_PLAN.md` | 当前进度、阶段依赖、交付范围和进入条件 |
 | [experiments/IMPLEMENTATION_DESIGN.md](experiments/IMPLEMENTATION_DESIGN.md) | 2026-10-26 确认的公开基线实验设计：Terminal-Bench 4.0 与 SWE-bench Pro V2 子集的实际重跑、记录和比较；不含自进化，不改变产品运行时契约 |
 | [experiments/VALIDATION.md](experiments/VALIDATION.md) | 实验 CLI、31 项检查、实际 Pro V2 双变体/全新沙箱重评分、费用及 TB Dockerfile 接入受阻范围；不将单题结果外推为记忆优势 |
+| [experiments/PUBLIC_BASELINE_2026-10-27.md](experiments/PUBLIC_BASELINE_2026-10-27.md) | 公开 Pro V2 四仓库真实对照：原生 4/4、插件 3/4，输入/缓存/费用/阶段时间、Element Web 算法失败与 TB 未进入模型阶段的原因；含可复查汇总 JSON |
 | [experiments/LOCAL_BASELINE_DESIGN.md](experiments/LOCAL_BASELINE_DESIGN.md) | local_baseline 待确认草案：发布功能回归与 MW-001—MW-011 真实 Pi 能力评测分层；评分口径和本轮预算确认后实现 |
 | `PHASE_0_VALIDATION.md` | 阶段 0 的实际测试证据、复现命令、兼容与未验证范围 |
 | `PHASE_1_VALIDATION.md` | 配置/Rule 正式模块、精确容量、HTTP 重试与真实 DeepSeek 验收 |
