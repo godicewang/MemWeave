@@ -107,13 +107,11 @@ export function registerMemweaveRuntime(
       ctx: ExtensionContext,
       id: string,
     ) => Promise<unknown>,
-    promptSnippet?: string,
   ) {
     pi.registerTool({
       name,
       label: name,
       description,
-      ...(promptSnippet ? { promptSnippet } : {}),
       parameters,
       async execute(id, params, signal, _update, ctx) {
         signal?.throwIfAborted();
@@ -163,10 +161,9 @@ export function registerMemweaveRuntime(
   );
   tool(
     "state_append",
-    "Before delivering a stage result, changing approach or pausing, save only important new verified facts/decisions not already in State. A tool turn ending alone is not stage completion. Append a nonempty batch. EVERY item requires type (fact or decision), content and nonempty evidence mapping existing Task-scoped refs to explanations. Do not omit type. Body limit: state_event_max_chars Unicode code points in the request snapshot (bundle default 100). Minimal example: {\"items\":[{\"type\":\"fact\",\"content\":\"Verified fact\",\"evidence\":{\"U1\":\"Supporting user statement\"}}]}. Replace U1 with an actual existing supporting ref; never guess IDs from this batch. Invalid/overlong input is rejected, never filled or truncated. Returns only State updated: vN.",
+    "Append a nonempty batch. EVERY item requires type (fact or decision), content and nonempty evidence mapping existing Task-scoped refs to explanations. Do not omit type. Body limit: state_event_max_chars Unicode code points in the request snapshot (bundle default 100). Minimal example: {\"items\":[{\"type\":\"fact\",\"content\":\"Verified fact\",\"evidence\":{\"U1\":\"Supporting user statement\"}}]}. Replace U1 with an actual existing supporting ref; never guess IDs from this batch. Invalid/overlong input is rejected, never filled or truncated. Before delivering a stage result, changing approach or pausing, save only important new verified facts/decisions not already in State. A tool turn ending alone is not stage completion. Returns only State updated: vN.",
     AppendSchema,
     (p, ctx, id) => tasks.append(p.items, ctx, id),
-    "Save important new facts/decisions needed to continue the Task before stage delivery, approach changes or handoff; skip unchanged cognition.",
   );
   tool(
     "update_goal",
