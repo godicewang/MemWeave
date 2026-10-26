@@ -63,6 +63,48 @@ def test_failed_installation_is_infrastructure_not_agent_ability():
     assert row["execution_status"] == "infrastructure_error"
 
 
+def test_cancellation_during_setup_remains_cancellation():
+    row = normalize_trial(
+        {
+            "exception_info": {"exception_type": "CancelledError"},
+            "agent_setup": {"started_at": "2026-01-01T00:00:00Z"},
+        },
+        {"task_id": "x"},
+    )
+    assert row["execution_status"] == "cancelled"
+
+
+def test_session_diagnostics_only_derive_counts_and_keep_unknown(tmp_path):
+    import json
+
+    from memweave_eval.report import session_diagnostics
+
+    assert session_diagnostics([]) is None
+    p = tmp_path / "session.jsonl"
+    p.write_text(
+        json.dumps(
+            {
+                "type": "message",
+                "message": {
+                    "role": "assistant",
+                    "usage": {"input": 1},
+                    "content": [
+                        {"type": "toolCall", "name": "task_create"},
+                        {"type": "toolCall", "name": "bash"},
+                    ],
+                },
+            }
+        )
+        + "\n"
+        + json.dumps({"type": "compaction"})
+        + "\n"
+    )
+    value = session_diagnostics([p])
+    assert value["model_responses_with_usage"] == 1
+    assert value["tool_calls"] == {"task_create": 1, "bash": 1}
+    assert value["compaction_events"] == 1
+
+
 def test_full_denominator_and_pairs_are_preserved():
     rows = []
     for variant, reward in [("pi-native", 0), ("pi-memweave", 1)]:

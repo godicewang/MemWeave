@@ -6,7 +6,7 @@ import csv
 import io
 import json
 import math
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
 
@@ -24,6 +24,41 @@ def duration(record: dict) -> float | None:
         return None
 
 
+def session_diagnostics(paths: list[Path]) -> dict | None:
+    if not paths:
+        return None
+    tools = Counter()
+    responses = compactions = invalid = 0
+    for path in paths:
+        with path.open() as stream:
+            for line in stream:
+                try:
+                    event = json.loads(line)
+                    message = event.get("message") or {}
+                    responses += bool(
+                        message.get("role") == "assistant" and message.get("usage") is not None
+                    )
+                    if event.get("type") == "compaction":
+                        compactions += 1
+                        responses += event.get("usage") is not None
+                    if message.get("role") == "assistant":
+                        for part in message.get("content") or []:
+                            if (
+                                isinstance(part, dict)
+                                and part.get("type") == "toolCall"
+                                and isinstance(part.get("name"), str)
+                            ):
+                                tools[part["name"]] += 1
+                except (ValueError, AttributeError, TypeError):
+                    invalid += 1
+    return {
+        "model_responses_with_usage": responses,
+        "tool_calls": dict(sorted(tools.items())),
+        "compaction_events": compactions,
+        "invalid_lines": invalid,
+    }
+
+
 def normalize_trial(raw: dict | None, plan: dict) -> dict:
     row = dict(plan)
     row.update(
@@ -38,10 +73,10 @@ def normalize_trial(raw: dict | None, plan: dict) -> dict:
     row["harbor_trial"] = raw.get("trial_name")
     row["error_type"] = (raw.get("exception_info") or {}).get("exception_type")
     error = row["error_type"] or ""
-    if error and raw.get("agent_setup") and not raw.get("agent_execution"):
-        status = "infrastructure_error"
-    elif "Cancel" in error:
+    if "Cancel" in error:
         status = "cancelled"
+    elif error and raw.get("agent_setup") and not raw.get("agent_execution"):
+        status = "infrastructure_error"
     elif "Verifier" in error or "Reward" in error:
         status = "verifier_error"
     elif "Agent" in error or "Token" in error or "ContextWindow" in error:
@@ -113,6 +148,10 @@ def summarize(rows: list[dict]) -> dict:
             "cost_usd": sum(costs) if all(c is not None for c in costs) else None,
             "known_cost_usd": sum(c for c in costs if c is not None),
             "missing_cost_count": sum(c is None for c in costs),
+            "execution_statuses": dict(Counter(r["execution_status"] for r in items)),
+            "agent_seconds": sum(r["phase_seconds"]["agent_execution"] for r in items)
+            if all(r.get("phase_seconds", {}).get("agent_execution") is not None for r in items)
+            else None,
         }
     for pair in pairs.values():
         a, b = pair.get("pi-native"), pair.get("pi-memweave")
@@ -128,6 +167,14 @@ def summarize(rows: list[dict]) -> dict:
             else "neither"
         )
         result["pairs"][label] += 1
+    a, b = result["variants"].get("pi-native"), result["variants"].get("pi-memweave")
+    if a and b:
+        result["memweave_minus_native"] = {
+            "successful_attempts": b["successes"] - a["successes"],
+            "cost_usd": b["cost_usd"] - a["cost_usd"]
+            if a["cost_usd"] is not None and b["cost_usd"] is not None
+            else None,
+        }
     return result
 
 
@@ -204,6 +251,35 @@ def generate_report(root: Path) -> dict:
                         row["execution_status"] = "invalid_result"
             else:
                 row.update(execution_status="invalid_result", success=None)
+        # Derive counts from the existing native original, never create a chat copy.
+        sessions = []
+        if job.get("path") and not invalid:
+            originals = []
+            for item in evidence["files"]:
+                if item["path"].startswith(job["path"] + "/") and item["path"].endswith(
+                    "/result.json"
+                ):
+                    raw = json.loads(contained(root, item["path"]).read_text())
+                    if raw.get("task_name", "").split("/")[-1] == plan["task_id"]:
+                        originals.append(item["path"].removesuffix("result.json"))
+            if len(originals) == 1:
+                sessions = [
+                    item["path"]
+                    for item in evidence["files"]
+                    if item["path"].startswith(originals[0] + "agent/pi/sessions/")
+                    and item["path"].endswith(".jsonl")
+                ]
+        row["session_sources"] = sessions
+        row["diagnostics"] = session_diagnostics([contained(root, path) for path in sessions])
+        row["memory_tool_calls"] = (
+            {
+                k: v
+                for k, v in row["diagnostics"]["tool_calls"].items()
+                if k.startswith(("task_", "state_", "memory_"))
+            }
+            if row["diagnostics"] is not None and plan["variant_id"] == "pi-memweave"
+            else None
+        )
         rows.append(row)
     summary = summarize(rows)
     summary["complete"] = (
@@ -235,18 +311,20 @@ def generate_report(root: Path) -> dict:
         "",
         "仅代表冻结的本机子集；不导入公开榜单成绩。",
         "",
-        "| 变体 | 计划 | 有效评分 | 成功 | 计划成功覆盖率 | 有效样本成功率 |",
-        "|---|---:|---:|---:|---:|---:|",
+        "| 变体 | 计划 | 有效评分 | 成功 | 计划成功覆盖率 | 有效样本成功率 | 已知估算费用 USD | 未知费用行 | Agent 秒 |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for variant, s in summary["variants"].items():
         valid = f"{s['valid_success_rate']:.1%}" if s["valid_success_rate"] is not None else "未知"
+        seconds = f"{s['agent_seconds']:.1f}" if s["agent_seconds"] is not None else "未知"
         lines.append(
             f"| {variant} | {s['planned']} | {s['scored']} | {s['successes']} | "
-            f"{s['coverage_success_rate']:.1%} | {valid} |"
+            f"{s['coverage_success_rate']:.1%} | {valid} | {s['known_cost_usd']:.6f} | {s['missing_cost_count']} | {seconds} |"
         )
     lines += [
         "",
         f"成对结果：`{json.dumps(summary['pairs'], ensure_ascii=False)}`",
+        f"MemWeave − 原生：`{json.dumps(summary.get('memweave_minus_native'), ensure_ascii=False)}`；成功差值基于计划行，费用差值仅在全部费用已知时给出。",
         "",
         f"结果完整：{summary['complete']}；停止原因：{state.get('stop_reason') or '正常结束'}。",
         "",

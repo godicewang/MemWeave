@@ -407,6 +407,11 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                     )
 
             for control in ("oracle", "nop"):
+                state["jobs"]["control-" + control] = {
+                    "path": "harbor/control-" + control,
+                    "purpose": "official_" + control,
+                }
+                atomic_json(root / "run.json", state)
                 cfg = build_job_config(spec, root, f"control-{control}", paths, control=control)
                 execute(cfg)
             for task in selected:
@@ -482,7 +487,7 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                         ):
                             raise ValueError("official task changed after freezing")
                     name = f"{variant.id}-r{rep}"
-                    state["jobs"][name] = {"path": f"harbor/{name}"}
+                    state["jobs"][name] = {"path": f"harbor/{name}", "purpose": "solve"}
                     atomic_json(root / "run.json", state)
                     cfg = build_job_config(
                         spec,
