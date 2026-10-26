@@ -5,8 +5,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import tarfile
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 def file_digest(path: Path) -> str:
@@ -60,3 +61,37 @@ def evidence_index(root: Path) -> list[dict]:
             raise ValueError("credential file found in evidence")
         records.append({"path": relative, "sha256": file_digest(p), "size": p.stat().st_size})
     return records
+
+
+def check_private_evidence(root: Path, credential: bytes) -> None:
+    """Fail closed before indexing; never rewrite original logs to conceal a leak."""
+
+    def check(stream):
+        previous = b""
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            data = previous + chunk
+            if credential in data:
+                raise ValueError("credential detected in private evidence; indexing stopped")
+            previous = data[-len(credential) :]
+
+    if not credential:
+        raise ValueError("empty credential cannot be used for evidence privacy validation")
+    for p in root.rglob("*"):
+        if p.is_symlink():
+            raise ValueError("symlink found in private evidence")
+        if not p.is_file():
+            continue
+        with p.open("rb") as stream:
+            check(stream)
+        if p.name == "memory.tar.gz":
+            with tarfile.open(p, "r:gz") as archive:
+                for item in archive:
+                    relative = PurePosixPath(item.name)
+                    if (
+                        relative.is_absolute()
+                        or ".." in relative.parts
+                        or not (item.isfile() or item.isdir())
+                    ):
+                        raise ValueError("unsafe memory evidence archive")
+                    if item.isfile():
+                        check(archive.extractfile(item))

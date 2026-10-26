@@ -19,7 +19,7 @@ import yaml
 
 from .report import generate_report
 from .spec import REPOSITORY, Experiment, Subset, Suite
-from .storage import atomic_json, evidence_index, file_digest
+from .storage import atomic_json, check_private_evidence, evidence_index, file_digest
 from .suites import resolve_suite, select_tasks, task_digest
 
 
@@ -176,9 +176,9 @@ def tool_environment(spec: Experiment, upstream: Path, *, inference=False) -> di
         "SSL_CERT_DIR",
     )
     env = {k: os.environ[k] for k in names if k in os.environ}
-    env.update(
-        HARBOR_TELEMETRY="0", DO_NOT_TRACK="1", DOCKER_DEFAULT_PLATFORM=spec.execution.platform
-    )
+    # Only the main task service gets the explicit platform overlay. Harbor builds
+    # its egress helper for the daemon ISA; a global platform would break that helper.
+    env.update(HARBOR_TELEMETRY="0", DO_NOT_TRACK="1")
     own_source = str(Path(__file__).resolve().parents[1])
     env["PYTHONPATH"] = os.pathsep.join([own_source, str(upstream / "v2/tooling")])
     if inference:
@@ -219,6 +219,8 @@ def execute_harbor(config: dict, root: Path, env: dict, deadline: float, budget:
     from harbor.models.job.config import JobConfig
 
     JobConfig.model_validate(config)  # Verify against the installed fixed Harbor API.
+    if time.monotonic() >= deadline or observed_cost(root) >= budget:
+        raise TimeoutError("experiment stop before starting the next Job")
     config_path = root / "configs" / f"{config['job_name']}.json"
     atomic_json(config_path, config, immutable=True)
     log = root / "harbor-console" / f"{config['job_name']}.log"
@@ -343,6 +345,13 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
     )
     if dirty:
         raise ValueError("commit the experiment implementation before a frozen run")
+    code_commit = subprocess.check_output(
+        ["git", "-C", str(REPOSITORY), "rev-parse", "HEAD"], text=True
+    ).strip()
+    code_files = {
+        p.relative_to(REPOSITORY).as_posix(): file_digest(p)
+        for p in sorted((REPOSITORY / "experiments/src").rglob("*.py"))
+    }
     spec.root.mkdir(parents=True, exist_ok=True, mode=0o700)
     with (spec.root / ".run.lock").open("a") as lease:
         try:
@@ -365,6 +374,7 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
         }
         atomic_json(root / "run.json", state)
         lock_written = False
+        credential = None
         try:
             upstream = resolve_suite(suite, spec.root / "cache")
             selection = select_tasks(upstream / suite.tasks_dir, suite.id, subset.model_dump())
@@ -410,6 +420,10 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                         f"official empty control failed: {task_id}; review before admitting"
                     )
             images = image_snapshot(paths)
+            if any(file_digest(REPOSITORY / path) != digest for path, digest in code_files.items()):
+                raise ValueError(
+                    "experiment implementation changed during preflight; start a new run"
+                )
             plan = [
                 {"task_id": task["task_id"], "variant_id": variant.id, "repetition": rep}
                 for rep in range(1, spec.execution.repetitions + 1)
@@ -425,9 +439,18 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                 "subset": subset.model_dump(),
                 "selection": selected,
                 "package": package,
-                "experiment_commit": subprocess.check_output(
-                    ["git", "-C", str(REPOSITORY), "rev-parse", "HEAD"], text=True
-                ).strip(),
+                "experiment_commit": code_commit,
+                "implementation_files": code_files,
+                "pricing": {
+                    "source": "https://api-docs.deepseek.com/quick_start/pricing/",
+                    "checked_at": "2026-10-27T00:33:05+08:00",
+                    "currency": "USD",
+                    "basis": "Pi 1.4.0 native usage; peak reference rates, estimated not billed",
+                    "per_million_tokens": {
+                        "deepseek-flash": {"input": 0.3, "cache_read": 0.006, "output": 1.2},
+                        "deepseek-v4-pro": {"input": 1.32, "cache_read": 0.044, "output": 3.96},
+                    }.get(spec.model.id),
+                },
                 "docker": docker,
                 "images": images,
                 "tooling_sha256": {
@@ -441,9 +464,15 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
             atomic_json(root / "experiment.lock.json", lock, immutable=True)
             lock_written = True
             env = tool_environment(spec, upstream, inference=True)
+            credential = json.loads(auth_file().read_text())["deepseek"]["key"].encode()
             for rep in range(1, spec.execution.repetitions + 1):
                 order = spec.variants if rep % 2 else list(reversed(spec.variants))
                 for variant in order:
+                    if any(
+                        file_digest(REPOSITORY / path) != digest
+                        for path, digest in code_files.items()
+                    ):
+                        raise ValueError("experiment implementation changed after freezing")
                     if image_snapshot(paths) != images:
                         raise ValueError("task image changed after freezing; start a new run")
                     for task in selected:
@@ -510,6 +539,16 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
             state["finished_at"] = datetime.now(UTC).isoformat()
             state["estimated_known_cost_usd"] = observed_cost(root)
             atomic_json(root / "run.json", state)
+            if credential is not None:
+                try:
+                    check_private_evidence(root, credential)
+                except ValueError:
+                    state.update(
+                        complete=False,
+                        stop_reason="Evidence privacy validation failed; indexing stopped",
+                    )
+                    atomic_json(root / "run.json", state)
+                    raise
             atomic_json(
                 root / "evidence-index.json", {"schema_version": 1, "files": evidence_index(root)}
             )

@@ -34,6 +34,23 @@ def test_partial_patch_score_keeps_agent_error_and_valid_reward():
     assert row["usage"]["input_tokens"] == 100  # cache already included
 
 
+def test_native_phase_durations_are_derived_without_guessing_missing_values():
+    row = normalize_trial(
+        {
+            "started_at": "2026-01-01T00:00:00Z",
+            "finished_at": "2026-01-01T00:00:10Z",
+            "agent_execution": {
+                "started_at": "2026-01-01T00:00:02Z",
+                "finished_at": "2026-01-01T00:00:08Z",
+            },
+        },
+        {"task_id": "x"},
+    )
+    assert row["elapsed_seconds"] == 10
+    assert row["phase_seconds"]["agent_execution"] == 6
+    assert row["phase_seconds"]["verifier"] is None
+
+
 def test_full_denominator_and_pairs_are_preserved():
     rows = []
     for variant, reward in [("pi-native", 0), ("pi-memweave", 1)]:

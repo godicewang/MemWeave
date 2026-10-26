@@ -7,9 +7,21 @@ import io
 import json
 import math
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 
 from .storage import atomic_json, contained, file_digest
+
+
+def duration(record: dict) -> float | None:
+    try:
+        seconds = (
+            datetime.fromisoformat(record["finished_at"])
+            - datetime.fromisoformat(record["started_at"])
+        ).total_seconds()
+        return seconds if seconds >= 0 else None
+    except (KeyError, TypeError, ValueError):
+        return None
 
 
 def normalize_trial(raw: dict | None, plan: dict) -> dict:
@@ -68,6 +80,11 @@ def normalize_trial(raw: dict | None, plan: dict) -> dict:
             row["usage"][target] = sum(values)
     for phase in ("environment_setup", "agent_setup", "agent_execution", "verifier"):
         row[phase] = raw.get(phase)
+    row["phase_seconds"] = {
+        phase: duration(raw.get(phase) or {})
+        for phase in ("environment_setup", "agent_setup", "agent_execution", "verifier")
+    }
+    row["elapsed_seconds"] = duration(raw)
     row["started_at"], row["finished_at"] = raw.get("started_at"), raw.get("finished_at")
     return row
 
@@ -160,6 +177,12 @@ def generate_report(root: Path) -> dict:
                 row["usage"] = original["usage"]
                 row["error_type"] = original["error_type"]
                 row["original_trial"] = originals[0].get("trial_name")
+                row["regrade_elapsed_seconds"] = row.get("elapsed_seconds")
+                row["elapsed_seconds"] = original.get("elapsed_seconds")
+                row["phase_seconds"] = dict(
+                    original.get("phase_seconds", {}),
+                    verifier=row.get("phase_seconds", {}).get("verifier"),
+                )
                 if original["error_type"] and row["execution_status"] == "scored":
                     row["execution_status"] = original["execution_status"]
                 if not matches:

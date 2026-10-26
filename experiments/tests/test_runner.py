@@ -125,3 +125,19 @@ def test_host_credentials_never_enter_harbor_environment(tmp_path, monkeypatch):
     assert "DEEPSEEK_API_KEY" not in env
     assert "OPENAI_API_KEY" not in env
     assert env["HARBOR_TELEMETRY"] == "0"
+    assert "DOCKER_DEFAULT_PLATFORM" not in env  # Harbor sidecar is built for the daemon ISA.
+
+
+def test_stopped_experiment_never_starts_another_job(tmp_path):
+    import time
+    from unittest.mock import patch
+
+    from memweave_eval.runner import execute_harbor
+
+    spec = Experiment.model_validate(configuration(tmp_path))
+    cfg = build_job_config(spec, tmp_path, "nop", [], control="nop")
+    with (
+        patch("subprocess.Popen", side_effect=AssertionError("must not start")),
+        pytest.raises(TimeoutError),
+    ):
+        execute_harbor(cfg, tmp_path, {}, time.monotonic() - 1, 20)
