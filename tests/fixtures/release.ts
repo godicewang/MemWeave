@@ -87,7 +87,7 @@ export async function packArtifact(
     [
       npm,
       "--cache",
-      join(root, "npm-cache"),
+      process.env.MEMWEAVE_TEST_NPM_CACHE ?? join(root, "npm-cache"),
       "pack",
       "--ignore-scripts",
       "--json",
@@ -116,12 +116,12 @@ export async function unpackArtifact(root: string, archive: string) {
       "--prefix",
       destination,
       "--cache",
-      join(root, "npm-cache"),
+      process.env.MEMWEAVE_TEST_NPM_CACHE ?? join(root, "npm-cache"),
       "--ignore-scripts",
       "--no-audit",
       "--no-fund",
       "--package-lock=false",
-      `@huggingface/tokenizers@${manifest.dependencies["@huggingface/tokenizers"]}`,
+      ...Object.entries(manifest.dependencies as Record<string,string>).map(([name,version])=>`${name}@${version}`),
     ]);
   }
   return artifact;
@@ -176,9 +176,9 @@ export async function legacyReleaseHost(root: string): Promise<string> {
   assert.ok(npm, "Run through an npm test script");
   const manifest = JSON.parse(await readFile(join(repository, "package.json"), "utf8"));
   await run(process.execPath, [npm, "install", "--prefix", hostRoot, "--ignore-scripts", "--no-audit", "--no-fund",
-    "--package-lock=false", "--cache", join(root, "npm-cache"),
+    "--package-lock=false", "--cache", process.env.MEMWEAVE_TEST_NPM_CACHE ?? join(root, "npm-cache"),
     "@earendil-works/pi-coding-agent@1.3.0", "@earendil-works/pi-ai@1.3.0", "typebox@1.3.27",
-    `@huggingface/tokenizers@${manifest.dependencies["@huggingface/tokenizers"]}`],
+    ...Object.entries(manifest.dependencies as Record<string,string>).map(([name,version])=>`${name}@${version}`)],
     { timeout: 120_000, maxBuffer: 1024 * 1024 });
   return hostRoot;
 }

@@ -137,7 +137,7 @@ test("Task discovery/status/resume and conflict rejection use native tool calls"
     fauxAssistantMessage("resumed"),
   ]);
   await h.session.prompt("Find and resume first task");
-  assert.equal(scopeOf(h.manager.getBranch()).task_id, first.task_id);
+  assert.equal(scopeOf(h.manager.getBranch()).task_id, first.task_id, JSON.stringify(h.manager.getBranch().filter(e=>e.type==="message"&&e.message.role==="toolResult"&&e.message.isError)));
   assert.equal((await h.tasks.index.get(second.task_id)).status, "active");
   assert.deepEqual(h.diagnostics, []);
   assert.deepEqual(h.errors, []);
@@ -497,7 +497,7 @@ test("only the triggering unbound user/creation turn is adopted; latest_paused u
     fauxAssistantMessage("resumed"),
   ]);
   await h.session.prompt("resume latest paused");
-  assert.equal((await h.tasks.index.get(task.task_id)).status, "active");
+  assert.equal((await h.tasks.index.get(task.task_id)).status, "active",JSON.stringify(h.manager.getBranch().filter(e=>e.type==="message"&&e.message.role==="toolResult"&&e.message.isError)));
   assert.deepEqual(h.diagnostics, []);
 });
 

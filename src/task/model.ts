@@ -19,6 +19,7 @@ export const CreateSchema = Type.Object(
 export const FindSchema = Type.Object(
   {
     query: text,
+    initialize: Type.Optional(Type.Boolean()),
     keywords: Type.Optional(Type.Array(text)),
     limit: Type.Optional(
       Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }),

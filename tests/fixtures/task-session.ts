@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
+import { mkdtemp, writeFile, readFile, rm, mkdir, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { TestContext } from "node:test";
@@ -9,11 +9,12 @@ import type {
 import { registerMemweave } from "../../src/extension/register.ts";
 import { registerLauncher } from "../../src/extension/launcher.ts";
 import { DEFAULT_CONFIG } from "../../src/config/schema.ts";
-import { memoryPaths, type MemoryPaths } from "../../src/storage/paths.ts";
+import { memoryPaths, parentPath, type MemoryPaths } from "../../src/storage/paths.ts";
 import { TaskService } from "../../src/task/service.ts";
 import type { RequestMessages } from "../../src/pi/request-lifecycle.ts";
 import type { CapacityVerifier } from "../../src/pi/model-capacity.ts";
 import { nativeSession } from "./native-session.ts";
+import type { Embedder } from "../../src/task/embedding.ts";
 import { imageReserve } from "../../src/pi/window-budget.ts";
 import type { WindowBudget } from "../../src/pi/window-service.ts";
 export async function taskSession(
@@ -24,6 +25,7 @@ export async function taskSession(
     extra?: (pi: ExtensionAPI) => void;
     verifyCapacity?: CapacityVerifier;
     fullEnvironment?: boolean;
+    embedder?: Embedder;
   } = {},
 ) {
   const root = await mkdtemp(join(tmpdir(), "memweave-task-"));
@@ -36,6 +38,11 @@ export async function taskSession(
       await readFile(new URL("../../resources/rule.md", import.meta.url)),
     );
   }
+  const models=process.env.MEMWEAVE_EMBEDDING_MODELS;
+  if(options.fullEnvironment&&models){
+    await mkdir(parentPath(paths.models),{recursive:true});
+    try{await symlink(models,paths.models,"dir");}catch(error){if((error as NodeJS.ErrnoException).code!=="EEXIST")throw error;}
+  }
   let tasks!: TaskService;
   const frames: RequestMessages[] = [],
     budgets: WindowBudget[] = [],
@@ -46,6 +53,7 @@ export async function taskSession(
       (pi) => {
         const runtimeOptions = {
           paths,
+          ...(!options.fullEnvironment || options.embedder ? {embedder:options.embedder??(async(texts:string[])=>({vectors:texts.map(text=>{const v=Array<number>(384).fill(0);for(const c of text)v[c.codePointAt(0)!%384]!+=1;return v;}),truncated:texts.map(()=>false)}))} : {}),
           imageCost: (model, image) =>
             model.provider === "memweave-test"
               ? 2048

@@ -35,7 +35,8 @@
     "USER_GUIDE.md",
     "LICENSE",
     "resources/tokenizer/*",
-    "src/config/defaults.json"
+    "src/config/defaults.json",
+    "resources/embedding/*"
   ],
   "scripts": {
     "resources:sync": "node scripts/sync-rule.mjs",
@@ -64,6 +65,8 @@
     "typescript": "7.0.2"
   },
   "dependencies": {
-    "@huggingface/tokenizers": "0.2.0"
+    "@huggingface/tokenizers": "0.2.0",
+    "minisearch": "7.2.0",
+    "onnxruntime-node": "1.30.0"
   }
 }

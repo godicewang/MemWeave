@@ -25,6 +25,13 @@ export const POLICY_SCHEMA = object({
   read: object({ lifetime_messages: integer(), default_total_chars: integer(1, CONFIG_LIMITS.read_chars) }),
   source_cache: object({ max_entries: integer(0, CONFIG_LIMITS.cache_entries), max_bytes: integer(0, CONFIG_LIMITS.cache_bytes) }),
   model_metadata_timeout_ms: integer(1, 2147483647),
+  task_binding: object({ max_corrections: integer(0, 3) }),
+  task_search: object({ default_limit: integer(), candidates_per_channel: integer(), rrf_constant: integer(),
+    channel_weights: object({ lexical: Type.Number({exclusiveMinimum:0}), semantic: Type.Number({exclusiveMinimum:0}), keywords: Type.Number({exclusiveMinimum:0}) }),
+    field_weights: object({goal:percent(1000),title:percent(1000),keywords:percent(1000),summary:percent(1000),project_name:percent(1000)}),
+    embedding: object({model:Type.Literal("Xenova/multilingual-e5-small"),revision:Type.Literal("761b726dd34fb83930e26aab4e9ac3899aa1fa78"),dtype:Type.Literal("q8")}),
+    cache_max_bytes:integer(0,33554432),model_idle_ms:integer(1,2147483647),model_timeout_ms:integer(1,2147483647),
+  }),
 });
 export type PolicySettings = Readonly<Static<typeof POLICY_SCHEMA>>;
 export const POLICY_KEYS = Object.freeze(Object.keys(POLICY_SCHEMA.properties) as (keyof PolicySettings)[]);
@@ -39,6 +46,8 @@ export const percentUnits = (percent: number) => Math.round(percent * 100);
 export const percentOf = (total: number, percent: number) => Number(BigInt(total) * BigInt(percentUnits(percent)) / 10000n);
 export function validateSettings(value: unknown): asserts value is PolicySettings {
   if (!Check(POLICY_SCHEMA, value)) throw Error("INVALID_CONFIG: invalid policy settings");
+  if (Math.abs(Object.values(value.task_search.channel_weights).reduce((a,b)=>a+b,0)-1)>1e-8)
+    throw Error("INVALID_CONFIG: Task search weights must sum to 1");
   const p = value.context_budget.parts_percent;
   const elastic = value.elastic_budget;
   const percentages = [value.context_budget.model_percent, ...Object.values(p),
@@ -75,6 +84,8 @@ export function settingsFor(config?: Partial<PolicySettings>): PolicySettings {
     read: config?.read ?? DEFAULT_SETTINGS.read,
     source_cache: config?.source_cache ?? DEFAULT_SETTINGS.source_cache,
     model_metadata_timeout_ms: config?.model_metadata_timeout_ms ?? DEFAULT_SETTINGS.model_metadata_timeout_ms,
+    task_binding:config?.task_binding??DEFAULT_SETTINGS.task_binding,
+    task_search:config?.task_search??DEFAULT_SETTINGS.task_search,
   });
 }
 export { freeze as freezeConfig };

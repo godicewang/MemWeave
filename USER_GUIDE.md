@@ -60,7 +60,7 @@ Git 来源仍可使用 `pi install 'git:git@github.com:godicewang/MemWeave.git@<
 
 3. **在 Pi 中配置模型和认证。** 使用 Pi 自己的模型选择与私有认证配置，密钥不要放入项目、Rule 或聊天。当前生产容量适配要求 OpenAI 兼容 `/models` 提供唯一匹配模型的精确 `context_window`；仅有静态目录或“1M”显示名称不足以通过检查。DeepSeek Flash 已验收，不能由此推断所有 OpenAI 兼容供应商都可用。仓库的开发验证私有配置不随 Package 分发。
 
-4. 初始化完成后，先用文字让模型创建 Task，例如：“为当前工作创建一个 Task，目标是完成……”。再进行正常工作。没有当前 Task 时不可写 State 或读取 Task 引用。
+4. 初始化完成后直接描述工作目标。Agent 自行判断是否需要持续维护 Task；简单算术、时间、模型/插件信息等即时问答直接回答。实质工作未绑定时先检索候选，再选择创建或恢复；同目标已有绑定就继续。没有当前 Task 时不可写 State 或读取 Task 引用。
 
 ## 正常使用
 
@@ -68,8 +68,8 @@ Task 保存目标和当前认知，Pi Session 保存原始交互。你可直接�
 
 | 意图 | 工具与边界 |
 |---|---|
-| 新工作 | `task_create` 创建并绑定 Task，初始化 Goal |
-| 查找旧任务 | `task_find` 模糊查找；查询本身不切换 Task |
+| 新工作 | `task_find` 携带 `initialize=true` 获取候选，由 Agent 选择 `task_create` 或 `task_resume` |
+| 查找旧任务 | `task_find` 融合词项、关键词、本机语义召回 Top-k；普通查询不切换 Task |
 | 继续旧任务 | `task_resume` 用明确 task_id，恢复认知并绑定当前 Session/分支 |
 | 查看认知 | `state_read` 读取明确 Task；可用 event_ids 查询已知历史 F/D，`task_status` 查看状态；都不切换 Task |
 | 保存认知 | `state_append` 保存 Fact/Decision，`update_goal` 更新目标，`modify_fact` 归档旧认知并写入修正 |
@@ -90,7 +90,7 @@ Task 保存目标和当前认知，Pi Session 保存原始交互。你可直接�
 /memweave-restart
 ```
 
-命令无参数，不发起模型推理、不写入假用户消息；确定自动窗口时可能查询模型容量元数据。它选取最近 N 个完整事件，退出当前分支旧绑定、取消旧窗口积压，然后等待你发送新的工作要求。下一轮由 Agent 根据近期现场和最新要求创建新 Goal；目标没决定时先提问，不创建“确认目标”等占位任务。
+命令无参数，不发起模型推理、不写入假用户消息；确定自动窗口时可能查询模型容量元数据。它选取最近 N 个完整事件，退出当前分支旧绑定、取消旧窗口积压，然后等待你发送新的工作要求。下一轮目标明确后由 Agent 声明检索初始化，再根据近期现场和最新要求创建新 Goal；目标没决定时先提问，不创建“确认目标”等占位任务。
 
 旧 Task/State 和原始 Session 保留，其他会话继续使用旧任务；这里不是删除记忆。初始近期范围没有用户消息时，用最近真实用户加末尾 N-1 个完整事件，总数不超过 N；加入新消息后仍按正常 N/B 滑动，不建立永久锚点。空 Session 直接等待首次输入。已有不可裁剪内容本身超预算时仍会明确取消，不能保证任何输入都放得下。
 
@@ -130,7 +130,7 @@ Task 保存目标和当前认知，Pi Session 保存原始交互。你可直接�
 
 ## 重启、备份与并发
 
-- 要恢复同一聊天，使用 Pi 原生 `pi --session <path-or-id>`；磁盘恢复会继续 Task 绑定、引用编号和分支设置。`task_resume` 在新聊天中只恢复认知，不载入旧 Task 全部聊天，不重放外部操作或改变 cwd。
+- 要恢复同一聊天，使用 Pi 原生 `pi --session <path-or-id>`；磁盘恢复会继续 Task 绑定、引用编号和分支设置。`task_resume` 在新聊天中恢复最新 State 和目标 Task 在已登记 Session 中最近 N 个完整事件，保留本次恢复输入/工具过程。旧消息只进入请求视图，不复制到新 Session，不重放外部操作或改变 cwd。来源在恢复时冻结；缺失、损坏或不支持的原生压缩表示明确报错，不能以摘要替代。
 - 备份时同时保留 `~/.pi/memory/` 和其 Task 注册过的 Pi Session 原件。`state.md` 可由 `state.json` 重建，`state.json`、index、blobs 和 Session 不能当缓存删除。
 - 不同 Pi 进程可通过各自 Session 共享同一 Task，写入使用进程锁；Recent Window 设置互相隔离。**多个进程同时写同一 Session 文件未验收。**
 - 磁盘失败可能出现“State 已提交、派生视图或索引未更新”；不要据此重复制造新认知。保留原文件并按诊断恢复，幂等重试会识别已提交操作。Session 元数据未可靠落盘时，需从磁盘重新打开，单纯 `/reload` 不能修复脏内存。
@@ -195,6 +195,13 @@ pi remove '<pi list 中的完整来源>' --local
 | read.default_total_chars | 8000 | 两种回读工具未传 max_total_chars 时的默认值，1–50000；调用显式值优先 |
 | source_cache.max_entries / max_bytes | 8192 / 16777216 | 来源定位缓存条数与估算 bytes 限额，可缩小/置 0 禁用，不可增大超过既定上限 |
 | model_metadata_timeout_ms | 15000 | 模型容量元数据查询超时毫秒，1–2147483647，不改变 Pi 推理重试 |
+| task_binding.max_corrections | 1 | 显式初始化后未绑定即交付的自动纠正次数，0–3；0 仍记录失败 |
+| task_search.default_limit / candidates_per_channel / rrf_constant | 5 / 50 / 60 | Top-k、各路候选数、RRF 常数；正整数，工具显式 limit 优先 |
+| task_search.channel_weights | lexical=0.45, semantic=0.45, keywords=0.10 | 正数合计 1；分数不表示恢复概率 |
+| task_search.field_weights | goal=3, title=2, keywords=2, summary=1, project_name=1 | 词项通道字段权重，0<值≤1000 |
+| task_search.embedding | 固定 E5-small / revision / q8 | 只接受本包已校验的固定组合，不执行任意远程模型代码 |
+| task_search.cache_max_bytes | 33554432 | 派生行驻留估算 bytes，可降低至 0，不含模型/原生内存 |
+| task_search.model_idle_ms / model_timeout_ms | 60000 / 180000 | 模型空闲释放、下载/单次推理超时毫秒，正整数 |
 
 | parts_percent 子键 | state | window | output | system | user | read | protocol | safety |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -205,3 +212,16 @@ pi remove '<pi list 中的完整来源>' --local
 默认 Rule 增加四个纯数值占位符：`{{agent_context_percent}}`、`{{state_token_warning_percent}}`、`{{read_lifetime_messages}}`、`{{read_default_total_chars}}`，加上原六项共十项；不支持表达式、嵌套配置路径或任意变量。六变量旧模板在原默认策略下仍可用。改变对应策略而旧模板缺少相应占位符时，会报 `RULE_CONFIG_MISMATCH` 并取消；备份后将兼容默认模板合并到独立 `rule.md` 再重试。首次确认和包版本变化时按初始化规则更新默认 Rule；同版本保留日常编辑。开发源码更新且版本未变时，应将 resources/rule.md 中新的固定预算/回读说明同步到运行时 Rule，保留自己的其他内容。仅调整缓存、超时、自动窗口规则或既有六字段，无须因此更新模板。
 
 配置不是密钥存储：模型/API/认证继续使用 Pi 私有配置。缓存限额变化仅清理本实例的定位缓存；State、Session、原件及当前 Task 不会被配置文件直接删除。
+
+
+## 本地 Task 召回与初始化边界（当前开发版本）
+
+Task 检索复用 MiniSearch 和多语言 E5-small Q8，融合 Top-k 后由当前 Agent 选择，不自动恢复第一名。跨工作区候选也会展示 workspace，执行前仍需确认当前目录和业务状态。它只索引 Goal/发现字段，不向量化全部聊天或 F/D，不新增远程嵌入 API、后台分类或独立决策 Agent。
+
+首次对已有 Task 检索时需从公开模型仓库下载固定资源，合计约 135 MB；npm 安装的原生推理依赖空间另计。资源来源和哈希见包内 resources/embedding/。之后本地 CPU 运行；查询和目标不会上传到下载站点。每个扩展运行实例最多一个推理线程，查询串行、空闲默认60秒释放。实际进程内存高于权重文件大小，本机短时测试约 0.7–0.8 GB；这不是整台机器或所有平台的固定上限。
+
+模型放在 `~/.pi/memory/models/`，可重建的每 Task 派生索引放在 `search/v1/`，更新替换而不逐查询追加。默认行缓存上限32 MiB，超限淘汰驻留项，不删除 Task；Goal/发现字段变化重新嵌入，普通 F/D 追加复用原向量。下载、校验、主 State 损坏均明确失败；不会悄悄改成仅关键词查询。离线使用需先完成资源准备；删除模型/派生索引可重建，勿删除 State 或 Session。
+
+只有 Agent 显式发起 `task_find initialize=true` 后，未绑定阶段才限制业务工具。若模型仍直接交付，Pi 保存一条可见程序失败回执，默认最多再推理一次以完成创建/恢复；失败答复保留，回执不是用户消息、真实事件或认知证据。普通问答、只读历史查找及目标待澄清不进入此流程。Agent 若错误地没声明初始化，程序不会自行识别并强制建 Task；该自主判断仍需真实模型验收。显式 `/memweave-restart` 仍准备新 Task，不因找到相似候选自动恢复旧 State。
+
+新增的 `memweave.resume.v1` 与 `memweave.task.binding.v1` 是原生 Session 中的轻量定位/失败记录。旧数据无需迁移；旧扩展版本不保证理解新恢复记录。这些功能尚未发布到现有 npm 0.1.0，源码版本号并不代表公网包已更新。

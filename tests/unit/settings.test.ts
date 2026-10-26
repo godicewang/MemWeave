@@ -103,3 +103,19 @@ test("cache reconfiguration clears hints and actually obeys smaller/disabled lim
   verifier.match(messages, entries, "s", () => { throw Error("no projection"); });
   assert.equal(verifier.stats.entries, 0);
 });
+
+test("Task search policies merge nested overrides and reject unsupported model or invalid weights", () => {
+  const config=mergeConfig({task_binding:{max_corrections:0},task_search:{field_weights:{goal:4},cache_max_bytes:0}},{},629145);
+  assert.equal(config.task_binding.max_corrections,0);
+  assert.equal(config.task_search.field_weights.goal,4);
+  assert.equal(config.task_search.field_weights.title,2);
+  assert.equal(config.task_search.embedding.dtype,"q8");
+  for(const value of [
+    {task_binding:{max_corrections:4}},
+    {task_search:{channel_weights:{semantic:0.9}}},
+    {task_search:{embedding:{model:"arbitrary-remote-code"}}},
+    {task_search:{embedding:{revision:"main"}}},
+    {task_search:{model_idle_ms:0}},
+    {task_search:{field_weights:{goal:0}}},
+  ])assert.throws(()=>mergeConfig(value,{},629145),/INVALID_CONFIG/);
+});

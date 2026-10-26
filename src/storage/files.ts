@@ -15,7 +15,7 @@ export async function readOptional(file: string): Promise<string | undefined> {
   }
 }
 /** Same-directory rename is the commit point. A directory-sync failure is explicitly indeterminate. */
-export async function atomicWrite(file: string, bytes: string): Promise<void> {
+export async function atomicWrite(file: string, bytes: string | Uint8Array): Promise<void> {
   await mkdir(parentPath(file), { recursive: true, mode: 0o700 });
   const temporary = temporaryPath(file);
   try {

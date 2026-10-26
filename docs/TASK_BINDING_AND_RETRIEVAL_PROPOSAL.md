@@ -1,6 +1,6 @@
 # 首次 Task 绑定、混合检索与近期现场恢复
 
-2026-10-26。**设计提案，尚未实现。** 用户最终确认：简单即时问答不创建 Task；是否属于有意义的任务由 Agent 自主判断，需要时进入检索，收到 Top-k 后选择创建或恢复；旧 Task 恢复 State 和近期 Window；采用本机嵌入。早先“所有首次输入均强制绑定”的中间要求已被最新指示取代。用户要求先定稿模型、缓存与恢复设计。本文集中列出新增接线/配置/持久化边界，待确认后先同步直接相关规范，再开发，不把当前源码说成已具备这些能力。
+2026-10-26。**2026-10-26 用户已批准，进入实现；完成情况与实际验收另行记录。** 用户最终确认：简单即时问答不创建 Task；是否属于有意义的任务由 Agent 自主判断，需要时进入检索，收到 Top-k 后选择创建或恢复；旧 Task 恢复 State 和近期 Window；采用本机嵌入。早先“所有首次输入均强制绑定”的中间要求已被最新指示取代。用户要求先定稿模型、缓存与恢复设计。本文确定新增接线/配置/持久化边界；先同步直接相关规范，再按垂直切片实现。用户同时要求撤回未显示收益的工具摘要优化，视觉只验兼容、能力结果另记。
 
 ## 第一部分：目的、范围和取舍
 
@@ -10,15 +10,15 @@
 
 推荐使用同一条路径：由当前 Agent 判断用户是否提出了值得持续维护的任务；简单算术、时间、当前模型/插件信息等直接回答，不创建 Task，也不需要额外分类工具。需要 Task 且尚未绑定时，使用 task_find 发现候选，再选择 task_create 或 task_resume。已有绑定的同目标续作直接继续，不每轮搜索/创建；目标不明先澄清，不伪造占位 Goal。
 
-为区别“只查找 Task”与“已决定建立任务现场”，建议 task_find 新增可选 initialize=true 标记，默认false保持原发现语义。Agent 目标明确且决定进入任务时才填写true；返回仍是候选，不自动建Task。程序只对已经显式进入初始化或/memweave-restart的流程检查绑定；普通未触发初始化的回答不一律失败。若初始化后直接答复却未绑定，系统给出失败回执，最多纠正一次；仍失败就停止。已流式显示的原答复不隐藏/删除。**Agent 未进入初始化的错误判断仍可能漏掉Task，这是保留自主判断的取舍，不能宣称程序识别所有实质问题。**
+为区别“只查找 Task”与“已决定建立任务现场”，建议 task_find 新增可选 initialize=true 标记，默认false保持原发现语义。Agent 目标明确且决定进入任务时才填写true；返回仍是候选，不自动建Task。程序只对当前输入已经显式initialize的流程检查绑定；restart仅准备现场，目标明确后仍由Agent声明初始化；普通未触发初始化的回答不一律失败。若初始化后直接答复却未绑定，系统给出失败回执，最多纠正一次；仍失败就停止。已流式显示的原答复不隐藏/删除。**Agent 未进入初始化的错误判断仍可能漏掉Task，这是保留自主判断的取舍，不能宣称程序识别所有实质问题。**
 
 ### 检索方式
 
 用本地词项检索和语义向量分别召回，再融合候选，避免只数关键词命中。Goal 作为重要检索字段；标题、摘要、项目和关键词提供其他线索。向量只用于 Task 发现，不向量化全部聊天或 F/D，不自动恢复最高分任务，不增加独立决策 Agent。
 
-建议本地模型为 **Xenova/multilingual-e5-small 的 Q8 ONNX 版本**，基于 intfloat 的多语言 E5。模型卡提供 Transformers.js 加载方式；转换仓库、原模型与运行库均单独记录来源。[模型卡](https://huggingface.co/Xenova/multilingual-e5-small)、[原模型](https://huggingface.co/intfloat/multilingual-e5-small)。本机目前没有这个推理依赖或模型，尚未下载/执行权重，不宣称已经通过兼容或性能验收。
+建议本地模型为 **Xenova/multilingual-e5-small 的 Q8 ONNX 版本**，基于 intfloat 的多语言 E5。模型卡提供 Transformers.js 加载方式；转换仓库、原模型与运行库均单独记录来源。[模型卡](https://huggingface.co/Xenova/multilingual-e5-small)、[原模型](https://huggingface.co/intfloat/multilingual-e5-small)。原提案时尚未下载；当前已按固定 revision 在本机实际运行，具体正确性、资源和兼容数据见本轮验收记录。
 
-按 2026-10-26 官方仓库文件元数据，Q8 权重 118,308,185 bytes，加分词资源约 140 MB；推理库安装空间另计。首次使用需下载一次，此后本地运行，不向远程发送目标或查询、不新增远程嵌入 API。代价是首次等待、推理依赖及本机 CPU/内存；不能用缓存大小冒充整个进程内存上限。
+按 2026-10-26 官方仓库文件元数据，Q8 权重 118,308,185 bytes，加分词资源约 135 MB；推理库安装空间另计。首次使用需下载一次，此后本地运行，不向远程发送目标或查询、不新增远程嵌入 API。代价是首次等待、推理依赖及本机 CPU/内存；不能用缓存大小冒充整个进程内存上限。
 
 ### 恢复什么
 
@@ -38,17 +38,17 @@
 
 ### A. 首次绑定与有界纠正
 
-1. 未绑定分支的 task_find({query,keywords?,limit?,initialize:true}) 表示Agent明确进入初始化；普通调用默认initialize=false只发现，不切换或强制绑定。标记从当前真实输入的原生调用/结果核验，不新增初始化数据库。初始化或显式restart生效后，仅允许task_find、state_read、task_status、task_create、task_resume；其他模型工具返回TASK_BINDING_REQUIRED，绑定后开放。未经验证的工具旁路不宣称覆盖。
+1. 未绑定分支的 task_find({query,keywords?,limit?,initialize:true}) 表示Agent明确进入初始化；普通调用默认initialize=false只发现，不切换或强制绑定。标记从当前真实输入的原生调用/结果核验，不新增初始化数据库。initialize声明生效后，仅允许task_find、state_read、task_status、task_create、task_resume；其他模型工具返回TASK_BINDING_REQUIRED，绑定后开放。未经验证的工具旁路不宣称覆盖。
 2. 完整Rule保留简单即时问答豁免，明确由Agent判断是否需要Task；只查历史或需澄清时可以普通task_find，不填写initialize。目标明确且需要任务时才显式初始化。已有有效绑定则复用，独立新目标创建新Task。task_find不自动切换，task_resume才切换，检索分数不决定绑定。
-3. 显式 /memweave-restart 仍表示准备**新** Task，保留种子，不因旧任务相似而自动恢复旧 State。用户明确要求回到旧任务才走恢复流程。新目标明确时先 task_create，再执行后续业务；目标未定先澄清。
+3. 显式 /memweave-restart 仍表示准备**新** Task，保留种子，不因旧任务相似而自动恢复旧 State。用户明确要求回到旧任务才走恢复流程。新目标明确时先task_find initialize=true声明初始化，再task_create；候选不能改变本次新Task意图；目标未定先澄清。
 4. Pi 1.3.0/1.4.0 公开 agent_before_settle 可以请求继续，但原生源码要求原始上下文末尾不是 assistant，或存在待发送消息。仅返回 continue=true 不能在最终 assistant 答复后启动纠正。因此建议追加一条可见原生 custom_message 失败回执，再让原生循环继续；不 fork Loop、不伪造 user 或 toolResult、不删除旧答复。
 5. 提议 custom_message 类型 memweave.task.binding.v1，details={version:1,trigger_user_entry_id,rejected_assistant_entry_id,attempt:1,reason:"TASK_BINDING_REQUIRED"}；正文是固定程序失败说明。没有用户目标、事实或聊天副本，不分配 U/A/T，不计真实事件，不可作 evidence。Window 仅接受当前祖先链上与原件逐字段一致的自有回执，经专用薄适配展示/预算；不能借此放行任意第三方 custom 消息。该消息需要保留在原生 Session，这是新增边界。
 6. 纠正计数属于当前真实输入，自动工具续跑不重置；中断/错误不强行继续，网络重试不产生新回执。reload/重启从轻量回执定位同一输入，不能将同一违规再次纠正一遍。默认最多一次；仍失败时明确停止，不以部分 Task/Goal 提交伪称完成。
-7. 程序不根据问号、句长、正则或额外模型推理区分问题性质，只执行Agent已显式声明的初始化。目标或候选不明时，Agent可先普通查询并澄清；误声明initialize后又无法绑定，最多纠正一次再停止，不猜造Goal。显式restart仍有独立的已确认新Task意图；目标未明时等待澄清，不能因相似候选自动恢复旧State。
+7. 程序不根据问号、句长、正则或额外模型推理区分问题性质，只执行Agent已显式声明的初始化。目标或候选不明时，Agent可先普通查询并澄清；误声明initialize后又无法绑定，最多纠正一次再停止，不猜造Goal。显式restart仍有已确认的新Task意图，但当前输入目标未明时不自动触发门禁/失败纠正，先等待澄清，不能因相似候选自动恢复旧State。
 
 ### B. 多路召回与配置
 
-词项通道采用 BM25 字段加权：Goal 3、title 2、keywords 2、summary 1、project_name 1；中文等语言使用 Intl.Segmenter 分词。另有显式关键词匹配通道和多语言向量余弦通道。每路先取候选，最终用加权 RRF 合并：
+词项通道复用无依赖的 MiniSearch 7.2.0（BM25+ 系算法）进行字段加权：Goal 3、title 2、keywords 2、summary 1、project_name 1；中文等语言使用 Intl.Segmenter 分词。另有显式关键词匹配通道和多语言向量余弦通道。每路先取候选，最终用加权 RRF 合并：
 
 ```text
 score(task) = Σ weight[channel] / (60 + rank[channel](task))
@@ -67,7 +67,7 @@ score(task) = Σ weight[channel] / (60 + rank[channel](task))
 | task_search.channel_weights | lexical=0.45、semantic=0.45、keywords=0.10；正数合计 1 |
 | task_search.field_weights | Goal/title/keywords/summary/project=3/2/2/1/1 |
 | task_search.embedding | 固定模型标识/revision/Q8；首版不接受任意远程模型执行代码 |
-| task_search.cache_max_bytes / model_idle_ms | 32 MiB 派生缓存驻留预算 / 60000ms |
+| task_search.cache_max_bytes / model_idle_ms / model_timeout_ms | 32 MiB 派生缓存驻留估算预算 / 60000ms 空闲释放 / 180000ms 下载及单次推理超时 |
 
 task_find 保留 query/keywords/limit，并新增可选initialize（默认false，仅标记已决定开始初始化，不自行创建），仍返回数组；候选增加goal、workspace、融合分数和各通道排名，帮助Agent判断；分数不是“恢复正确概率”。默认不限定当前工作区，但明确展示 workspace，不把异工作区结果自动恢复。没有相关候选或候选不适用时创建新 Task；不把 Top-1 当确定答案。
 
@@ -103,3 +103,7 @@ source_session_id 必须已登记在目标 Task；source_anchor 固定当时可�
 3. 完成本地混合检索：真实模型/固定本地样本比较纯词项与混合 Top-k；同义表达、中英文、同关键词不同 Goal、跨工作区、多任务、缓存失效、离线下载失败及并发。确认 Agent 选择而非程序自动恢复。
 4. 完成旧 Window：单/多 Session、同 Session 后续其他 Task、分支切换、来源丢失/损坏、压缩表示、原件/引用、多模态、部分提交与重试；旧原始消息和 State 不被改写。
 5. 全程使用完整发布提示/环境与真实 DeepSeek 检查业务/认知；另行测本机嵌入的冷/热耗时、内存与磁盘。最后双宿主、完整发布入口和相关真实专项；测试失败继续停止发布，不用前一轮元数据小改动的结果替代。
+
+## 实现选择补充（授权调研范围内）
+
+检索词项引擎复用 MiniSearch 7.2.0，不自行维护 BM25 实现；无传递依赖，支持字段加权与 Intl.Segmenter 自定义分词。融合仍为既定加权RRF。嵌入运行时采用 ONNX Runtime CPU 1.30.0＋项目已有 @huggingface/tokenizers，省去 Transformers.js 的浏览器/图像依赖；相同E5 Q8、query/passage前缀、mean pooling及L2归一化。三个本机对照样本与Transformers.js参考向量最大绝对差约2.56e-8；不据此承诺所有任务检索质量。[MiniSearch](https://github.com/lucaong/minisearch)、[ONNX Runtime Node](https://onnxruntime.ai/docs/get-started/with-javascript/node.html)。

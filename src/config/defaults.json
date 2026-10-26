@@ -18,8 +18,16 @@
   },
   "elastic_budget": {
     "extra_model_percent": 20,
-    "pool_percent": { "read": 40, "window": 40, "safety": 20 },
-    "window_weights": { "current": 50, "recent": 35, "older": 15 },
+    "pool_percent": {
+      "read": 40,
+      "window": 40,
+      "safety": 20
+    },
+    "window_weights": {
+      "current": 50,
+      "recent": 35,
+      "older": 15
+    },
     "recent_events": 3,
     "expired_read_percent": 10
   },
@@ -42,5 +50,33 @@
     "max_entries": 8192,
     "max_bytes": 16777216
   },
-  "model_metadata_timeout_ms": 15000
+  "model_metadata_timeout_ms": 15000,
+  "task_binding": {
+    "max_corrections": 1
+  },
+  "task_search": {
+    "default_limit": 5,
+    "candidates_per_channel": 50,
+    "rrf_constant": 60,
+    "channel_weights": {
+      "lexical": 0.45,
+      "semantic": 0.45,
+      "keywords": 0.1
+    },
+    "field_weights": {
+      "goal": 3,
+      "title": 2,
+      "keywords": 2,
+      "summary": 1,
+      "project_name": 1
+    },
+    "embedding": {
+      "model": "Xenova/multilingual-e5-small",
+      "revision": "761b726dd34fb83930e26aab4e9ac3899aa1fa78",
+      "dtype": "q8"
+    },
+    "cache_max_bytes": 33554432,
+    "model_idle_ms": 60000,
+    "model_timeout_ms": 180000
+  }
 }

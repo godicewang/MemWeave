@@ -12,6 +12,8 @@ import { CONFIG_SCHEMA } from "../config/schema.ts";
 import { StateBatchSchema } from "../state/window.ts";
 import { WINDOW_TYPE, WindowSchema } from "../window/model.ts";
 import { TaskIdSchema } from "../task/model.ts";
+import { RESUME_TYPE,ResumeWindowSchema } from "../task/resume-window.ts";
+import { BINDING_TYPE,BindingSchema as BindingReceiptSchema,bindingReceipts } from "../task/binding.ts";
 import { RESTART_TYPE, RestartSchema } from "../task/restart-model.ts";
 import {
   ALIAS_TYPE,
@@ -224,16 +226,18 @@ export class SessionMemory {
   }
   async verify(ctx: ExtensionContext): Promise<void> {
     this.check();
+    bindingReceipts(ctx.sessionManager.getBranch());
     const own = ctx.sessionManager
       .getBranch()
       .filter(
         (e) =>
-          e.type === "custom" &&
+          (e.type === "custom_message" && e.customType === BINDING_TYPE && Check(BindingReceiptSchema,e.details)) || e.type === "custom" &&
           (e.customType === SCOPE_TYPE ||
             e.customType === REF_TYPE ||
             e.customType === STATE_REQUEST_TYPE ||
             e.customType === WINDOW_TYPE ||
             e.customType === RESTART_TYPE ||
+            e.customType === RESUME_TYPE ||
             e.customType === ALIAS_TYPE ||
             e.customType === ORIGINAL_TYPE),
       );
@@ -252,6 +256,9 @@ export class SessionMemory {
           "SESSION_STATE_DIVERGED: own metadata is not durable; reopen Session from disk",
         );
       }
+    if(own.some(e=>e.type==="custom_message")){
+      const fd=openSync(file,"r");try{fsyncSync(fd);}finally{closeSync(fd);}
+    }
   }
   async append(
     ctx: ExtensionContext,
@@ -264,6 +271,7 @@ export class SessionMemory {
       (kind === STATE_REQUEST_TYPE && !Check(StateBatchSchema, data)) ||
       (kind === WINDOW_TYPE && !Check(WindowSchema, data)) ||
       (kind === RESTART_TYPE && !Check(RestartSchema, data)) ||
+      (kind === RESUME_TYPE && !Check(ResumeWindowSchema,data)) ||
       (kind === ALIAS_TYPE && !Check(AliasesSchema, data)) ||
       (kind === ORIGINAL_TYPE && !Check(OriginalsSchema, data))
     )

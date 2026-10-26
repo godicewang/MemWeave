@@ -33,10 +33,13 @@ import { SetWindowSchema } from "../window/model.ts";
 import { StateReadSchema, historyReadRanges } from "../state/read.ts";
 import { WindowService, type WindowOptions } from "../pi/window-service.ts";
 import { READ_TRUNCATION_TAG } from "../window/read-budget.ts";
+import { registerTaskBinding } from "../task/binding.ts";
+import type { Embedder } from "../task/embedding.ts";
 import { registerRestart } from "./restart.ts";
 import { registerSetup } from "./setup.ts";
 import { registerContextFooter } from "../pi/context-footer.ts";
 export interface MemweaveOptions extends WindowOptions {
+  embedder?:Embedder;
   paths?: MemoryPaths;
   setupAgentDir?: string;
   setupPackageVersion?: string;
@@ -58,7 +61,7 @@ export function registerMemweaveRuntime(
   existingSetup?: ReturnType<typeof registerSetup>,
 ) {
   const paths = options.paths ?? memoryPaths(),
-    tasks = new TaskService(paths, pi),
+    tasks = new TaskService(paths, pi,options.embedder),
     window = new WindowService(tasks, {
       ...options,
       thinkingLevel: () => pi.getThinkingLevel(),
@@ -77,6 +80,8 @@ export function registerMemweaveRuntime(
     },
   });
   registerRestart(pi, window, report);
+  registerTaskBinding(pi,tasks,report);
+  pi.on("session_shutdown",()=>tasks.search.close());
   const setup = existingSetup ?? registerSetup(pi, paths, report, options.setupAgentDir, options.setupPackageVersion);
   const footer = registerContextFooter(pi);
   const lifecycle = registerRequestLifecycle(pi, { ...services, ...setup, report });
@@ -143,9 +148,9 @@ export function registerMemweaveRuntime(
   );
   tool(
     "task_find",
-    "Find historical Tasks by query and optional keywords. limit defaults to 5. Discovery only; does not switch Task.",
+    "Find Top-k Tasks using Goal/field lexical, keyword and local semantic retrieval. query required; optional keywords/limit. initialize=true explicitly starts Task initialization for this real input when unbound: choose task_create/task_resume before business tools or final delivery. Omit initialize for discovery/clarification only. Simple immediate Q&A needs no Task/search. Results do not switch or auto-resume; inspect candidates and choose. Local model errors are explicit; never infer absence from failed search.",
     FindSchema,
-    (p) => tasks.find(p),
+    (p,ctx) => tasks.find(p,ctx),
   );
   tool(
     "task_resume",

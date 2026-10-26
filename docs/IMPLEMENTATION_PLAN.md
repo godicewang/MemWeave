@@ -202,3 +202,10 @@
 用户已确认 RESTART_AND_MEMORY_CHECKPOINT_PROPOSAL.md 和 RESTART_WIRING_PROPOSAL.md。先同步直接规范；测试并实现显式命令、原事件种子、新 Goal 部分提交恢复，以及固定 Rule 的业务/记忆双检查。保持旧 Task/State、已有分池、Goal/F/D、独立窗口提交和宿主边界；不增加自动启停判定、工作流或总结 Agent。
 
 246 项常规回归、5 项入口/产物检查、解包产物真实 DeepSeek 恢复与 5 项新增真实 Flash 场景通过；Pi 1.3.0 类型及 161 项相关检查通过。临时解包驱动额外验证了命令、最近用户补入、磁盘重开和新 Goal，见 RESTART_AND_CHECKPOINT_VALIDATION.md。未发布 npm，也未将模型语义测试表述为每次必然写入记忆的保证。
+
+
+## 2026-10-26 Task 初始化与混合召回（研发与验收）
+
+用户确认 TASK_BINDING_AND_RETRIEVAL_PROPOSAL.md：先同步直接规范，再实现声明初始化/有界原生纠正、MiniSearch＋多语言 E5-small Q8 本机混合 Top-k、冻结旧 Session 分支的有界 Window 恢复。简单问答豁免、同目标复用、显式 restart 等待新目标、原始历史/Goal/F/D/独立窗口提交保持。State 工具摘要优化已按用户要求撤回；图片只检验兼容，不把特定 OCR 格式设为插件发布门槛。
+
+新功能已完成确定性、真实模型和资源测量；最终候选、双宿主及完整入口证据由 TASK_RETRIEVAL_VALIDATION_2026-10-26.md 记录。真实模型“受阻后漏存失败边界”仍可能发生，不因绑定改进宣称每次必然写 State；所有专项未通过前仍不发布 npm。

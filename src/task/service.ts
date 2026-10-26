@@ -50,6 +50,9 @@ import {
   readHistoricalState,
   type StateReadInput,
 } from "../state/read.ts";
+import { RESUME_TYPE,resumeMetadata,resumeSourceCall,resumeCommitted,receiptForCall,prepareResume } from "./resume-window.ts";
+import { TaskSearch } from "./search.ts";
+import type { Embedder } from "./embedding.ts";
 import { TaskIndex } from "./index-store.ts";
 import {
   CreateSchema,
@@ -83,10 +86,12 @@ export class TaskService {
   readonly memory: SessionMemory;
   readonly goalMetadata: GoalMetadataResolver;
   readonly reader: MemoryService;
-  constructor(paths: MemoryPaths, pi: Pick<ExtensionAPI, "appendEntry">) {
+  readonly search: TaskSearch;
+  constructor(paths: MemoryPaths, pi: Pick<ExtensionAPI, "appendEntry">,embedder?:Embedder) {
     this.paths = paths;
     this.index = new TaskIndex(paths);
     this.state = new StateStore(paths);
+    this.search = new TaskSearch(paths,this.state,embedder);
     this.memory = new SessionMemory(pi);
     this.goalMetadata = new GoalMetadataResolver(this.memory);
     this.reader = new MemoryService(paths, this.index, this.memory);
@@ -492,46 +497,11 @@ export class TaskService {
       ctx.signal,
     );
   }
-  async find(input: FindInput) {
-    if (!Check(FindSchema, input)) throw Error("INVALID_TASK_FIND");
-    const segmenter = new Intl.Segmenter("zh", { granularity: "word" });
-    const words = [
-      ...new Set(
-        [input.query, ...(input.keywords ?? [])].flatMap((s) =>
-          [...segmenter.segment(s.toLocaleLowerCase())]
-            .filter((p) => p.isWordLike)
-            .map((p) => p.segment),
-        ),
-      ),
-    ];
-    return (await this.index.read())
-      .map((task) => ({
-        task,
-        score: words.reduce(
-          (score, word) =>
-            score +
-            ([task.title, task.project_name, task.summary, ...task.keywords]
-              .join(" ")
-              .toLocaleLowerCase()
-              .includes(word)
-              ? 1
-              : 0),
-          0,
-        ),
-      }))
-      .filter((e) => e.score > 0)
-      .sort(
-        (a, b) =>
-          b.score - a.score ||
-          Date.parse(b.task.updated_at) - Date.parse(a.task.updated_at),
-      )
-      .slice(0, input.limit ?? 5)
-      .map(({ task }) => ({
-        task_id: task.task_id,
-        title: task.title,
-        summary: task.summary,
-        keywords: task.keywords,
-      }));
+  async find(input: FindInput,ctx?:ExtensionContext) {
+    if (!Check(FindSchema,input))throw Error("INVALID_TASK_FIND");
+    if(input.initialize&&!ctx)throw Error("TASK_INITIALIZATION_CONTEXT_REQUIRED");
+    const config=ctx?await this.configuration(ctx):undefined;
+    return this.search.find(await this.index.read(),input,settingsFor(config).task_search,ctx?.signal);
   }
   async status(id: string, ctx: ExtensionContext) {
     if (!Check(StatusSchema, { task_id: id }))
@@ -556,7 +526,8 @@ export class TaskService {
     if (!Check(ResumeSchema, input)) throw Error("INVALID_TASK_RESUME");
     await this.memory.verify(ctx);
     this.checkCalls(ctx, callId);
-    const target =
+    const previousResume=receiptForCall(ctx.sessionManager.getBranch(),sourceAssistant(ctx,callId).id);
+    const target = previousResume ? await this.index.get(previousResume.data.task_id) :
       "task_id" in input
         ? await this.index.get(input.task_id)
         : (await this.index.read())
@@ -571,18 +542,20 @@ export class TaskService {
     return withLock(
       this.paths.taskLock(target),
       async () => {
-        let task = await this.register(
-          await this.index.get(target.task_id),
-          ctx,
-        );
-        const state = await this.state.read(task);
+        let task=await this.index.get(target.task_id);
+        const state=await this.state.read(task);
+        if(previousResume&&resumeCommitted(ctx.sessionManager.getBranch(),previousResume))return {task_id:task.task_id,title:task.title,summary:task.summary,goal:state.goal,state_version:state.version,restored:true};
+        const config=await this.configuration(ctx);
+        const data=await prepareResume(this,task,ctx,callId,config);
+        if(!previousResume)await this.memory.append(ctx,RESUME_TYPE,data);
+        task=await this.register(task,ctx);
         await synchronizeReferences(task, ctx, this.memory);
         task = await this.derivatives(
           { ...task, status: "active", updated_at: now() },
           state,
         );
         const scope = this.scope(ctx);
-        if (scope.task_id !== task.task_id) {
+        {
           try {
             await this.memory.append(ctx, SCOPE_TYPE, {
               ...scope,
@@ -648,6 +621,10 @@ export class TaskService {
     budget?: TaskBudget,
   ): Promise<TaskSnapshot> {
     await this.memory.verify(ctx);
+    const resume=resumeMetadata(ctx.sessionManager.getBranch()),restart=restartMetadata(ctx.sessionManager.getBranch());
+    if(resume&&(!restart||resume.position>restart.position)&&!resumeCommitted(ctx.sessionManager.getBranch(),resume)){
+      const source=resumeSourceCall(ctx.sessionManager.getBranch(),resume);await this.resume(source.input,ctx,source.callId);
+    }
     await this.recoverRestart(ctx);
     const scope = this.scope(ctx);
     await this.syncBranch(ctx);

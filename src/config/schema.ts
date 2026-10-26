@@ -34,6 +34,12 @@ const fileSchema = Type.Partial(Type.Object({ ...CONFIG_SCHEMA.properties,
   state_policy: Type.Partial(POLICY_SCHEMA.properties.state_policy, { additionalProperties: false }),
   read: Type.Partial(POLICY_SCHEMA.properties.read, { additionalProperties: false }),
   source_cache: Type.Partial(POLICY_SCHEMA.properties.source_cache, { additionalProperties: false }),
+  task_binding:Type.Partial(POLICY_SCHEMA.properties.task_binding,{additionalProperties:false}),
+  task_search:Type.Partial(Type.Object({...POLICY_SCHEMA.properties.task_search.properties,
+    channel_weights:Type.Partial(POLICY_SCHEMA.properties.task_search.properties.channel_weights,{additionalProperties:false}),
+    field_weights:Type.Partial(POLICY_SCHEMA.properties.task_search.properties.field_weights,{additionalProperties:false}),
+    embedding:Type.Partial(POLICY_SCHEMA.properties.task_search.properties.embedding,{additionalProperties:false}),
+  },{additionalProperties:false}),{additionalProperties:false}),
 }, { additionalProperties: false }), { additionalProperties: false });
 function rejectUndefined(value: unknown): void {
   if (typeof value !== "object" || value === null) return;

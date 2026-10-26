@@ -1,3 +1,5 @@
+import { resumeMetadata,resumedHistory } from "../task/resume-window.ts";
+import { bindingNotice,withoutBindingMessages } from "../task/binding.ts";
 import { DEFAULT_SETTINGS, settingsFor, percentOf, type PolicySettings } from "../config/defaults.ts";
 import type { Api, Model, ModelThinkingLevel } from "@earendil-works/pi-ai";
 import { getSystemMessageText } from "@earendil-works/pi-ai";
@@ -48,9 +50,10 @@ import type { StateReadInput } from "../state/read.ts";
 import { RESTART_TYPE, restartMetadata } from "../task/restart-model.ts";
 import { restartSeed, restartEvents, validateRestart } from "../window/restart.ts";
 import { stableId } from "../storage/identity.ts";
-export function windowMetadata(entries: SessionEntry[]): WindowMetadata | null {
-  const restart = restartMetadata(entries);
-  const last = entries.slice(restart ? restart.position + 1 : 0).findLast(
+export function windowMetadata(entries: SessionEntry[],verifyIds=true): WindowMetadata | null {
+  const restart = restartMetadata(entries),resume=resumeMetadata(entries);
+  const start=Math.max(restart?.position??-1,resume?.position??-1)+1;
+  const last = entries.slice(start).findLast(
     (e) => e.type === "custom" && e.customType === WINDOW_TYPE,
   );
   if (!last || last.type !== "custom") return null;
@@ -66,6 +69,7 @@ export function windowMetadata(entries: SessionEntry[]): WindowMetadata | null {
     );
   if (new Set(data.pending.map((b) => b.batch_id)).size !== data.pending.length)
     throw Error("CORRUPT_WINDOW_METADATA");
+  if(!verifyIds)return structuredClone(data);
   for (const id of [
     data.boundary_entry_id,
     data.request_anchor_entry_id,
@@ -190,14 +194,16 @@ export class WindowService {
   ): Promise<RequestMessages> {
     const settings = settingsFor(prepared.frame.config);
     this.sources.configure(settings.source_cache);
-    const entries = snapshot.entries,
+    const history=await resumedHistory(this.tasks,ctx,prepared.frame.config,snapshot.entries);
+    const entries = history.entries,
       persistedPrevious = windowMetadata(entries),
       receipt = restartMetadata(entries),
-      previous = persistedPrevious ?? (receipt ? {
+      resumed=resumeMetadata(entries),
+      previous = persistedPrevious ?? (receipt&&(!resumed||receipt.position>resumed.position) ? {
         stage: "prepare" as const, recent_turns: receipt.data.recent_turns, evict_turns: receipt.data.evict_turns,
         boundary_entry_id: null, pending: [], request_anchor_entry_id: receipt.data.anchor_entry_id, completed_by: null,
       } : null),
-      events = restartEvents(entries, previous, prepared.frame.config),
+      events = history.events??restartEvents(entries, previous, prepared.frame.config),
       anchor =
         entries.findLast(
           (e) => e.type === "message" && e.message.role !== "system",
@@ -212,11 +218,12 @@ export class WindowService {
         ctx.sessionManager.getSessionId(),
         anchor,
       );
+    const incoming=withoutBindingMessages(prepared.messages,snapshot.entries);
     const { matched } = this.sources.match(
-      prepared.messages, entries, ctx.sessionManager.getSessionId(),
+      incoming, snapshot.entries, ctx.sessionManager.getSessionId(),
       () => ctx.sessionManager.buildSessionProjection(), ctx.signal,
     );
-    for (const [index, message] of prepared.messages.entries()) {
+    for (const [index, message] of incoming.entries()) {
       if (message.role === "system") continue;
       if (!matched[index])
         throw Error("UNSUPPORTED_WINDOW_CONTEXT: incoming message has no native source");
@@ -247,7 +254,7 @@ export class WindowService {
           });
       }
     const latestRealUser = events.findLast((event) => event.messages[0]?.message.role === "user")?.id;
-    const reads = readKinds(selected.events, entries, settings.read.lifetime_messages),
+    const reads = readKinds(selected.events, history.ageEntries, settings.read.lifetime_messages),
       latestUser = selected.events.findLast(
         (e) => e.messages[0]?.message.role === "user",
       )?.id;
@@ -304,9 +311,10 @@ export class WindowService {
     const system = prepared.messages.find((m) => m.role === "system");
     if (!system || system.role !== "system") throw Error("MISSING_SYSTEM");
     const state = snapshot.state ?? "";
-    const runtimeState = state || (snapshot.restarting
-      ? "【新 Task 初始化｜程序状态，不是用户目标或证据】\n旧绑定已退出，旧 Task/State 仍保留。本提示不能覆盖最新真实用户要求。先判断用户是否已选定明确目标：目标未定或用户要求先讨论/先问问题时，只澄清，不调用 task_create，不能用“确认目标/等待决定”作占位 Goal。目标明确后才根据近期现场及真实要求调用 task_create，提供新 Goal 和元数据；不要自动恢复旧 State。"
-      : "当前未绑定 Task。");
+    const notice=bindingNotice(entries);
+    const runtimeState = (state || (snapshot.restarting
+      ? "【新 Task 初始化｜程序状态，不是用户目标或证据】\n旧绑定已退出，旧 Task/State 仍保留。本提示不能覆盖最新真实用户要求。先判断用户是否已选定明确目标：目标未定或用户要求先讨论/先问问题时，只澄清，不调用 task_create，不能用“确认目标/等待决定”作占位 Goal。目标明确后先通过 task_find initialize=true 声明本轮初始化，再根据近期现场及真实要求调用 task_create，提供新 Goal 和元数据；不要自动恢复旧 State。"
+      : "当前未绑定 Task。"))+(notice?"\n\n"+notice:"");
     if ((this.options.thinkingLevel?.() ?? "off") !== output.thinkingLevel)
       throw Error(
         "OUTPUT_BUDGET_UNVERIFIED: thinking level changed during request preparation",
@@ -400,16 +408,19 @@ Recent Window N/B：${prepared.frame.config.recent_turns}/${prepared.frame.confi
       event.message.role !== "assistant"
     )
       return;
-    const branch = ctx.sessionManager.getBranch(),
-      before = ctx.sessionManager.getBranch(event.messageEntryId).slice(0, -1),
-      prepared = windowMetadata(before);
-    if (!prepared?.pending.length || prepared.stage !== "prepare") return;
+    const branch=ctx.sessionManager.getBranch(),beforeActual=ctx.sessionManager.getBranch(event.messageEntryId).slice(0,-1);
+    const raw=windowMetadata(beforeActual,false);
+    if(!raw?.pending.length||raw.stage!=="prepare")return;
+    const config={recent_turns:raw.recent_turns,evict_turns:raw.evict_turns};
+    const beforeHistory=await resumedHistory(this.tasks,ctx,config,beforeActual),before=beforeHistory.entries;
+    const prepared=windowMetadata(before)!;
     const prior = before.findLast(
       (e) => e.type === "message" && e.message.role !== "system",
     );
     if (prior?.id !== prepared.request_anchor_entry_id)
       throw Error("WINDOW_REQUEST_ANCHOR_CHANGED");
-    const events = restartEvents(branch, prepared, { recent_turns: prepared.recent_turns, evict_turns: prepared.evict_turns }),
+    const history=await resumedHistory(this.tasks,ctx,config,branch);
+    const events = history.events??restartEvents(history.entries, prepared, config),
       finished = events.find((e) => e.id === event.messageEntryId);
     if (
       !finished ||
@@ -421,7 +432,7 @@ Recent Window N/B：${prepared.frame.config.recent_turns}/${prepared.frame.confi
       )
     )
       throw Error("INCOMPLETE_TOOL_EVENT");
-    let latest = windowMetadata(branch)!;
+    let latest = windowMetadata(history.entries)!;
     if (latest.completed_by === event.messageEntryId && !latest.pending.length)
       return;
     if (

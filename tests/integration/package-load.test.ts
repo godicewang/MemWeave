@@ -18,9 +18,9 @@ async function assertPackageLoads(packageRoot: string, temporaryRoot: string) {
   await mkdir(agentDir, { recursive: true });
 
   const manifest = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
-  if (manifest.dependencies?.["@huggingface/tokenizers"]) {
+  if (packageRoot !== root && manifest.dependencies?.["@huggingface/tokenizers"]) {
     const npm = process.env.npm_execpath!;
-    await run(process.execPath, [npm, "install", "--prefix", temporaryRoot, "--cache", join(temporaryRoot, "npm-cache"), "--ignore-scripts", "--no-audit", "--no-fund", "--package-lock=false", `@huggingface/tokenizers@${manifest.dependencies["@huggingface/tokenizers"]}`]);
+    await run(process.execPath, [npm, "install", "--prefix", temporaryRoot, "--cache", process.env.MEMWEAVE_TEST_NPM_CACHE ?? join(temporaryRoot, "npm-cache"), "--ignore-scripts", "--no-audit", "--no-fund", "--package-lock=false", ...Object.entries(manifest.dependencies as Record<string,string>).map(([name,version])=>`${name}@${version}`)]);
   }
   const result = await discoverAndLoadExtensions([packageRoot], workspace, agentDir);
 
@@ -90,6 +90,7 @@ test("npm 归档只含运行资源，解包后由 Pi 加载同一入口", async 
     "src/config/defaults.json",
     "resources/rule.md",
     ...(await readdir(join(root, "resources/tokenizer"))).map(name => `resources/tokenizer/${name}`),
+    ...(await readdir(join(root,"resources/embedding"))).map(name=>`resources/embedding/${name}`),
     ...sources,
   ].sort());
 

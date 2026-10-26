@@ -164,3 +164,12 @@ manifest 使用公开的 `pi.extensions`，优先指向可直接加载的 `src/e
 Goal 已提交但索引/绑定未完成时，按原始创建调用和稳定候选修复；原调用可在同一 Session 的其他分支，不能因 tree 回退丢弃已提交 Goal 或重复建 Task。候选存储位置使用原生 Session cwd 身份，不因后来 SDK 上下文 cwd 不同重复生成文件。新 Goal 及证据/原子提交协议保持，完整接线见 RESTART_WIRING_PROPOSAL.md、Task §11、Window §19、State §23。
 
 阶段由用户可交付目标界定，由 Agent 执行业务/认知两层检查；不增加 Workflow Engine、Plan、阶段状态机、独立总结 Agent 或 turn_end 自动写入。规则正文及工具说明同步；无重要变化不写，失败/暂停不得伪装完成。见 Rule §18。
+
+
+## 主动绑定、本机召回与旧窗口恢复（2026-10-26 用户确认）
+
+直接相关规范已同步 Task §12、Rule §20、State §24、Recent Window §20，具体资源与格式见 TASK_BINDING_AND_RETRIEVAL_PROPOSAL.md。简单问答由当前 Agent 自主豁免，实质目标未绑定时以 task_find initialize=true 声明初始化；Top-k 由 Agent 选择创建/恢复，已有同目标绑定直接复用。仅声明后的未绑定流程门禁业务工具，原生 agent_before_settle 追加可见失败回执后最多纠正一次，不另建分类器、总结 Agent 或 Agent Loop。
+
+src/task/search* 复用 MiniSearch、固定多语言 E5-small Q8 与加权 RRF；ONNX Runtime CPU 和已有 tokenizer 按需执行。模型与每 Task 当前派生行独立置于 models/、search/v1/，只索引 Goal/发现字段；派生缓存可重建，不能掩盖主 State 损坏。首次下载、原生依赖、CPU/内存和空闲释放属于已确认副作用；限额与资源成本在 USER_GUIDE 和本轮验收记录说明。
+
+memweave.resume.v1 固定已登记原生 Session 的来源分支/种子和本次恢复锚点，旧近期事件只用于请求视图；memweave.task.binding.v1 是可见程序失败回执。两者不保存聊天副本或新认知，不计 U/A/T/真实事件。原始 State、引用和 Window v1 提交格式保持；恢复部分失败依据原调用补齐同一定位，源损坏不换源或用摘要兜底。已取消无固定样本收益的 state_append 工具摘要调整；图片回归验证出站原件与供应商兼容，OCR/格式单独观察。

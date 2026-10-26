@@ -12,6 +12,10 @@ export interface MemoryPaths {
   readonly rule: string;
   readonly index: string;
   readonly indexLock: string;
+  readonly models: string;
+  readonly modelLock: string;
+  modelFile(relative:string):string;
+  search(taskId:string): {data:string;lock:string};
   setup(agentDir: string): { marker: string; lock: string; settings: string };
   blob(hash: string): string;
   state(task: TaskLocation): string;
@@ -52,6 +56,10 @@ export function memoryPaths(
     rule: join(normalized, "rule.md"),
     index: join(normalized, "index.json"),
     indexLock: join(normalized, "index.lock"),
+    models:join(normalized,"models","multilingual-e5-small-q8","761b726dd34fb83930e26aab4e9ac3899aa1fa78"),
+    modelLock:join(normalized,"models","e5-small.lock"),
+    modelFile:(relative:string)=>join(normalized,"models","multilingual-e5-small-q8","761b726dd34fb83930e26aab4e9ac3899aa1fa78",...relative.split("/").map(segment)),
+    search:(taskId:string)=>({data:join(normalized,"search","v1",segment(taskId)+".json"),lock:join(normalized,"search","v1",segment(taskId)+".lock")}),
     setup: (agentDir: string) => {
       if (!isAbsolute(agentDir)) throw Error("INVALID_SETUP_PROFILE: expected absolute Pi agentDir");
       const profile = resolve(agentDir), key = stableId(profile);
