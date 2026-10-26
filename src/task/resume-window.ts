@@ -2,7 +2,7 @@ import { Type, type Static } from "typebox";
 import { Check } from "typebox/value";
 import { isDeepStrictEqual } from "node:util";
 import {
-  SessionManager,
+  buildSessionProjection,
   type ExtensionContext,
   type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
@@ -76,6 +76,32 @@ function ownedEvents(entries: SessionEntry[], taskId: string) {
     event.messages.every((item) => owners.get(item.entryId) === taskId),
   );
 }
+/** A foreign live Session may end inside its current tool batch. Earlier
+ * protocol errors remain errors; only that incomplete tail is not yet an event. */
+function completedResumeBranch(entries: SessionEntry[]): SessionEntry[] {
+  const position = entries.findLastIndex(
+    (e) => e.type === "message" && e.message.role === "assistant",
+  );
+  if (position < 0) return entries;
+  const assistant = entries[position]!;
+  if (
+    assistant.type !== "message" ||
+    assistant.message.role !== "assistant" ||
+    ["error", "aborted"].includes(assistant.message.stopReason)
+  )
+    return entries;
+  const calls = assistant.message.content.filter((p) => p.type === "toolCall"),
+    missing = new Set(calls.map((c) => c.id));
+  if (missing.size !== calls.length) throw Error("DUPLICATE_TOOL_CALL_ID");
+  if (!missing.size) return entries;
+  for (const entry of entries.slice(position + 1)) {
+    if (entry.type !== "message" || entry.message.role === "system") continue;
+    if (entry.message.role !== "toolResult") return entries;
+    if (!missing.delete(entry.message.toolCallId))
+      throw Error("UNPAIRED_TOOL_RESULT");
+  }
+  return missing.size ? entries.slice(0, position) : entries;
+}
 export function receiptForCall(
   entries: SessionEntry[],
   assistantId: string,
@@ -126,10 +152,11 @@ export async function prepareResume(
       source.file,
       source.session_id,
     );
-    const branch =
-      source.session_id === ctx.sessionManager.getSessionId()
-        ? prefix
-        : SessionManager.open(source.file).getBranch();
+    const current = source.session_id === ctx.sessionManager.getSessionId();
+    const leaf = view.entries.at(-1)?.id;
+    const branch = current
+      ? prefix
+      : completedResumeBranch(leaf ? frozenBranch(view.entries, leaf) : []);
     if (
       branch.some(
         (e) => JSON.stringify(e) !== JSON.stringify(view.byId.get(e.id)),
@@ -142,9 +169,7 @@ export async function prepareResume(
     if (
       branch.some((e) => e.type === "context_edit" || e.type === "compaction")
     ) {
-      const projection = SessionManager.open(
-        source.file,
-      ).buildSessionProjection();
+      const projection = buildSessionProjection(branch, branch.at(-1)?.id);
       if (
         events
           .slice(-config.recent_turns)
@@ -264,12 +289,10 @@ export async function resumedHistory(
     throw Error("RESUME_SEED_CHANGED");
   const foreign = data.source_session_id !== ctx.sessionManager.getSessionId(),
     key = (id: string) => (foreign ? `${data.source_session_id}:${id}` : id);
-  const seed = owned
-    .slice(-config.recent_turns)
-    .map((e) => ({
-      id: key(e.id),
-      messages: e.messages.map((m) => ({ ...m, entryId: key(m.entryId) })),
-    }));
+  const seed = owned.slice(-config.recent_turns).map((e) => ({
+    id: key(e.id),
+    messages: e.messages.map((m) => ({ ...m, entryId: key(m.entryId) })),
+  }));
   const anchor =
     data.target_anchor_entry_id === null
       ? -1

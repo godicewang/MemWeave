@@ -107,3 +107,5 @@ source_session_id 必须已登记在目标 Task；source_anchor 固定当时可�
 ## 实现选择补充（授权调研范围内）
 
 检索词项引擎复用 MiniSearch 7.2.0，不自行维护 BM25 实现；无传递依赖，支持字段加权与 Intl.Segmenter 自定义分词。融合仍为既定加权RRF。嵌入运行时采用 ONNX Runtime CPU 1.30.0＋项目已有 @huggingface/tokenizers，省去 Transformers.js 的浏览器/图像依赖；相同E5 Q8、query/passage前缀、mean pooling及L2归一化。三个本机对照样本与Transformers.js参考向量最大绝对差约2.56e-8；不据此承诺所有任务检索质量。[MiniSearch](https://github.com/lucaong/minisearch)、[ONNX Runtime Node](https://onnxruntime.ai/docs/get-started/with-javascript/node.html)。
+
+并发实现补充：其他 Session 可能正在执行工具，按既定“完整事件”契约只选其尾部未完成事件之前的前缀；原件校验、分支与原生投影取同一快照，不重复打开后混读新旧状态。中间配对错误仍拒绝，不把未完成事件算作完整事件，不新增锁、重试策略、元数据或等待源任务的流程。

@@ -8,6 +8,76 @@ import { taskSession } from "../fixtures/task-session.ts";
 import { resumeMetadata } from "../../src/task/resume-window.ts";
 import { readFile, rm, mkdir } from "node:fs/promises";
 import { scopeOf } from "../../src/pi/session-memory.ts";
+import { Type } from "typebox";
+
+test("resume reads completed source events while another Session is executing a tool", async (t) => {
+  let begin!: () => void, release!: () => void;
+  const started = new Promise<void>((resolve) => {
+      begin = resolve;
+    }),
+    waiting = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+  const source = await taskSession(t, {
+    extra(pi) {
+      pi.registerTool({
+        name: "slow_probe",
+        label: "probe",
+        description: "controlled source operation",
+        parameters: Type.Object({}),
+        async execute() {
+          begin();
+          await waiting;
+          return {
+            content: [{ type: "text", text: "source tool finished" }],
+            details: {},
+          };
+        },
+      });
+    },
+  });
+  source.faux.setResponses([
+    answer([
+      call("task_create", {
+        title: "A",
+        goal: "订单",
+        project_name: "P",
+        summary: "orders",
+        keywords: ["orders"],
+      }),
+    ]),
+    answer("COMPLETED_SOURCE_SEED"),
+  ]);
+  await source.session.prompt("orders");
+  const task = (await source.tasks.index.read())[0]!;
+  source.faux.setResponses([
+    answer([
+      { type: "text", text: "UNFINISHED_SOURCE_SENTINEL" },
+      call("slow_probe", {}),
+    ]),
+    answer("finished"),
+  ]);
+  const running = source.session.prompt("run source operation");
+  await started;
+  try {
+    const target = await taskSession(t, { paths: source.paths });
+    target.faux.setResponses([
+      answer([call("task_resume", { task_id: task.task_id })]),
+      answer("restored"),
+    ]);
+    await target.session.prompt("restore completed context");
+    assert.equal(scopeOf(target.manager.getBranch()).task_id, task.task_id);
+    assert.match(JSON.stringify(target.frames.at(-1)), /COMPLETED_SOURCE_SEED/);
+    assert.doesNotMatch(
+      JSON.stringify(target.frames.at(-1)),
+      /UNFINISHED_SOURCE_SENTINEL/,
+    );
+    assert.deepEqual(target.diagnostics, []);
+  } finally {
+    release();
+    await running;
+  }
+});
 test("cross Session resume restores the old Task's bounded events without copying messages and survives reload", async (t) => {
   const source = await taskSession(t);
   source.faux.setResponses([

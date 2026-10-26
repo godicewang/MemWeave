@@ -215,7 +215,7 @@ test(
       assert.equal(h.session.messages.at(-1)?.role, "assistant");
       for (const entry of results)
         if (entry.type === "message" && entry.message.role === "toolResult")
-          assert.equal(entry.message.isError, false);
+          assert.equal(entry.message.isError, false,`${entry.message.toolName}: ${JSON.stringify(entry.message.content)}`);
       if (input.action === "recover" || input.action === "live") {
         const result = results.findLast(
           (e) =>
