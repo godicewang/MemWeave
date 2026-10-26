@@ -64,7 +64,8 @@ test("real Flash: ambiguous restart asks for the goal and keeps the intent until
   assert.equal(scopeOf(h.manager.getBranch()).task_id, null);
   assert.equal((await h.tasks.index.read()).length, 1);
   const question = h.session.agent.state.messages.at(-1);
-  assert.ok(question?.role === "assistant" && question.stopReason === "stop");
+  assert.ok(question?.role === "toolResult" && question.toolName === "task_clarify" && !question.isError);
+  assert.equal((question.details as {status:string}).status, "waiting_for_user");
   assert.match(JSON.stringify(question.content), /？|\?/);
   await h.session.prompt("新目标是实现订单批次校验，先建立这个工作目标，不执行外部操作。");
   assert.equal(scopeOf(h.manager.getBranch()).task_id, restartTaskId(h.manager.getSessionId(), receipt.data.restart_id));

@@ -1,0 +1,1149 @@
+{
+  "date": "2026-10-26",
+  "baseCommit": "0a43fa6",
+  "scope": "User-approved clarification tool, removal of initialize, intent from actual create/resume, legacy v1 receipt compatibility; deferred memory/tool/reminder cases are not fixed",
+  "environment": {
+    "pi": "1.4.0",
+    "node": "24.22.0",
+    "model": "deepseek/deepseek-flash",
+    "fullSystemRuleAndDefaultTools": true,
+    "nativeTools": 4,
+    "memoryTools": 12
+  },
+  "firstFullLive": {
+    "cases": [
+      {
+        "name": "real Flash: substantial delivery binds a Task and preserves verified cognition without an explicit memory request",
+        "passed": true,
+        "durationMs": 14281.140125,
+        "harnessOnly": false
+      },
+      {
+        "name": "real Flash: blocked delivery records failure boundaries rather than a passing result",
+        "passed": true,
+        "durationMs": 11490.095209,
+        "harnessOnly": false
+      },
+      {
+        "name": "real Flash: short Q&A does not force a Task or State writes",
+        "passed": true,
+        "durationMs": 965.358,
+        "harnessOnly": false
+      },
+      {
+        "name": "real DeepSeek: partial settings control actual output and hot restore defaults",
+        "passed": true,
+        "durationMs": 2752.323083,
+        "harnessOnly": false
+      },
+      {
+        "name": "real DeepSeek: matching tokenizer, actual output cap, footer and usage including cached input",
+        "passed": true,
+        "durationMs": 3551.415208,
+        "harnessOnly": false
+      },
+      {
+        "name": "real DeepSeek: isolated text-token delta agrees with the bundled official tokenizer",
+        "passed": true,
+        "durationMs": 1709.622417,
+        "harnessOnly": false
+      },
+      {
+        "name": "真实 DeepSeek：完整入口、原生提示/工具、精确容量、续跑与失败取消",
+        "passed": true,
+        "durationMs": 3163.205833,
+        "harnessOnly": false
+      },
+      {
+        "name": "real DeepSeek reads a bounded range with the fixed truncation protocol and shared pool",
+        "passed": true,
+        "durationMs": 4418.289542,
+        "harnessOnly": false
+      },
+      {
+        "name": "real DeepSeek: cancelled-request priority recovery, bundle",
+        "passed": true,
+        "durationMs": 3213.261916,
+        "harnessOnly": false
+      },
+      {
+        "name": "real DeepSeek: cancelled-request priority recovery, reload",
+        "passed": true,
+        "durationMs": 2374.22775,
+        "harnessOnly": false
+      },
+      {
+        "name": "real DeepSeek: cancelled-request priority recovery, with-State",
+        "passed": true,
+        "durationMs": 3953.344541,
+        "harnessOnly": false
+      },
+      {
+        "name": "real DeepSeek reads exact Unicode ranges across Tasks and persists R-backed cognition",
+        "passed": true,
+        "durationMs": 6974.623792,
+        "harnessOnly": false
+      },
+      {
+        "name": "real DeepSeek changes the Window, reads an evicted original, saves cognition and observes transient reminders",
+        "passed": true,
+        "durationMs": 5942.262042,
+        "harnessOnly": false
+      },
+      {
+        "name": "real DeepSeek: npm artifact recovers persisted cognition and reads source after process restart",
+        "passed": false,
+        "durationMs": 30201.179042,
+        "harnessOnly": false
+      },
+      {
+        "name": "real Flash: 26000 native-format records restart without inference, survive reload, and establish a fresh Goal",
+        "passed": false,
+        "durationMs": 8981.346542,
+        "harnessOnly": false
+      },
+      {
+        "name": "real Flash: ambiguous restart asks for the goal and keeps the intent until the user's clarification",
+        "passed": false,
+        "durationMs": 2271.963291,
+        "harnessOnly": false
+      },
+      {
+        "name": "真实 DeepSeek：完整生产 Rule 热加载、原生工具续跑与非法模板取消",
+        "passed": true,
+        "durationMs": 3054.47675,
+        "harnessOnly": false
+      },
+      {
+        "name": "真实 DeepSeek：Goal 更新与 State 读取，索引和尾部认知同步",
+        "passed": true,
+        "durationMs": 8156.251708,
+        "harnessOnly": false
+      },
+      {
+        "name": "real DeepSeek traces evicted and archived F/D using bounded state_read without changing cognition",
+        "passed": true,
+        "durationMs": 3987.993792,
+        "harnessOnly": false
+      },
+      {
+        "name": "真实 DeepSeek：State 满窗提醒、移除、事实原子修正和读取",
+        "passed": true,
+        "durationMs": 12555.637875,
+        "harnessOnly": false
+      },
+      {
+        "name": "real Flash asks before ambiguous recovery, stops without guessing, then restores the user's chosen Task",
+        "passed": true,
+        "durationMs": 12862.554583,
+        "harnessOnly": false
+      },
+      {
+        "name": "local E5 communication batches equal singleton vectors exactly, including bounded long passages",
+        "passed": true,
+        "durationMs": 1154.406042,
+        "harnessOnly": false
+      },
+      {
+        "name": "local model lifecycle control: shutdown during resource preparation never resurrects a worker",
+        "passed": true,
+        "durationMs": 1208.196666,
+        "harnessOnly": false
+      },
+      {
+        "name": "real Flash autonomously exempts arithmetic, selects hybrid Top-k and restores the old native Task window",
+        "passed": true,
+        "durationMs": 10954.241667,
+        "harnessOnly": false
+      },
+      {
+        "name": "packed runtime performs local CPU retrieval and restores native history with real Flash",
+        "passed": true,
+        "durationMs": 13476.671666,
+        "harnessOnly": false
+      },
+      {
+        "name": "真实 DeepSeek：正式 Task/State 工具与自动注入闭环",
+        "passed": true,
+        "durationMs": 5261.072958,
+        "harnessOnly": false
+      },
+      {
+        "name": "real DeepSeek image provider compatibility; OCR/format are reported separately",
+        "passed": true,
+        "durationMs": 1537.762916,
+        "harnessOnly": false
+      },
+      {
+        "name": "real DeepSeek accepts the unchanged R image read through the complete installed protocol",
+        "passed": true,
+        "durationMs": 7173.129042,
+        "harnessOnly": false
+      }
+    ],
+    "diagnostics": [
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 8,
+        "responsesEnded": 8,
+        "calls": [
+          "inspect_component",
+          "task_create",
+          "set_component_timeout",
+          "verify_component",
+          "state_append"
+        ],
+        "toolErrors": [],
+        "reply": "已修复的最终超时参数是 **123ms**（`timeout_ms=123`），与 `target_timeout_ms=123` 精确一致，`verify_component` 已验证通过。"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 6,
+        "responsesEnded": 6,
+        "calls": [
+          "inspect_component",
+          "task_create",
+          "set_component_timeout",
+          "verify_component",
+          "state_append"
+        ],
+        "toolErrors": [],
+        "reply": "已完成本次工作，总结如下：\n\n**已修复**\n- 超时配置：`31ms` → `138ms`（恰好等于 `target_timeout_ms`，且小于服务延迟的 `101ms`）。\n\n**被阻塞，未完成**\n- `verify_component` 返回 `passed=false`，原因为 `fixture transport blocked` —— 这与"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 1,
+        "responsesEnded": 1,
+        "calls": [],
+        "toolErrors": [],
+        "reply": "84"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 2,
+        "responsesEnded": 2,
+        "calls": [],
+        "toolErrors": [],
+        "reply": "CONFIG_OK"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 2,
+        "responsesEnded": 2,
+        "calls": [
+          "state_append"
+        ],
+        "toolErrors": [],
+        "reply": "BUDGET_OK"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 2,
+        "responsesEnded": 3,
+        "calls": [
+          "stage0_probe"
+        ],
+        "toolErrors": [],
+        "reply": ""
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 2,
+        "responsesEnded": 2,
+        "calls": [
+          "memory_read"
+        ],
+        "toolErrors": [],
+        "reply": "ELASTIC_OK"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 2,
+        "responsesEnded": 4,
+        "calls": [],
+        "toolErrors": [],
+        "reply": "KEEP_FOURTH_EXPECT"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 2,
+        "responsesEnded": 4,
+        "calls": [],
+        "toolErrors": [],
+        "reply": "KEEP_FOURTH_EXPECT"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 2,
+        "responsesEnded": 4,
+        "calls": [],
+        "toolErrors": [],
+        "reply": "KEEP_FOURTH_EXPECT"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 3,
+        "responsesEnded": 3,
+        "calls": [
+          "memory_read",
+          "state_append"
+        ],
+        "toolErrors": [],
+        "reply": "Acknowledged — memory_read returned the expected ranges (`U1` → `R1`, `U999` not found) and the fact was appended to State (v2)."
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 4,
+        "responsesEnded": 4,
+        "calls": [
+          "recent_window_set",
+          "memory_read",
+          "state_append"
+        ],
+        "toolErrors": [],
+        "reply": "All three steps completed in order:\n\n1. `recent_window_set` (turns=4, evict_turns=2) — succeeded.\n2. `memory_read` U1 (offset 0, limit 16) — returned the first 16 of 77 chars.\n3. `"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 1,
+        "responsesEnded": 1,
+        "calls": [
+          "task_clarify"
+        ],
+        "toolErrors": [],
+        "reply": "这个请求要求我确立一个新的工作目标，但不执行外部操作。不过，“接下来开展新的订单批次校验工作”只给出了一个大方向，没有说明具体的校验对象、数据来源和验收标准。在建立目标前，我需要先确认实际范围。"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 1,
+        "responsesEnded": 1,
+        "calls": [
+          "task_clarify"
+        ],
+        "toolErrors": [],
+        "reply": ""
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 2,
+        "responsesEnded": 3,
+        "calls": [
+          "phase1_live_probe"
+        ],
+        "toolErrors": [],
+        "reply": ""
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 5,
+        "responsesEnded": 5,
+        "calls": [
+          "task_create",
+          "update_goal",
+          "state_read"
+        ],
+        "toolErrors": [],
+        "reply": "MEMWEAVE_GOAL_OK\n\n- `update_goal` 已执行（State v2），项目名保持 `MemWeave`。\n- `state_read` 显示 Goal 为「验证更新后的目标」，Facts/Decisions 为空，符合预期。"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 2,
+        "responsesEnded": 2,
+        "calls": [
+          "state_read"
+        ],
+        "toolErrors": [],
+        "reply": "Verified via the single `state_read` call:\n\n- **F1** — \"The source user requested recovery verification\": still retrievable as an active, non-archived fact, but **no longer in the "
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 6,
+        "responsesEnded": 6,
+        "calls": [
+          "task_create",
+          "state_append",
+          "state_remain",
+          "modify_fact",
+          "state_read"
+        ],
+        "toolErrors": [],
+        "reply": "MEMWEAVE_STATE_WINDOW_OK"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 0,
+        "responsesEnded": 0,
+        "calls": [],
+        "toolErrors": [],
+        "reply": ""
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 4,
+        "responsesEnded": 4,
+        "calls": [
+          "task_find",
+          "task_clarify",
+          "task_resume"
+        ],
+        "toolErrors": [],
+        "reply": "已恢复「改进支付退款超时与失败补偿」任务（task_28b68a8bca753fc24950b5ebbe386be2）。\n\n之前讨论的环境别名：**REFUND_CHOSEN_72**\n\n未执行任何外部业务操作。"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 0,
+        "responsesEnded": 0,
+        "calls": [],
+        "toolErrors": [],
+        "reply": ""
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 4,
+        "responsesEnded": 4,
+        "calls": [
+          "task_find",
+          "task_resume"
+        ],
+        "toolErrors": [],
+        "reply": "已找到该任务 `task_45f50e175ee43f166395967303b765ec`（标题 Work 0，目标：修复支付接口重复扣款并验证幂等键），并恢复其认知状态。该任务的 State 目前仍是空的，还没有记录 Fact 或 Decision。\n\n不过，你要求恢复的近期讨论属于这个任务的历史会话内容；这些内容没有保存在它的 State 中，而当前可"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 0,
+        "responsesEnded": 0,
+        "calls": [],
+        "toolErrors": [],
+        "reply": ""
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 3,
+        "responsesEnded": 3,
+        "calls": [
+          "task_create",
+          "state_append"
+        ],
+        "toolErrors": [],
+        "reply": "MEMWEAVE_PHASE2_OK"
+      },
+      {
+        "compatibility": "provider accepted native image and completed",
+        "ocrContainsExpectedDigitsIgnoringWhitespace": true,
+        "recognitionPreview": "I read the image directly.\n\n**Digits (left to right):** `1 2 8 1 9 4 6 8`\n\n**Shapes (left to right):**\n1. Red circle\n2. Blue square\n3. Green triangle"
+      },
+      {
+        "compatibility": "provider accepted native image and completed",
+        "ocrContainsExpectedDigitsIgnoringWhitespace": true,
+        "recognitionPreview": "Image read and described:\n\n**Digits:** `58273929` (5, 8, 2, 7, 3, 9, 2, 9)\n\n**Shapes left to right:** red circle, blue square, green triangle\n\nSaved to State as F1."
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 0,
+        "responsesEnded": 0,
+        "calls": [],
+        "toolErrors": [],
+        "reply": ""
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 2,
+        "responsesEnded": 2,
+        "calls": [
+          "state_append"
+        ],
+        "toolErrors": [],
+        "reply": "Image read and described:\n\n**Digits:** `58273929` (5, 8, 2, 7, 3, 9, 2, 9)\n\n**Shapes left to right:** red circle, blue square, green triangle\n\nSaved to State as F1."
+      }
+    ],
+    "namedPasses": 25,
+    "namedFailures": [
+      "real DeepSeek: npm artifact recovers persisted cognition and reads source after process restart",
+      "real Flash: 26000 native-format records restart without inference, survive reload, and establish a fresh Goal",
+      "real Flash: ambiguous restart asks for the goal and keeps the intent until the user's clarification"
+    ],
+    "harnessOnlyPasses": []
+  },
+  "currentLiveExcludingDeferred": {
+    "cases": [
+      {
+        "name": "real Flash: substantial delivery binds a Task and preserves verified cognition without an explicit memory request",
+        "passed": true,
+        "durationMs": 12733.648625,
+        "harnessOnly": false
+      },
+      {
+        "name": "real Flash: blocked delivery records failure boundaries rather than a passing result",
+        "passed": true,
+        "durationMs": 8345.429,
+        "harnessOnly": false
+      },
+      {
+        "name": "real Flash: short Q&A does not force a Task or State writes",
+        "passed": true,
+        "durationMs": 1143.810542,
+        "harnessOnly": false
+      },
+      {
+        "name": "real DeepSeek: partial settings control actual output and hot restore defaults",
+        "passed": true,
+        "durationMs": 2665.156833,
+        "harnessOnly": false
+      },
+      {
+        "name": "real DeepSeek: matching tokenizer, actual output cap, footer and usage including cached input",
+        "passed": true,
+        "durationMs": 3788.214542,
+        "harnessOnly": false
+      },
+      {
+        "name": "real DeepSeek: isolated text-token delta agrees with the bundled official tokenizer",
+        "passed": true,
+        "durationMs": 1035.342541,
+        "harnessOnly": false
+      },
+      {
+        "name": "真实 DeepSeek：完整入口、原生提示/工具、精确容量、续跑与失败取消",
+        "passed": true,
+        "durationMs": 3218.913917,
+        "harnessOnly": false
+      },
+      {
+        "name": "real DeepSeek reads a bounded range with the fixed truncation protocol and shared pool",
+        "passed": true,
+        "durationMs": 5182.395125,
+        "harnessOnly": false
+      },
+      {
+        "name": "real DeepSeek: cancelled-request priority recovery, bundle",
+        "passed": true,
+        "durationMs": 3539.822542,
+        "harnessOnly": false
+      },
+      {
+        "name": "real DeepSeek: cancelled-request priority recovery, reload",
+        "passed": true,
+        "durationMs": 2615.982833,
+        "harnessOnly": false
+      },
+      {
+        "name": "real DeepSeek: cancelled-request priority recovery, with-State",
+        "passed": true,
+        "durationMs": 3298.766375,
+        "harnessOnly": false
+      },
+      {
+        "name": "real DeepSeek reads exact Unicode ranges across Tasks and persists R-backed cognition",
+        "passed": true,
+        "durationMs": 6516.898875,
+        "harnessOnly": false
+      },
+      {
+        "name": "real DeepSeek changes the Window, reads an evicted original, saves cognition and observes transient reminders",
+        "passed": true,
+        "durationMs": 6431.934041,
+        "harnessOnly": false
+      },
+      {
+        "name": "tests/live/release.test.ts",
+        "passed": true,
+        "durationMs": 872.765833,
+        "harnessOnly": true
+      },
+      {
+        "name": "real Flash: 26000 native-format records restart without inference, survive reload, and establish a fresh Goal",
+        "passed": true,
+        "durationMs": 18641.641959,
+        "harnessOnly": false
+      },
+      {
+        "name": "real Flash: ambiguous restart asks for the goal and keeps the intent until the user's clarification",
+        "passed": true,
+        "durationMs": 5557.292166,
+        "harnessOnly": false
+      },
+      {
+        "name": "真实 DeepSeek：完整生产 Rule 热加载、原生工具续跑与非法模板取消",
+        "passed": true,
+        "durationMs": 3236.796167,
+        "harnessOnly": false
+      },
+      {
+        "name": "真实 DeepSeek：Goal 更新与 State 读取，索引和尾部认知同步",
+        "passed": true,
+        "durationMs": 7870.366208,
+        "harnessOnly": false
+      },
+      {
+        "name": "real DeepSeek traces evicted and archived F/D using bounded state_read without changing cognition",
+        "passed": true,
+        "durationMs": 5311.2435,
+        "harnessOnly": false
+      },
+      {
+        "name": "真实 DeepSeek：State 满窗提醒、移除、事实原子修正和读取",
+        "passed": true,
+        "durationMs": 11043.296792,
+        "harnessOnly": false
+      },
+      {
+        "name": "real Flash asks before ambiguous recovery, stops without guessing, then restores the user's chosen Task",
+        "passed": true,
+        "durationMs": 10608.992958,
+        "harnessOnly": false
+      },
+      {
+        "name": "local E5 communication batches equal singleton vectors exactly, including bounded long passages",
+        "passed": true,
+        "durationMs": 1033.9255,
+        "harnessOnly": false
+      },
+      {
+        "name": "local model lifecycle control: shutdown during resource preparation never resurrects a worker",
+        "passed": true,
+        "durationMs": 1116.880167,
+        "harnessOnly": false
+      },
+      {
+        "name": "real Flash autonomously exempts arithmetic, selects hybrid Top-k and restores the old native Task window",
+        "passed": true,
+        "durationMs": 11453.092667,
+        "harnessOnly": false
+      },
+      {
+        "name": "packed runtime performs local CPU retrieval and restores native history with real Flash",
+        "passed": true,
+        "durationMs": 13374.023167,
+        "harnessOnly": false
+      },
+      {
+        "name": "真实 DeepSeek：正式 Task/State 工具与自动注入闭环",
+        "passed": true,
+        "durationMs": 5365.051458,
+        "harnessOnly": false
+      },
+      {
+        "name": "real DeepSeek image provider compatibility; OCR/format are reported separately",
+        "passed": true,
+        "durationMs": 1760.848792,
+        "harnessOnly": false
+      },
+      {
+        "name": "real DeepSeek accepts the unchanged R image read through the complete installed protocol",
+        "passed": true,
+        "durationMs": 4032.716292,
+        "harnessOnly": false
+      }
+    ],
+    "diagnostics": [
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 8,
+        "responsesEnded": 8,
+        "calls": [
+          "inspect_component",
+          "task_create",
+          "set_component_timeout",
+          "verify_component",
+          "state_append"
+        ],
+        "toolErrors": [],
+        "reply": "实际最终配置的超时参数是 **timeout_ms = 128**（与 inspect 显示的 target_timeout_ms=128 一致），据此运行 verify_component 的结果为 passed=true。\n\n（依据 F1：inspect 显示 target_timeout_ms=128、service_delay_ms=91；已设 ti"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 6,
+        "responsesEnded": 6,
+        "calls": [
+          "inspect_component",
+          "task_create",
+          "set_component_timeout",
+          "verify_component",
+          "state_append"
+        ],
+        "toolErrors": [],
+        "reply": "**结果：超时配置已修复，但验证被阻塞。**\n\n已完成：\n- `inspect_component`：`timeout_ms=31`，`service_delay_ms=88`，`target_timeout_ms=125`——原超时 31ms 短于服务耗时 88ms，必然超时。\n- `set_component_timeout(timeout_ms=125"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 1,
+        "responsesEnded": 1,
+        "calls": [],
+        "toolErrors": [],
+        "reply": "84"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 2,
+        "responsesEnded": 2,
+        "calls": [],
+        "toolErrors": [],
+        "reply": "CONFIG_OK"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 2,
+        "responsesEnded": 2,
+        "calls": [
+          "state_append"
+        ],
+        "toolErrors": [],
+        "reply": "BUDGET_OK"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 2,
+        "responsesEnded": 3,
+        "calls": [
+          "stage0_probe"
+        ],
+        "toolErrors": [],
+        "reply": ""
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 2,
+        "responsesEnded": 2,
+        "calls": [
+          "memory_read"
+        ],
+        "toolErrors": [],
+        "reply": "ELASTIC_OK"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 2,
+        "responsesEnded": 4,
+        "calls": [],
+        "toolErrors": [],
+        "reply": "KEEP_FOURTH_EXPECT"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 2,
+        "responsesEnded": 4,
+        "calls": [],
+        "toolErrors": [],
+        "reply": "KEEP_FOURTH_EXPECT"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 2,
+        "responsesEnded": 4,
+        "calls": [],
+        "toolErrors": [],
+        "reply": "KEEP_FOURTH_EXPECT"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 3,
+        "responsesEnded": 3,
+        "calls": [
+          "memory_read",
+          "state_append"
+        ],
+        "toolErrors": [],
+        "reply": "Both tools succeeded:\n\n- **memory_read** (one call): U1 offset 7/limit 1 → `😀` (R1); U999 → `not_found`; U1 offset 0/limit 6 → `source` (R1). Total chars 7 as budgeted.\n- **state_"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 4,
+        "responsesEnded": 4,
+        "calls": [
+          "recent_window_set",
+          "memory_read",
+          "state_append"
+        ],
+        "toolErrors": [],
+        "reply": "Round complete. The window was set to turns=4/evict=2, `U1` was read (16 of 77 chars), and a single fact was appended recording your bounded-window recovery verification request (S"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 2,
+        "responsesEnded": 2,
+        "calls": [
+          "task_create"
+        ],
+        "toolErrors": [],
+        "reply": "新任务已建立。\n\n**目标**：开展新的订单批次校验工作，本阶段只确立工作目标，**不执行任何外部操作**（不调用外部系统、不修改数据、不运行校验脚本）。\n\n**待你补充的信息**（不阻塞当前目标确立）：\n1. 校验对象：哪一类订单、哪个批次范围（批次号/时间窗/来源系统）\n2. 校验规则与判定标准：字段完整性、金额一致性、状态流转、去重等\n3. 数据源与产"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 4,
+        "responsesEnded": 4,
+        "calls": [
+          "task_clarify",
+          "task_find",
+          "task_create"
+        ],
+        "toolErrors": [],
+        "reply": "已建立新任务目标，未执行任何外部操作。\n\n- **任务**：`task_3a0de13d343fcfba294f5452857cf17f`（订单批次校验）\n- **Goal**：实现订单批次校验（先建目标，暂不执行外部操作）\n- **状态**：旧任务（支付模块优化）未恢复、未修改；当前任务 State 尚无 Fact/Decision。\n\n请补充校验规则的细"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 2,
+        "responsesEnded": 3,
+        "calls": [
+          "phase1_live_probe"
+        ],
+        "toolErrors": [],
+        "reply": ""
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 5,
+        "responsesEnded": 5,
+        "calls": [
+          "task_create",
+          "update_goal",
+          "state_read"
+        ],
+        "toolErrors": [],
+        "reply": "MEMWEAVE_GOAL_OK"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 2,
+        "responsesEnded": 2,
+        "calls": [
+          "state_read"
+        ],
+        "toolErrors": [],
+        "reply": "`state_read` 已调用一次，结果如下：\n\n- **F1**（fact，status: ok，未归档，已在窗口外）：\"The source user requested recovery verification\"，证据为 U1，70 字符完整返回——这就是已离开 State 窗口但仍可读取的条目。\n- **D1**（decision，status:"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 6,
+        "responsesEnded": 6,
+        "calls": [
+          "task_create",
+          "state_append",
+          "state_remain",
+          "modify_fact",
+          "state_read"
+        ],
+        "toolErrors": [],
+        "reply": "MEMWEAVE_STATE_WINDOW_OK\n\nAll six steps completed sequentially:\n\n1. **task_create** → `task_2cce5aeba467baa7c7a5ced1989387e4` (v1)\n2. **state_append** → 10 facts (F1–F10, v11)\n3. *"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 0,
+        "responsesEnded": 0,
+        "calls": [],
+        "toolErrors": [],
+        "reply": ""
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 4,
+        "responsesEnded": 4,
+        "calls": [
+          "task_find",
+          "task_clarify",
+          "task_resume"
+        ],
+        "toolErrors": [],
+        "reply": "已恢复「改进支付退款超时与失败补偿」这个任务。\n\n之前讨论的环境别名是：**REFUND_CHOSEN_72**\n\n未执行任何外部业务操作。"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 0,
+        "responsesEnded": 0,
+        "calls": [],
+        "toolErrors": [],
+        "reply": ""
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 4,
+        "responsesEnded": 4,
+        "calls": [
+          "task_find",
+          "task_resume"
+        ],
+        "toolErrors": [],
+        "reply": "已恢复之前那个防止重复付款重复记账的任务（`Work 0`，任务 ID `task_6d2a3a2ffd4ca99bd5bc0e936448a05f`），之前约定的信息如下：\n\n- **测试环境别名**：`SABLE_71`\n- **幂等键保留时长**：24 小时\n\n按照你的要求，我没有执行任何文件或外部业务操作。需要说明的是，恢复时任务自身的 State "
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 0,
+        "responsesEnded": 0,
+        "calls": [],
+        "toolErrors": [],
+        "reply": ""
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 3,
+        "responsesEnded": 3,
+        "calls": [
+          "task_create",
+          "state_append"
+        ],
+        "toolErrors": [],
+        "reply": "MEMWEAVE_PHASE2_OK"
+      },
+      {
+        "compatibility": "provider accepted native image and completed",
+        "ocrContainsExpectedDigitsIgnoringWhitespace": true,
+        "recognitionPreview": "Digits (left to right): **9 5 3 8 7 5 8 3** → `95387583`\n\nShapes (left to right):\n1. Red circle\n2. Blue square\n3. Green triangle"
+      },
+      {
+        "compatibility": "provider accepted native image and completed",
+        "ocrContainsExpectedDigitsIgnoringWhitespace": true,
+        "recognitionPreview": "The image shows:\n\n**Digits (left to right):** 2 8 4 9 1 4 9 5 → **28491495**\n\n**Shapes (left to right):**\n1. Red circle\n2. Blue square\n3. Green triangle"
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 0,
+        "responsesEnded": 0,
+        "calls": [],
+        "toolErrors": [],
+        "reply": ""
+      },
+      {
+        "environment": "complete Pi + package Rule + all default tools",
+        "requestsPrepared": 1,
+        "responsesEnded": 1,
+        "calls": [],
+        "toolErrors": [],
+        "reply": "The image shows:\n\n**Digits (left to right):** 2 8 4 9 1 4 9 5 → **28491495**\n\n**Shapes (left to right):**\n1. Red circle\n2. Blue square\n3. Green triangle"
+      }
+    ],
+    "namedPasses": 27,
+    "namedFailures": [],
+    "harnessOnlyPasses": [
+      "tests/live/release.test.ts"
+    ]
+  },
+  "deferredExcluded": {
+    "test": "real DeepSeek: npm artifact recovers persisted cognition and reads source after process restart",
+    "case": "MW-004",
+    "lastObserved": "failed: last.fact did not contain GATE_artifact-live",
+    "rerun": false,
+    "unknowns": "First failure output does not distinguish no append, wrong body or another path; do not infer a unique cause."
+  },
+  "finalBoundaryTests": {
+    "cases": [
+      {
+        "name": "native boundary rejects delivery after a failed resume once, then continues through actual Task creation",
+        "passed": true,
+        "durationMs": 201.096625,
+        "harnessOnly": false
+      },
+      {
+        "name": "failed correction stops at its bound, survives reload, and rejects forged receipt content",
+        "passed": true,
+        "durationMs": 73.222917,
+        "harnessOnly": false
+      },
+      {
+        "name": "simple answers and search never gate; a failed create gates business execution",
+        "passed": true,
+        "durationMs": 203.853417,
+        "harnessOnly": false
+      },
+      {
+        "name": "zero correction budget records failure without inference and the next user is independent",
+        "passed": true,
+        "durationMs": 40.694959,
+        "harnessOnly": false
+      },
+      {
+        "name": "ambiguous search pauses with a native clarification; reload and the real user selection resume only the chosen Task",
+        "passed": true,
+        "durationMs": 453.854166,
+        "harnessOnly": false
+      },
+      {
+        "name": "clarification stops even after failed binding and suppresses final-answer corrections",
+        "passed": true,
+        "durationMs": 29.369834,
+        "harnessOnly": false
+      },
+      {
+        "name": "a clarification mixed with business tools blocks the entire batch before side effects",
+        "passed": true,
+        "durationMs": 30.258084,
+        "harnessOnly": false
+      },
+      {
+        "name": "new calls reject initialize while old binding receipt provenance remains readable and inactive",
+        "passed": true,
+        "durationMs": 47.719541,
+        "harnessOnly": false
+      },
+      {
+        "name": "actual pre-removal Session receipts reopen unchanged with the new runtime",
+        "passed": true,
+        "durationMs": 166.50825,
+        "harnessOnly": false
+      },
+      {
+        "name": "native dialog reply becomes exactly one real user follow-up before Task creation",
+        "passed": true,
+        "durationMs": 99.33925,
+        "harnessOnly": false
+      },
+      {
+        "name": "clarification queues only actual UI text as a new native user input and terminates the old request",
+        "passed": true,
+        "durationMs": 1.326375,
+        "harnessOnly": false
+      },
+      {
+        "name": "cancelling or blank clarification never invents an answer; headless mode does not open a dialog",
+        "passed": true,
+        "durationMs": 0.275041,
+        "harnessOnly": false
+      },
+      {
+        "name": "an aborted UI response is never sent to a replacement turn",
+        "passed": true,
+        "durationMs": 0.239125,
+        "harnessOnly": false
+      },
+      {
+        "name": "clarification schema requires only a meaningful question and rejects hidden initialization fields",
+        "passed": true,
+        "durationMs": 0.175166,
+        "harnessOnly": false
+      }
+    ],
+    "diagnostics": [],
+    "namedPasses": 14,
+    "namedFailures": [],
+    "harnessOnlyPasses": []
+  },
+  "pi13NativeControls": {
+    "cases": [
+      {
+        "name": "native boundary rejects delivery after a failed resume once, then continues through actual Task creation",
+        "passed": true,
+        "durationMs": 378.921791,
+        "harnessOnly": false
+      },
+      {
+        "name": "failed correction stops at its bound, survives reload, and rejects forged receipt content",
+        "passed": true,
+        "durationMs": 115.774125,
+        "harnessOnly": false
+      },
+      {
+        "name": "simple answers and search never gate; a failed create gates business execution",
+        "passed": true,
+        "durationMs": 380.68,
+        "harnessOnly": false
+      },
+      {
+        "name": "zero correction budget records failure without inference and the next user is independent",
+        "passed": true,
+        "durationMs": 75.778375,
+        "harnessOnly": false
+      },
+      {
+        "name": "ambiguous search pauses with a native clarification; reload and the real user selection resume only the chosen Task",
+        "passed": true,
+        "durationMs": 825.5585,
+        "harnessOnly": false
+      },
+      {
+        "name": "clarification stops even after failed binding and suppresses final-answer corrections",
+        "passed": true,
+        "durationMs": 44.346333,
+        "harnessOnly": false
+      },
+      {
+        "name": "a clarification mixed with business tools blocks the entire batch before side effects",
+        "passed": true,
+        "durationMs": 66.330958,
+        "harnessOnly": false
+      },
+      {
+        "name": "new calls reject initialize while old binding receipt provenance remains readable and inactive",
+        "passed": true,
+        "durationMs": 76.920167,
+        "harnessOnly": false
+      },
+      {
+        "name": "native dialog reply becomes exactly one real user follow-up before Task creation",
+        "passed": true,
+        "durationMs": 199.010084,
+        "harnessOnly": false
+      },
+      {
+        "name": "bounded index batches preserve exact rankings, publish completed progress and never re-embed unchanged Tasks",
+        "passed": true,
+        "durationMs": 851.7885,
+        "harnessOnly": false
+      },
+      {
+        "name": "cancelled embedding and malformed batches never publish completion or derived successes",
+        "passed": true,
+        "durationMs": 428.281584,
+        "harnessOnly": false
+      },
+      {
+        "name": "a failed derived write is reported, all started writes settle, and a later search can rebuild",
+        "passed": true,
+        "durationMs": 576.450709,
+        "harnessOnly": false
+      },
+      {
+        "name": "native task_find streams UI progress without persisting it or injecting it into model context",
+        "passed": true,
+        "durationMs": 1011.348083,
+        "harnessOnly": false
+      },
+      {
+        "name": "clarification queues only actual UI text as a new native user input and terminates the old request",
+        "passed": true,
+        "durationMs": 2.007708,
+        "harnessOnly": false
+      },
+      {
+        "name": "cancelling or blank clarification never invents an answer; headless mode does not open a dialog",
+        "passed": true,
+        "durationMs": 0.341375,
+        "harnessOnly": false
+      },
+      {
+        "name": "an aborted UI response is never sent to a replacement turn",
+        "passed": true,
+        "durationMs": 0.285417,
+        "harnessOnly": false
+      },
+      {
+        "name": "clarification schema requires only a meaningful question and rejects hidden initialization fields",
+        "passed": true,
+        "durationMs": 0.175417,
+        "harnessOnly": false
+      }
+    ],
+    "diagnostics": [],
+    "namedPasses": 17,
+    "namedFailures": [],
+    "harnessOnlyPasses": []
+  },
+  "fullCheck": {
+    "passed": 275,
+    "failed": 0
+  },
+  "sourceSha256": {
+    "src/task/binding.ts": "d11282c20b20eb167d262527d7e6d89b227d32c08064f23bf679a80640dacee1",
+    "src/task/model.ts": "1d2d51f0e41b1e4e597f0f09c353dd6f2b691c8a5526c1b635f75ad86c269c1a",
+    "src/task/service.ts": "1a11d98b5a83ad2ffa0a3b28e10b0dc842067309f3bf1359cfc74d474739f34e",
+    "src/extension/clarify.ts": "667b513ba9327fef34224d2b878879be692e7351cc1faa533d12a3dc1add6158",
+    "src/extension/register.ts": "1721128f561957e4cee9cc4a6fe02e2cf35d96883ad132843427e4f7d90c5588",
+    "src/pi/window-service.ts": "bfaff7732b478af5ac7dcb1d9c42e65dc9ddde8e2e45d1604925cb47202b85cc",
+    "resources/rule.md": "9e28956ad5feffece69050e1c687b3f8351ea9ffd3dbe24c19aeed03ffedb2a7"
+  },
+  "measurementNotes": [
+    "The filtered deferred test leaves an empty-file harness pass in Node; exclude this from the27 meaningful cases. This is not a28/28 product pass.",
+    "Old restart test expected assistant text; changed to assert task_clarify waiting_for_user tool result.",
+    "Clear Goal-registration sample first over-clarified. Tool/Rule now ask only for information blocking the current step; same input passed. No classifier added.",
+    "State error repair and two-window reminders not changed; recorded for future discussion.",
+    "UI integration uses controlled native RPC input, not manual TUI.",
+    "Pi1.3 controls exclude old-source Git archive case because isolated host is not a Git repository; actual old disk Session recovery passed on Pi1.4."
+  ]
+}

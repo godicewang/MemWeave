@@ -10,6 +10,7 @@ import { scopeOf } from "../pi/session-memory.ts";
 import { RESTART_TYPE, RestartSchema } from "./restart-model.ts";
 import type { TaskService } from "./service.ts";
 import { settingsFor } from "../config/defaults.ts";
+import { CLARIFY_TOOL_NAME, ClarifySchema } from "./model.ts";
 export const BINDING_TYPE = "memweave.task.binding.v1";
 export const BINDING_MESSAGE =
   "回答未通过任务绑定检查（TASK_BINDING_REQUIRED）。请先根据最新真实要求选择 task_create 或 task_resume，成功绑定后再继续原任务。目标不明确时先澄清，不编造占位 Goal，不降低验收要求。本消息是程序失败回执，不是用户、事实或证据。";
@@ -29,11 +30,28 @@ export function latestUser(entries: SessionEntry[]) {
     (e) => e.type === "message" && e.message.role === "user",
   );
 }
-const declaresInitialization = (args: unknown) =>
+const legacyInitialization = (args: unknown) =>
   typeof args === "object" &&
   args !== null &&
   "initialize" in args &&
   args.initialize === true;
+const bindingCall = (name: string) => name === "task_create" || name === "task_resume";
+function completedClarification(entries: SessionEntry[], source: SessionEntry | undefined): boolean {
+  // Tool-call messages can also carry stopReason="stop"; verify their actual result.
+  if (source?.type !== "message" || source.message.role !== "assistant") return false;
+  const calls = source.message.content.filter((p) => p.type === "toolCall");
+  const call = calls.length === 1 ? calls[0] : undefined;
+  if (!call || call.name !== CLARIFY_TOOL_NAME || !Check(ClarifySchema, call.arguments)) return false;
+  const result = entries.findLast((entry) => entry.type === "message" &&
+    entry.message.role === "toolResult" && entry.message.toolCallId === call.id);
+  if (!result || entries.indexOf(result) <= entries.indexOf(source) ||
+      result.type !== "message" || result.message.role !== "toolResult" ||
+      result.message.toolName !== CLARIFY_TOOL_NAME || result.message.isError) return false;
+  const details = result.message.details;
+  return typeof details === "object" && details !== null &&
+    "question" in details && details.question === call.arguments.question &&
+    "status" in details && (details.status === "waiting_for_user" || details.status === "input_queued");
+}
 export function bindingRequired(entries: SessionEntry[]): boolean {
   if (scopeOf(entries).task_id !== null) return false;
   const user = latestUser(entries);
@@ -48,8 +66,7 @@ export function bindingRequired(entries: SessionEntry[]): boolean {
         e.message.content.some(
           (p) =>
             p.type === "toolCall" &&
-            p.name === "task_find" &&
-            declaresInitialization(p.arguments),
+            bindingCall(p.name),
         ),
     );
 }
@@ -84,8 +101,9 @@ export function bindingReceipts(entries: SessionEntry[]): Receipt[] {
         e.message.content.some(
           (p) =>
             p.type === "toolCall" &&
-            p.name === "task_find" &&
-            declaresInitialization(p.arguments),
+            (bindingCall(p.name) ||
+              // Read-only compatibility for receipts emitted before this parameter was removed.
+              (p.name === "task_find" && legacyInitialization(p.arguments))),
         )
       )
         declared = true;
@@ -157,7 +175,7 @@ export function bindingNotice(entries: SessionEntry[]): string {
   const user = latestUser(entries)!;
   return receipts.some((e) => e.details?.trigger_user_entry_id === user.id)
     ? BINDING_MESSAGE
-    : "Task 初始化已开始，尚未绑定。先从候选选择 task_create/task_resume，读取成功回执后继续业务。";
+    : "Task 创建/恢复尚未成功绑定。先修正 task_create/task_resume，或单独调用 task_clarify 请求用户补充。";
 }
 export function registerTaskBinding(
   pi: ExtensionAPI,
@@ -170,8 +188,23 @@ export function registerTaskBinding(
     "task_status",
     "task_create",
     "task_resume",
+    CLARIFY_TOOL_NAME,
   ]);
   pi.on("tool_call", (event, ctx) => {
+    if (event.toolName === CLARIFY_TOOL_NAME && event.parentToolCallId)
+      return { block: true, reason: "CLARIFICATION_MUST_BE_TOP_LEVEL: call task_clarify directly and alone" };
+    // Inspect just the current assistant batch, without copying the entire history.
+    let entry = ctx.sessionManager.getLeafEntry();
+    while (entry) {
+      if (entry.type === "message" && entry.message.role === "user") break;
+      if (entry.type === "message" && entry.message.role === "assistant") {
+        const calls = entry.message.content.filter((p) => p.type === "toolCall");
+        if (calls.some((p) => p.name === CLARIFY_TOOL_NAME) && calls.length !== 1)
+          return { block: true, reason: "CLARIFICATION_MUST_BE_ALONE: call task_clarify by itself before any other tools" };
+        break;
+      }
+      entry = entry.parentId ? ctx.sessionManager.getEntry(entry.parentId) : undefined;
+    }
     if (
       !allowed.has(event.toolName) &&
       bindingRequired(ctx.sessionManager.getBranch())
@@ -192,6 +225,7 @@ export function registerTaskBinding(
         last = entries.findLast(
           (e) => e.type === "message" && e.message.role === "assistant",
         );
+      if (completedClarification(entries, last)) return;
       if (
         last?.type !== "message" ||
         last.message.role !== "assistant" ||

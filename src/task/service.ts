@@ -503,7 +503,6 @@ export class TaskService {
     onProgress?: (progress: SearchProgress) => void,
   ) {
     if (!Check(FindSchema, input)) throw Error("INVALID_TASK_FIND");
-    if (input.initialize && !ctx) throw Error("TASK_INITIALIZATION_CONTEXT_REQUIRED");
     const config = ctx ? await this.configuration(ctx) : undefined;
     return this.search.find(
       await this.index.read(), input, settingsFor(config).task_search,

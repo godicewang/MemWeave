@@ -99,7 +99,7 @@ test(
         (c) =>
           c.type === "toolCall" &&
           c.name === "task_find" &&
-          (c.arguments as { initialize?: boolean }).initialize === true,
+          !("initialize" in c.arguments),
       ),
     );
     assert.ok(

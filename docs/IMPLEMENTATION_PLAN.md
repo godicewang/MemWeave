@@ -209,3 +209,5 @@
 用户确认 TASK_BINDING_AND_RETRIEVAL_PROPOSAL.md：先同步直接规范，再实现声明初始化/有界原生纠正、MiniSearch＋多语言 E5-small Q8 本机混合 Top-k、冻结旧 Session 分支的有界 Window 恢复。简单问答豁免、同目标复用、显式 restart 等待新目标、原始历史/Goal/F/D/独立窗口提交保持。State 工具摘要优化已按用户要求撤回；图片只检验兼容，不把特定 OCR 格式设为插件发布门槛。
 
 新功能已完成确定性、真实模型和资源测量；最终候选、双宿主及完整入口证据由 TASK_RETRIEVAL_VALIDATION_2026-10-26.md 记录。真实模型“受阻后漏存失败边界”仍可能发生，不因绑定改进宣称每次必然写 State；所有专项未通过前仍不发布 npm。
+
+2026-10-26后续用户确认：移除initialize，绑定意图按实际task_create/task_resume判断；新增task_clarify停止自动执行、请求真实用户输入。先完成等价索引优化与疑难case记录，再完成澄清/兼容切片；范围与验收见TASK_CLARIFICATION_AND_INDEX_PLAN.md，冷索引已验收结果见TASK_INDEX_BATCHING_VALIDATION.md。漏存阻塞、工具修正及两类窗口混淆本轮仅记录待讨论。

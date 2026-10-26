@@ -168,7 +168,7 @@ Goal 已提交但索引/绑定未完成时，按原始创建调用和稳定候�
 
 ## 主动绑定、本机召回与旧窗口恢复（2026-10-26 用户确认）
 
-直接相关规范已同步 Task §12、Rule §20、State §24、Recent Window §20，具体资源与格式见 TASK_BINDING_AND_RETRIEVAL_PROPOSAL.md。简单问答由当前 Agent 自主豁免，实质目标未绑定时以 task_find initialize=true 声明初始化；Top-k 由 Agent 选择创建/恢复，已有同目标绑定直接复用。仅声明后的未绑定流程门禁业务工具，原生 agent_before_settle 追加可见失败回执后最多纠正一次，不另建分类器、总结 Agent 或 Agent Loop。
+直接相关规范已同步Task §12、Rule §20、State §24、Recent Window §20。简单问答由当前Agent自主豁免，task_find只发现，由Agent选择创建/恢复；实际task_create/task_resume调用后仍未绑定时才门禁和有界纠正，不使用initialize参数。task_clarify独立调用，以原生UI/工具终止等待真实用户，不新增暂停数据库；正常澄清不被迫绑定。旧回执保持来源核验，不另建分类器、总结Agent或Agent Loop。详情见TASK_CLARIFICATION_AND_INDEX_PLAN.md。
 
 src/task/search* 复用 MiniSearch、固定多语言 E5-small Q8 与加权 RRF；ONNX Runtime CPU 和已有 tokenizer 按需执行。模型与每 Task 当前派生行独立置于 models/、search/v1/，只索引 Goal/发现字段；派生缓存可重建，不能掩盖主 State 损坏。首次下载、原生依赖、CPU/内存和空闲释放属于已确认副作用；限额与资源成本在 USER_GUIDE 和本轮验收记录说明。
 

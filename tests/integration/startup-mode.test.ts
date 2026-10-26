@@ -139,7 +139,7 @@ test("enabled mode initializes once, registers memory and retains mode across na
   await settled(() => h.reloads === 1);
   assert.equal(h.settings.getCompactionEnabled(), false);
   assert.equal(h.selections, 1); assert.equal(h.confirmations, 1);
-  assert.equal(h.loader.getExtensions().extensions[0]!.tools.size, 11);
+  assert.equal(h.loader.getExtensions().extensions[0]!.tools.size, 12);
   assert.equal(h.statuses.at(-1), "MemWeave 已启用");
   assert.equal(h.footers, 1);
   await writeFile(h.paths.rule, "USER EDIT {{recent_turns}}");
@@ -154,7 +154,7 @@ test("enabled mode initializes once, registers memory and retains mode across na
   assert.equal(await readFile(h.paths.rule, "utf8"), "USER EDIT {{recent_turns}}");
   await h.newSession();
   assert.equal(h.selections, 1);
-  assert.equal(h.loader.getExtensions().extensions[0]!.tools.size, 11);
+  assert.equal(h.loader.getExtensions().extensions[0]!.tools.size, 12);
   h.faux.setResponses([fauxAssistantMessage("memory answer")]);
   await h.session.prompt("memory question");
   assert.equal(h.faux.state.callCount, 1);
@@ -195,7 +195,7 @@ test("settings failure aborts requests and never claims mode activation", async 
 test("headless mode keeps memory behavior without silently toggling shared settings", async t => {
   const h = await fixture(t, { headless: true });
   assert.equal(h.selections, 0); assert.equal(h.reloads, 0);
-  assert.equal(h.loader.getExtensions().extensions[0]!.tools.size, 11);
+  assert.equal(h.loader.getExtensions().extensions[0]!.tools.size, 12);
   assert.equal(h.settings.getCompactionEnabled(), false);
   await assert.rejects(readFile(h.paths.rule), { code: "ENOENT" });
 });
@@ -206,6 +206,6 @@ test("native instances in one process never inherit another instance's mode", as
   const b = await fixture(t, { choice: "off" });
   await settled(() => b.reloads === 1);
   assert.equal(a.selections, 1); assert.equal(b.selections, 1);
-  assert.equal(a.loader.getExtensions().extensions[0]!.tools.size, 11);
+  assert.equal(a.loader.getExtensions().extensions[0]!.tools.size, 12);
   assert.equal(b.loader.getExtensions().extensions[0]!.tools.size, 0);
 });

@@ -21,10 +21,10 @@ const create = {
   summary: "batch verification",
   keywords: ["orders"],
 };
-test("native boundary rejects unbound initialized delivery once, then continues through actual Task creation", async (t) => {
+test("native boundary rejects delivery after a failed resume once, then continues through actual Task creation", async (t) => {
   const h = await taskSession(t);
   h.faux.setResponses([
-    answer([call("task_find", { query: "orders", initialize: true })]),
+    answer([call("task_resume", { task_id: "task_missing" })]),
     answer("premature delivery"),
     answer([call("task_create", create)]),
     answer("bound delivery"),
@@ -58,7 +58,7 @@ test("native boundary rejects unbound initialized delivery once, then continues 
 test("failed correction stops at its bound, survives reload, and rejects forged receipt content", async (t) => {
   const h = await taskSession(t);
   h.faux.setResponses([
-    answer([call("task_find", { query: "orders", initialize: true })]),
+    answer([call("task_resume", { task_id: "task_missing" })]),
     answer("unbound one"),
     answer("unbound two"),
   ]);
@@ -95,7 +95,7 @@ test("failed correction stops at its bound, survives reload, and rejects forged 
   await h.session.prompt("12x7");
   assert.equal(bindingReceipts(h.manager.getBranch()).length, 2);
 });
-test("simple answers and ordinary discovery do not initialize; declaration gates business execution", async (t) => {
+test("simple answers and search never gate; a failed create gates business execution", async (t) => {
   let ran = 0;
   const h = await taskSession(t, {
     extra(pi) {
@@ -121,7 +121,7 @@ test("simple answers and ordinary discovery do not initialize; declaration gates
   assert.equal(bindingReceipts(h.manager.getBranch()).length, 0);
   assert.equal((await h.tasks.index.read()).length, 0);
   h.faux.setResponses([
-    answer([call("task_find", { query: "orders", initialize: true })]),
+    answer([call("task_create", { ...create, goal: "长".repeat(101) })]),
     answer([call("probe", {})]),
     answer([call("task_create", create)]),
     answer([call("probe", {})]),
@@ -148,7 +148,7 @@ test("zero correction budget records failure without inference and the next user
     JSON.stringify({ task_binding: { max_corrections: 0 } }),
   );
   h.faux.setResponses([
-    answer([call("task_find", { query: "orders", initialize: true })]),
+    answer([call("task_resume", { task_id: "task_missing" })]),
     answer("unbound"),
   ]);
   await h.session.prompt("start orders");

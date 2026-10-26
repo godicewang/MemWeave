@@ -39,6 +39,7 @@ import type { Embedder } from "../task/embedding.ts";
 import { registerRestart } from "./restart.ts";
 import { registerSetup } from "./setup.ts";
 import { registerContextFooter } from "../pi/context-footer.ts";
+import { registerTaskClarification } from "./clarify.ts";
 export interface MemweaveOptions extends WindowOptions {
   embedder?:Embedder;
   paths?: MemoryPaths;
@@ -81,6 +82,7 @@ export function registerMemweaveRuntime(
     },
   });
   registerRestart(pi, window, report);
+  registerTaskClarification(pi);
   registerTaskBinding(pi,tasks,report);
   pi.on("session_shutdown",()=>tasks.search.close());
   const setup = existingSetup ?? registerSetup(pi, paths, report, options.setupAgentDir, options.setupPackageVersion);
@@ -150,7 +152,7 @@ export function registerMemweaveRuntime(
   );
   tool(
     "task_find",
-    "Find Top-k Tasks using Goal/field lexical, keyword and local semantic retrieval. query required; optional keywords/limit. initialize=true explicitly starts Task initialization for this real input when unbound: choose task_create/task_resume before business tools or final delivery. Omit initialize for discovery/clarification only. Simple immediate Q&A needs no Task/search. Results do not switch or auto-resume; inspect candidates and choose. Local model errors are explicit; never infer absence from failed search.",
+    "Find Top-k Tasks using Goal/field lexical, keyword and local semantic retrieval. query required; optional keywords/limit. Search only: does not require binding, switch or auto-resume. No initialize parameter. For ongoing work inspect candidates, then task_create/task_resume; when the goal or candidate is unclear call task_clarify alone to ask the user. Simple immediate Q&A needs no Task/search. Local model errors are explicit; never infer absence from failed search.",
     FindSchema,
     (p, ctx, _id, update) => tasks.find(p, ctx, (progress) => {
       const preparing = progress.completed === 0 && progress.total > 0;

@@ -8,7 +8,7 @@ import { mergeConfig } from "../../src/config/schema.ts";
 import { renderRule } from "../../src/rule/render.ts";
 
 const builtins = ["read", "bash", "edit", "write"];
-const memoryTools = ["task_create", "task_find", "task_resume", "task_status", "state_append", "state_read", "update_goal", "modify_fact", "state_remain", "memory_read", "recent_window_set"];
+const memoryTools = ["task_create", "task_find", "task_resume", "task_clarify", "task_status", "state_append", "state_read", "update_goal", "modify_fact", "state_remain", "memory_read", "recent_window_set"];
 
 /** Fail before inference if a supplier test accidentally uses a reduced environment. */
 export function assertProductionPayload(payload: unknown, memory: boolean): void {

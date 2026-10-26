@@ -1,5 +1,10 @@
 import { Type, type Static } from "typebox";
 const text = Type.String({ minLength: 1, pattern: "\\S" });
+export const CLARIFY_TOOL_NAME = "task_clarify";
+export const ClarifySchema = Type.Object(
+  { question: text },
+  { additionalProperties: false },
+);
 export const TaskIdSchema = Type.String({ pattern: "^task_[A-Za-z0-9_-]+$" });
 export const CreateSchema = Type.Object(
   {
@@ -19,7 +24,6 @@ export const CreateSchema = Type.Object(
 export const FindSchema = Type.Object(
   {
     query: text,
-    initialize: Type.Optional(Type.Boolean()),
     keywords: Type.Optional(Type.Array(text)),
     limit: Type.Optional(
       Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }),

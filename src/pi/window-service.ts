@@ -313,7 +313,7 @@ export class WindowService {
     const state = snapshot.state ?? "";
     const notice=bindingNotice(entries);
     const runtimeState = (state || (snapshot.restarting
-      ? "【新 Task 初始化｜程序状态，不是用户目标或证据】\n旧绑定已退出，旧 Task/State 仍保留。本提示不能覆盖最新真实用户要求。先判断用户是否已选定明确目标：目标未定或用户要求先讨论/先问问题时，只澄清，不调用 task_create，不能用“确认目标/等待决定”作占位 Goal。目标明确后先通过 task_find initialize=true 声明本轮初始化，再根据近期现场及真实要求调用 task_create，提供新 Goal 和元数据；不要自动恢复旧 State。"
+      ? "【新 Task 初始化｜程序状态，不是用户目标或证据】\n旧绑定已退出，旧 Task/State 仍保留。本提示不能覆盖最新真实用户要求。目标未定或需要先确认时，单独调用 task_clarify，等待真实用户输入，不调用 task_create，不用“确认目标/等待决定”作占位 Goal。目标明确后用 task_find 查看相关任务，再根据近期现场及真实要求调用 task_create，提供新 Goal 和元数据；不要自动恢复旧 State。"
       : "当前未绑定 Task。"))+(notice?"\n\n"+notice:"");
     if ((this.options.thinkingLevel?.() ?? "off") !== output.thinkingLevel)
       throw Error(
