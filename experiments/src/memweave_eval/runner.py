@@ -37,7 +37,6 @@ def effective_concurrency(
 
 def image_snapshot(paths: list[Path]) -> dict:
     """Record actual local image identities after controls, without editing task definitions."""
-    from harbor.environments.definition import environment_content_hash
     from harbor.models.task.config import TaskConfig
     from harbor.models.task.paths import TaskPaths
     from harbor.models.task.verifier_mode import resolve_verifier_environment_definition
@@ -50,7 +49,11 @@ def image_snapshot(paths: list[Path]) -> dict:
         if verifier is not None:
             definitions.append((path.name + ":verifier", verifier.directory, verifier.config))
         for key, directory, environment in definitions:
-            name = environment.docker_image or "hb__" + environment_content_hash(directory)
+            if not environment.docker_image:
+                raise ValueError(
+                    "Dockerfile task image freezing requires the pending runtime-copy adaptation; see docs/experiments/DOCKERFILE_FREEZE_PROPOSAL.md"
+                )
+            name = environment.docker_image
             info = json.loads(
                 subprocess.check_output(["docker", "image", "inspect", name], text=True, timeout=30)
             )[0]

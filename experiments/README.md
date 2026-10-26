@@ -2,6 +2,8 @@
 
 在官方任务环境中实际重跑原生 Pi 和 Pi + MemWeave，保存原件，离线生成 JSON、CSV 和 Markdown 对照。只接入 Terminal-Bench 4.0 与 SWE-bench Pro V2，不包含自进化。行为边界见 [实现设计](../docs/experiments/IMPLEMENTATION_DESIGN.md)，实际通过范围见 [验收记录](../docs/experiments/VALIDATION.md)。
 
+当前验收：Pro V2 的完整真实对照已跑通；TB 4.0 的 Dockerfile 镜像冻结适配尚待确认，不宣称已跑通。TB 首题官方评分镜像构建失败，没有发起模型请求；方案见 [待确认提案](../docs/experiments/DOCKERFILE_FREEZE_PROPOSAL.md)。没有可核对的镜像身份时执行器阻断模型阶段。
+
 ## 安装实验依赖
 
 需要 Python 3.12–3.13、uv、可用的 Docker daemon、Compose 和 Buildx。依赖与产品 npm 环境独立：
@@ -34,6 +36,8 @@ docker buildx version
 把填好的配置保存在仓库外时，将 `suite`、`subset` 改为可解析的绝对路径。运行根目录默认 `~/.local/share/memweave-experiments/`，必须在所有 Git 工作区外。它保存缓存及 `runs/<run_id>/` 原件；不要提交个人配置、归档、Session、State 或密钥。
 
 `suites/` 锁定官方提交；`subsets/` 只声明筛选规则和规模。筛选保留原题指令、环境、评分和预算，按已声明的资源、分组和 SHA256 顺序确定任务；`selection.json` 保存全部入选、候补和排除理由。不能根据两个变体的解题成绩挑题。初始 smoke 默认 2 题，baseline 模板 12 题；数量可在实际运行前明确调整，baseline 模板不代表已授权扩大运行。
+
+子集 seed 只控制选题，不对模型 API 的随机性作确定性承诺。
 
 首次模型冒烟的用户授权是**两个任务集合计最多 20 美元、8 小时**。如果分开运行，须分配总额度，例如每个任务集最多 10 美元、14400 秒；不能把两个模板各自的上限相加当成新授权。模板默认也按这份分配填写。官方单题超时保持不变，整体止损可能提前取消任务，结果保留为中断。
 

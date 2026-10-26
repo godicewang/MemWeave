@@ -152,7 +152,13 @@ def test_image_lock_includes_official_separate_verifier(tmp_path):
 
     task = make_task(tmp_path, "one")
     with (task / "task.toml").open("a") as stream:
-        stream.write('\n[verifier]\nenvironment_mode="separate"\n')
+        stream.write(
+            '\n[verifier]\nenvironment_mode="separate"\n[verifier.environment]\ndocker_image="grader:fixed"\n'
+        )
+    p = task / "task.toml"
+    p.write_text(
+        p.read_text().replace("[environment]", '[environment]\ndocker_image="subject:fixed"')
+    )
     (task / "tests/Dockerfile").write_text("FROM verifier-base")
 
     def inspect(args, **kwargs):
@@ -162,3 +168,12 @@ def test_image_lock_includes_official_separate_verifier(tmp_path):
         images = image_snapshot([task])
     assert set(images) == {"one", "one:verifier"}
     assert images["one"]["reference"] != images["one:verifier"]["reference"]
+
+
+def test_dockerfile_task_cannot_be_falsely_declared_frozen(tmp_path):
+    from test_suites import make_task
+
+    from memweave_eval.runner import image_snapshot
+
+    with pytest.raises(ValueError, match="pending runtime-copy"):
+        image_snapshot([make_task(tmp_path, "one")])

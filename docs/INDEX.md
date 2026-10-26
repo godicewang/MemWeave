@@ -32,6 +32,7 @@
 | `GITHUB_PACKAGES_VALIDATION.md` | GitHub 0.1.0 镜像实际发布、原归档一致性与简版主页验收 |
 | `IMPLEMENTATION_PLAN.md` | 当前进度、阶段依赖、交付范围和进入条件 |
 | [experiments/IMPLEMENTATION_DESIGN.md](experiments/IMPLEMENTATION_DESIGN.md) | 2026-10-26 确认的公开基线实验设计：Terminal-Bench 4.0 与 SWE-bench Pro V2 子集的实际重跑、记录和比较；不含自进化，不改变产品运行时契约 |
+| [experiments/VALIDATION.md](experiments/VALIDATION.md) | 实验 CLI、31 项检查、实际 Pro V2 双变体/全新沙箱重评分、费用及 TB Dockerfile 接入受阻范围；不将单题结果外推为记忆优势 |
 | `PHASE_0_VALIDATION.md` | 阶段 0 的实际测试证据、复现命令、兼容与未验证范围 |
 | `PHASE_1_VALIDATION.md` | 配置/Rule 正式模块、精确容量、HTTP 重试与真实 DeepSeek 验收 |
 | `PHASE_2_VALIDATION.md` | Task/State 最小闭环、引用/分支恢复、并发与部分失败、真实 DeepSeek 验收 |
