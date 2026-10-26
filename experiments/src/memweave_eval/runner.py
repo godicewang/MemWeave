@@ -190,7 +190,7 @@ def tool_environment(spec: Experiment, upstream: Path, *, inference=False) -> di
             or not entry["key"]
         ):
             raise ValueError("DeepSeek API-key auth profile unavailable")
-        env["DEEPSEEK_API_KEY"] = entry["key"]
+        # Pi reads its private auth.json. Never put a key in Docker exec env/argv.
     return env
 
 

@@ -5,7 +5,12 @@ import tarfile
 import pytest
 from test_spec import configuration
 
-from memweave_eval.runner import build_job_config, effective_concurrency, verify_package
+from memweave_eval.runner import (
+    build_job_config,
+    effective_concurrency,
+    tool_environment,
+    verify_package,
+)
 from memweave_eval.spec import Experiment
 from memweave_eval.storage import atomic_json, contained, file_digest
 
@@ -105,3 +110,18 @@ def test_reduce_concurrency_without_reducing_official_resources():
     assert effective_concurrency(2, selected, cpus=8, memory_mb=20000) == 2
     with pytest.raises(ValueError):
         effective_concurrency(2, selected, cpus=2, memory_mb=20000)
+
+
+def test_host_credentials_never_enter_harbor_environment(tmp_path, monkeypatch):
+    from unittest.mock import patch
+
+    spec = Experiment.model_validate(configuration(tmp_path))
+    auth = tmp_path / "auth.json"
+    auth.write_text(json.dumps({"deepseek": {"type": "api_key", "key": "test-private-key"}}))
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "host-private-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "unrelated-key")
+    with patch("memweave_eval.runner.auth_file", return_value=auth):
+        env = tool_environment(spec, tmp_path, inference=True)
+    assert "DEEPSEEK_API_KEY" not in env
+    assert "OPENAI_API_KEY" not in env
+    assert env["HARBOR_TELEMETRY"] == "0"
