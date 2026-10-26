@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import shlex
 import tempfile
+import time
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -106,11 +107,11 @@ class ExperimentPi(Pi):
             script = (
                 f"const {{memoryPaths}}=await import({json.dumps(package + '/src/storage/paths.ts')});"
                 f"const {{ensureEmbeddingModel}}=await import({json.dumps(package + '/src/task/embedding.ts')});"
-                f"const {{DEFAULT_SETTINGS}}=await import({json.dumps(package + '/src/config/defaults.ts')});"
                 "const fs=await import('node:fs/promises');const paths=memoryPaths();"
+                f"const defaults=JSON.parse(await fs.readFile({json.dumps(package + '/src/config/defaults.json')},'utf8'));"
                 "await fs.mkdir(paths.root,{recursive:true});"
                 f"await fs.copyFile({json.dumps(package + '/resources/rule.md')},paths.rule);"
-                "await ensureEmbeddingModel(paths,DEFAULT_SETTINGS.task_search);"
+                "await ensureEmbeddingModel(paths,defaults.task_search);"
             )
             await self.exec_as_agent(
                 environment,
@@ -132,7 +133,10 @@ class ExperimentPi(Pi):
         if is_pi:
             # Public upstream Pi command is reused verbatim inside a pipefail shell.
             # The official locked Pro wrappers reserve 60s for patch capture.
-            prefix = "timeout -k 30 2940 " if self.options.protocol == "swe-pro-v2" else ""
+            remaining = max(
+                1, 2940 - int(time.monotonic() - getattr(self, "_agent_started", time.monotonic()))
+            )
+            prefix = f"timeout -k 30 {remaining} " if self.options.protocol == "swe-pro-v2" else ""
             command = prefix + "bash -o pipefail -c " + shlex.quote(command)
             if hasattr(self, "_experiment_home"):
                 kwargs["env"] = dict(
@@ -153,6 +157,7 @@ class ExperimentPi(Pi):
         return result
 
     async def run(self, instruction, environment, context) -> None:
+        self._agent_started = time.monotonic()
         try:
             if self.options.protocol == "swe-pro-v2":
                 model = await environment.exec(
@@ -187,7 +192,7 @@ class ExperimentPi(Pi):
                     "git diff --cached > /logs/agent/model.patch 2>/dev/null; "
                     "git reset -q 2>/dev/null; test -f /logs/agent/model.patch"
                 )
-                result = await environment.exec(command=capture, user="root", timeout_sec=60)
+                result = await environment.exec(command=capture, user="root", timeout_sec=30)
                 if result.return_code != 0:
                     raise RuntimeError("official Pro patch capture failed")
             if self.options.variant == "pi-memweave" and hasattr(self, "_experiment_home"):
