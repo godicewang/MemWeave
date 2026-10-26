@@ -1,6 +1,7 @@
 import type {
   ExtensionAPI,
   ExtensionContext,
+  AgentToolUpdateCallback,
 } from "@earendil-works/pi-coding-agent";
 import { isDeepStrictEqual } from "node:util";
 import { alignOutput } from "../pi/window-budget.ts";
@@ -111,6 +112,7 @@ export function registerMemweaveRuntime(
       params: Static<S>,
       ctx: ExtensionContext,
       id: string,
+      update?: AgentToolUpdateCallback,
     ) => Promise<unknown>,
   ) {
     pi.registerTool({
@@ -118,10 +120,10 @@ export function registerMemweaveRuntime(
       label: name,
       description,
       parameters,
-      async execute(id, params, signal, _update, ctx) {
+      async execute(id, params, signal, update, ctx) {
         signal?.throwIfAborted();
         if (!Check(parameters, params)) throw Error("INVALID_TOOL_INPUT");
-        const value = await run(params, ctx, id);
+        const value = await run(params, ctx, id, update);
         return {
           content: [
             {
@@ -150,7 +152,16 @@ export function registerMemweaveRuntime(
     "task_find",
     "Find Top-k Tasks using Goal/field lexical, keyword and local semantic retrieval. query required; optional keywords/limit. initialize=true explicitly starts Task initialization for this real input when unbound: choose task_create/task_resume before business tools or final delivery. Omit initialize for discovery/clarification only. Simple immediate Q&A needs no Task/search. Results do not switch or auto-resume; inspect candidates and choose. Local model errors are explicit; never infer absence from failed search.",
     FindSchema,
-    (p,ctx) => tasks.find(p,ctx),
+    (p, ctx, _id, update) => tasks.find(p, ctx, (progress) => {
+      const preparing = progress.completed === 0 && progress.total > 0;
+      update?.({
+        content: [{
+          type: "text",
+          text: `本地 Task 检索：索引 ${progress.completed}/${progress.total}，已更新 ${progress.indexed} 项${preparing ? "；准备本地模型/查询" : ""}`,
+        }],
+        details: {},
+      });
+    }),
   );
   tool(
     "task_resume",

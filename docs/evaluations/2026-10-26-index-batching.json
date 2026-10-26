@@ -1,0 +1,1390 @@
+{
+  "date": "2026-10-26",
+  "baseCommit": "10b4ef8",
+  "environment": {
+    "pi": "1.4.0",
+    "node": "24.22.0",
+    "embedding": "Xenova/multilingual-e5-small Q8",
+    "revision": "761b726dd34fb83930e26aab4e9ac3899aa1fa78",
+    "remoteApiInBenchmark": 0
+  },
+  "method": "1000 synthetic Task Goals, same authority files; 3 fresh derived roots each before/after, one cold and 3 warm queries each; tensors remain singleton; model resources already cached",
+  "baseline": [
+    {
+      "label": "baseline",
+      "trial": 0,
+      "rows": [
+        {
+          "phase": "cold",
+          "query": "payment charged twice",
+          "ms": 19712.187583,
+          "top": [
+            {
+              "id": "task_perf_215",
+              "score": 0.012490685543964233,
+              "ranks": {
+                "lexical": 28,
+                "semantic": 1,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_210",
+              "score": 0.012430478309232482,
+              "ranks": {
+                "lexical": 27,
+                "semantic": 2,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_220",
+              "score": 0.011979256698357824,
+              "ranks": {
+                "lexical": 29,
+                "semantic": 5,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_195",
+              "score": 0.011943425877422736,
+              "ranks": {
+                "lexical": 23,
+                "semantic": 9,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_270",
+              "score": 0.011642857142857142,
+              "ranks": {
+                "lexical": 40,
+                "semantic": 3,
+                "keywords": null
+              }
+            }
+          ],
+          "passageCalls": 1000,
+          "documents": 1000
+        },
+        {
+          "phase": "warm",
+          "query": "退款失败补偿",
+          "ms": 78.18112499999916,
+          "top": [
+            {
+              "id": "task_perf_156",
+              "score": 0.01311233108108108,
+              "ranks": {
+                "lexical": 14,
+                "semantic": 4,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_161",
+              "score": 0.01263747054202671,
+              "ranks": {
+                "lexical": 16,
+                "semantic": 7,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_171",
+              "score": 0.012290969899665553,
+              "ranks": {
+                "lexical": 18,
+                "semantic": 9,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_121",
+              "score": 0.011661472855502706,
+              "ranks": {
+                "lexical": 7,
+                "semantic": 31,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_236",
+              "score": 0.011319875776397516,
+              "ranks": {
+                "lexical": 32,
+                "semantic": 10,
+                "keywords": null
+              }
+            }
+          ],
+          "passageCalls": 1000,
+          "documents": 1000
+        },
+        {
+          "phase": "warm",
+          "query": "登录态提前失效",
+          "ms": 74.00749999999971,
+          "top": [
+            {
+              "id": "task_perf_137",
+              "score": 0.013779803646563817,
+              "ranks": {
+                "lexical": 9,
+                "semantic": 2,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_102",
+              "score": 0.013541432741971705,
+              "ranks": {
+                "lexical": 1,
+                "semantic": 13,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_127",
+              "score": 0.013238157040882544,
+              "ranks": {
+                "lexical": 7,
+                "semantic": 9,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_117",
+              "score": 0.013031250000000001,
+              "ranks": {
+                "lexical": 4,
+                "semantic": 15,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_157",
+              "score": 0.012982565379825655,
+              "ranks": {
+                "lexical": 13,
+                "semantic": 6,
+                "keywords": null
+              }
+            }
+          ],
+          "passageCalls": 1000,
+          "documents": 1000
+        },
+        {
+          "phase": "warm",
+          "query": "payment charged twice",
+          "ms": 67.05508299999929,
+          "top": [
+            {
+              "id": "task_perf_215",
+              "score": 0.012490685543964233,
+              "ranks": {
+                "lexical": 28,
+                "semantic": 1,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_210",
+              "score": 0.012430478309232482,
+              "ranks": {
+                "lexical": 27,
+                "semantic": 2,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_220",
+              "score": 0.011979256698357824,
+              "ranks": {
+                "lexical": 29,
+                "semantic": 5,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_195",
+              "score": 0.011943425877422736,
+              "ranks": {
+                "lexical": 23,
+                "semantic": 9,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_270",
+              "score": 0.011642857142857142,
+              "ranks": {
+                "lexical": 40,
+                "semantic": 3,
+                "keywords": null
+              }
+            }
+          ],
+          "passageCalls": 1000,
+          "documents": 1000
+        }
+      ],
+      "maxRss": 810991616,
+      "vectorHash": "0279b09516cf99ee48c915d1abd81c11ecd0914b955bea6dbaa2f663570287b2"
+    },
+    {
+      "label": "baseline",
+      "trial": 1,
+      "rows": [
+        {
+          "phase": "cold",
+          "query": "payment charged twice",
+          "ms": 20079.029166999997,
+          "top": [
+            {
+              "id": "task_perf_215",
+              "score": 0.012490685543964233,
+              "ranks": {
+                "lexical": 28,
+                "semantic": 1,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_210",
+              "score": 0.012430478309232482,
+              "ranks": {
+                "lexical": 27,
+                "semantic": 2,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_220",
+              "score": 0.011979256698357824,
+              "ranks": {
+                "lexical": 29,
+                "semantic": 5,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_195",
+              "score": 0.011943425877422736,
+              "ranks": {
+                "lexical": 23,
+                "semantic": 9,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_270",
+              "score": 0.011642857142857142,
+              "ranks": {
+                "lexical": 40,
+                "semantic": 3,
+                "keywords": null
+              }
+            }
+          ],
+          "passageCalls": 1000,
+          "documents": 1000
+        },
+        {
+          "phase": "warm",
+          "query": "退款失败补偿",
+          "ms": 66.96258300000045,
+          "top": [
+            {
+              "id": "task_perf_156",
+              "score": 0.01311233108108108,
+              "ranks": {
+                "lexical": 14,
+                "semantic": 4,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_161",
+              "score": 0.01263747054202671,
+              "ranks": {
+                "lexical": 16,
+                "semantic": 7,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_171",
+              "score": 0.012290969899665553,
+              "ranks": {
+                "lexical": 18,
+                "semantic": 9,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_121",
+              "score": 0.011661472855502706,
+              "ranks": {
+                "lexical": 7,
+                "semantic": 31,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_236",
+              "score": 0.011319875776397516,
+              "ranks": {
+                "lexical": 32,
+                "semantic": 10,
+                "keywords": null
+              }
+            }
+          ],
+          "passageCalls": 1000,
+          "documents": 1000
+        },
+        {
+          "phase": "warm",
+          "query": "登录态提前失效",
+          "ms": 67.4698750000025,
+          "top": [
+            {
+              "id": "task_perf_137",
+              "score": 0.013779803646563817,
+              "ranks": {
+                "lexical": 9,
+                "semantic": 2,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_102",
+              "score": 0.013541432741971705,
+              "ranks": {
+                "lexical": 1,
+                "semantic": 13,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_127",
+              "score": 0.013238157040882544,
+              "ranks": {
+                "lexical": 7,
+                "semantic": 9,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_117",
+              "score": 0.013031250000000001,
+              "ranks": {
+                "lexical": 4,
+                "semantic": 15,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_157",
+              "score": 0.012982565379825655,
+              "ranks": {
+                "lexical": 13,
+                "semantic": 6,
+                "keywords": null
+              }
+            }
+          ],
+          "passageCalls": 1000,
+          "documents": 1000
+        },
+        {
+          "phase": "warm",
+          "query": "payment charged twice",
+          "ms": 66.18483300000662,
+          "top": [
+            {
+              "id": "task_perf_215",
+              "score": 0.012490685543964233,
+              "ranks": {
+                "lexical": 28,
+                "semantic": 1,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_210",
+              "score": 0.012430478309232482,
+              "ranks": {
+                "lexical": 27,
+                "semantic": 2,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_220",
+              "score": 0.011979256698357824,
+              "ranks": {
+                "lexical": 29,
+                "semantic": 5,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_195",
+              "score": 0.011943425877422736,
+              "ranks": {
+                "lexical": 23,
+                "semantic": 9,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_270",
+              "score": 0.011642857142857142,
+              "ranks": {
+                "lexical": 40,
+                "semantic": 3,
+                "keywords": null
+              }
+            }
+          ],
+          "passageCalls": 1000,
+          "documents": 1000
+        }
+      ],
+      "maxRss": 884457472,
+      "vectorHash": "0279b09516cf99ee48c915d1abd81c11ecd0914b955bea6dbaa2f663570287b2"
+    },
+    {
+      "label": "baseline",
+      "trial": 2,
+      "rows": [
+        {
+          "phase": "cold",
+          "query": "payment charged twice",
+          "ms": 20126.268124999995,
+          "top": [
+            {
+              "id": "task_perf_215",
+              "score": 0.012490685543964233,
+              "ranks": {
+                "lexical": 28,
+                "semantic": 1,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_210",
+              "score": 0.012430478309232482,
+              "ranks": {
+                "lexical": 27,
+                "semantic": 2,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_220",
+              "score": 0.011979256698357824,
+              "ranks": {
+                "lexical": 29,
+                "semantic": 5,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_195",
+              "score": 0.011943425877422736,
+              "ranks": {
+                "lexical": 23,
+                "semantic": 9,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_270",
+              "score": 0.011642857142857142,
+              "ranks": {
+                "lexical": 40,
+                "semantic": 3,
+                "keywords": null
+              }
+            }
+          ],
+          "passageCalls": 1000,
+          "documents": 1000
+        },
+        {
+          "phase": "warm",
+          "query": "退款失败补偿",
+          "ms": 74.51437499999884,
+          "top": [
+            {
+              "id": "task_perf_156",
+              "score": 0.01311233108108108,
+              "ranks": {
+                "lexical": 14,
+                "semantic": 4,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_161",
+              "score": 0.01263747054202671,
+              "ranks": {
+                "lexical": 16,
+                "semantic": 7,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_171",
+              "score": 0.012290969899665553,
+              "ranks": {
+                "lexical": 18,
+                "semantic": 9,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_121",
+              "score": 0.011661472855502706,
+              "ranks": {
+                "lexical": 7,
+                "semantic": 31,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_236",
+              "score": 0.011319875776397516,
+              "ranks": {
+                "lexical": 32,
+                "semantic": 10,
+                "keywords": null
+              }
+            }
+          ],
+          "passageCalls": 1000,
+          "documents": 1000
+        },
+        {
+          "phase": "warm",
+          "query": "登录态提前失效",
+          "ms": 68.3942090000055,
+          "top": [
+            {
+              "id": "task_perf_137",
+              "score": 0.013779803646563817,
+              "ranks": {
+                "lexical": 9,
+                "semantic": 2,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_102",
+              "score": 0.013541432741971705,
+              "ranks": {
+                "lexical": 1,
+                "semantic": 13,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_127",
+              "score": 0.013238157040882544,
+              "ranks": {
+                "lexical": 7,
+                "semantic": 9,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_117",
+              "score": 0.013031250000000001,
+              "ranks": {
+                "lexical": 4,
+                "semantic": 15,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_157",
+              "score": 0.012982565379825655,
+              "ranks": {
+                "lexical": 13,
+                "semantic": 6,
+                "keywords": null
+              }
+            }
+          ],
+          "passageCalls": 1000,
+          "documents": 1000
+        },
+        {
+          "phase": "warm",
+          "query": "payment charged twice",
+          "ms": 65.63362500000221,
+          "top": [
+            {
+              "id": "task_perf_215",
+              "score": 0.012490685543964233,
+              "ranks": {
+                "lexical": 28,
+                "semantic": 1,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_210",
+              "score": 0.012430478309232482,
+              "ranks": {
+                "lexical": 27,
+                "semantic": 2,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_220",
+              "score": 0.011979256698357824,
+              "ranks": {
+                "lexical": 29,
+                "semantic": 5,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_195",
+              "score": 0.011943425877422736,
+              "ranks": {
+                "lexical": 23,
+                "semantic": 9,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_270",
+              "score": 0.011642857142857142,
+              "ranks": {
+                "lexical": 40,
+                "semantic": 3,
+                "keywords": null
+              }
+            }
+          ],
+          "passageCalls": 1000,
+          "documents": 1000
+        }
+      ],
+      "maxRss": 918683648,
+      "vectorHash": "0279b09516cf99ee48c915d1abd81c11ecd0914b955bea6dbaa2f663570287b2"
+    }
+  ],
+  "optimized": [
+    {
+      "label": "optimized",
+      "trial": 0,
+      "rows": [
+        {
+          "phase": "cold",
+          "query": "payment charged twice",
+          "ms": 12109.863374999999,
+          "top": [
+            {
+              "id": "task_perf_215",
+              "score": 0.012490685543964233,
+              "ranks": {
+                "lexical": 28,
+                "semantic": 1,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_210",
+              "score": 0.012430478309232482,
+              "ranks": {
+                "lexical": 27,
+                "semantic": 2,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_220",
+              "score": 0.011979256698357824,
+              "ranks": {
+                "lexical": 29,
+                "semantic": 5,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_195",
+              "score": 0.011943425877422736,
+              "ranks": {
+                "lexical": 23,
+                "semantic": 9,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_270",
+              "score": 0.011642857142857142,
+              "ranks": {
+                "lexical": 40,
+                "semantic": 3,
+                "keywords": null
+              }
+            }
+          ],
+          "passageCalls": 63,
+          "documents": 1000
+        },
+        {
+          "phase": "warm",
+          "query": "退款失败补偿",
+          "ms": 128.51516599999923,
+          "top": [
+            {
+              "id": "task_perf_156",
+              "score": 0.01311233108108108,
+              "ranks": {
+                "lexical": 14,
+                "semantic": 4,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_161",
+              "score": 0.01263747054202671,
+              "ranks": {
+                "lexical": 16,
+                "semantic": 7,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_171",
+              "score": 0.012290969899665553,
+              "ranks": {
+                "lexical": 18,
+                "semantic": 9,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_121",
+              "score": 0.011661472855502706,
+              "ranks": {
+                "lexical": 7,
+                "semantic": 31,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_236",
+              "score": 0.011319875776397516,
+              "ranks": {
+                "lexical": 32,
+                "semantic": 10,
+                "keywords": null
+              }
+            }
+          ],
+          "passageCalls": 63,
+          "documents": 1000
+        },
+        {
+          "phase": "warm",
+          "query": "登录态提前失效",
+          "ms": 90.13916699999936,
+          "top": [
+            {
+              "id": "task_perf_137",
+              "score": 0.013779803646563817,
+              "ranks": {
+                "lexical": 9,
+                "semantic": 2,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_102",
+              "score": 0.013541432741971705,
+              "ranks": {
+                "lexical": 1,
+                "semantic": 13,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_127",
+              "score": 0.013238157040882544,
+              "ranks": {
+                "lexical": 7,
+                "semantic": 9,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_117",
+              "score": 0.013031250000000001,
+              "ranks": {
+                "lexical": 4,
+                "semantic": 15,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_157",
+              "score": 0.012982565379825655,
+              "ranks": {
+                "lexical": 13,
+                "semantic": 6,
+                "keywords": null
+              }
+            }
+          ],
+          "passageCalls": 63,
+          "documents": 1000
+        },
+        {
+          "phase": "warm",
+          "query": "payment charged twice",
+          "ms": 69.64937500000087,
+          "top": [
+            {
+              "id": "task_perf_215",
+              "score": 0.012490685543964233,
+              "ranks": {
+                "lexical": 28,
+                "semantic": 1,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_210",
+              "score": 0.012430478309232482,
+              "ranks": {
+                "lexical": 27,
+                "semantic": 2,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_220",
+              "score": 0.011979256698357824,
+              "ranks": {
+                "lexical": 29,
+                "semantic": 5,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_195",
+              "score": 0.011943425877422736,
+              "ranks": {
+                "lexical": 23,
+                "semantic": 9,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_270",
+              "score": 0.011642857142857142,
+              "ranks": {
+                "lexical": 40,
+                "semantic": 3,
+                "keywords": null
+              }
+            }
+          ],
+          "passageCalls": 63,
+          "documents": 1000
+        }
+      ],
+      "maxRss": 782204928,
+      "vectorHash": "0279b09516cf99ee48c915d1abd81c11ecd0914b955bea6dbaa2f663570287b2"
+    },
+    {
+      "label": "optimized",
+      "trial": 1,
+      "rows": [
+        {
+          "phase": "cold",
+          "query": "payment charged twice",
+          "ms": 12211.95675,
+          "top": [
+            {
+              "id": "task_perf_215",
+              "score": 0.012490685543964233,
+              "ranks": {
+                "lexical": 28,
+                "semantic": 1,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_210",
+              "score": 0.012430478309232482,
+              "ranks": {
+                "lexical": 27,
+                "semantic": 2,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_220",
+              "score": 0.011979256698357824,
+              "ranks": {
+                "lexical": 29,
+                "semantic": 5,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_195",
+              "score": 0.011943425877422736,
+              "ranks": {
+                "lexical": 23,
+                "semantic": 9,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_270",
+              "score": 0.011642857142857142,
+              "ranks": {
+                "lexical": 40,
+                "semantic": 3,
+                "keywords": null
+              }
+            }
+          ],
+          "passageCalls": 63,
+          "documents": 1000
+        },
+        {
+          "phase": "warm",
+          "query": "退款失败补偿",
+          "ms": 64.16083300000173,
+          "top": [
+            {
+              "id": "task_perf_156",
+              "score": 0.01311233108108108,
+              "ranks": {
+                "lexical": 14,
+                "semantic": 4,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_161",
+              "score": 0.01263747054202671,
+              "ranks": {
+                "lexical": 16,
+                "semantic": 7,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_171",
+              "score": 0.012290969899665553,
+              "ranks": {
+                "lexical": 18,
+                "semantic": 9,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_121",
+              "score": 0.011661472855502706,
+              "ranks": {
+                "lexical": 7,
+                "semantic": 31,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_236",
+              "score": 0.011319875776397516,
+              "ranks": {
+                "lexical": 32,
+                "semantic": 10,
+                "keywords": null
+              }
+            }
+          ],
+          "passageCalls": 63,
+          "documents": 1000
+        },
+        {
+          "phase": "warm",
+          "query": "登录态提前失效",
+          "ms": 64.0044999999991,
+          "top": [
+            {
+              "id": "task_perf_137",
+              "score": 0.013779803646563817,
+              "ranks": {
+                "lexical": 9,
+                "semantic": 2,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_102",
+              "score": 0.013541432741971705,
+              "ranks": {
+                "lexical": 1,
+                "semantic": 13,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_127",
+              "score": 0.013238157040882544,
+              "ranks": {
+                "lexical": 7,
+                "semantic": 9,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_117",
+              "score": 0.013031250000000001,
+              "ranks": {
+                "lexical": 4,
+                "semantic": 15,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_157",
+              "score": 0.012982565379825655,
+              "ranks": {
+                "lexical": 13,
+                "semantic": 6,
+                "keywords": null
+              }
+            }
+          ],
+          "passageCalls": 63,
+          "documents": 1000
+        },
+        {
+          "phase": "warm",
+          "query": "payment charged twice",
+          "ms": 65.63891599999988,
+          "top": [
+            {
+              "id": "task_perf_215",
+              "score": 0.012490685543964233,
+              "ranks": {
+                "lexical": 28,
+                "semantic": 1,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_210",
+              "score": 0.012430478309232482,
+              "ranks": {
+                "lexical": 27,
+                "semantic": 2,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_220",
+              "score": 0.011979256698357824,
+              "ranks": {
+                "lexical": 29,
+                "semantic": 5,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_195",
+              "score": 0.011943425877422736,
+              "ranks": {
+                "lexical": 23,
+                "semantic": 9,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_270",
+              "score": 0.011642857142857142,
+              "ranks": {
+                "lexical": 40,
+                "semantic": 3,
+                "keywords": null
+              }
+            }
+          ],
+          "passageCalls": 63,
+          "documents": 1000
+        }
+      ],
+      "maxRss": 853213184,
+      "vectorHash": "0279b09516cf99ee48c915d1abd81c11ecd0914b955bea6dbaa2f663570287b2"
+    },
+    {
+      "label": "optimized",
+      "trial": 2,
+      "rows": [
+        {
+          "phase": "cold",
+          "query": "payment charged twice",
+          "ms": 13072.516291000004,
+          "top": [
+            {
+              "id": "task_perf_215",
+              "score": 0.012490685543964233,
+              "ranks": {
+                "lexical": 28,
+                "semantic": 1,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_210",
+              "score": 0.012430478309232482,
+              "ranks": {
+                "lexical": 27,
+                "semantic": 2,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_220",
+              "score": 0.011979256698357824,
+              "ranks": {
+                "lexical": 29,
+                "semantic": 5,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_195",
+              "score": 0.011943425877422736,
+              "ranks": {
+                "lexical": 23,
+                "semantic": 9,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_270",
+              "score": 0.011642857142857142,
+              "ranks": {
+                "lexical": 40,
+                "semantic": 3,
+                "keywords": null
+              }
+            }
+          ],
+          "passageCalls": 63,
+          "documents": 1000
+        },
+        {
+          "phase": "warm",
+          "query": "退款失败补偿",
+          "ms": 70.20216699999582,
+          "top": [
+            {
+              "id": "task_perf_156",
+              "score": 0.01311233108108108,
+              "ranks": {
+                "lexical": 14,
+                "semantic": 4,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_161",
+              "score": 0.01263747054202671,
+              "ranks": {
+                "lexical": 16,
+                "semantic": 7,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_171",
+              "score": 0.012290969899665553,
+              "ranks": {
+                "lexical": 18,
+                "semantic": 9,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_121",
+              "score": 0.011661472855502706,
+              "ranks": {
+                "lexical": 7,
+                "semantic": 31,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_236",
+              "score": 0.011319875776397516,
+              "ranks": {
+                "lexical": 32,
+                "semantic": 10,
+                "keywords": null
+              }
+            }
+          ],
+          "passageCalls": 63,
+          "documents": 1000
+        },
+        {
+          "phase": "warm",
+          "query": "登录态提前失效",
+          "ms": 64.06416699999681,
+          "top": [
+            {
+              "id": "task_perf_137",
+              "score": 0.013779803646563817,
+              "ranks": {
+                "lexical": 9,
+                "semantic": 2,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_102",
+              "score": 0.013541432741971705,
+              "ranks": {
+                "lexical": 1,
+                "semantic": 13,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_127",
+              "score": 0.013238157040882544,
+              "ranks": {
+                "lexical": 7,
+                "semantic": 9,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_117",
+              "score": 0.013031250000000001,
+              "ranks": {
+                "lexical": 4,
+                "semantic": 15,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_157",
+              "score": 0.012982565379825655,
+              "ranks": {
+                "lexical": 13,
+                "semantic": 6,
+                "keywords": null
+              }
+            }
+          ],
+          "passageCalls": 63,
+          "documents": 1000
+        },
+        {
+          "phase": "warm",
+          "query": "payment charged twice",
+          "ms": 61.45279200000368,
+          "top": [
+            {
+              "id": "task_perf_215",
+              "score": 0.012490685543964233,
+              "ranks": {
+                "lexical": 28,
+                "semantic": 1,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_210",
+              "score": 0.012430478309232482,
+              "ranks": {
+                "lexical": 27,
+                "semantic": 2,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_220",
+              "score": 0.011979256698357824,
+              "ranks": {
+                "lexical": 29,
+                "semantic": 5,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_195",
+              "score": 0.011943425877422736,
+              "ranks": {
+                "lexical": 23,
+                "semantic": 9,
+                "keywords": null
+              }
+            },
+            {
+              "id": "task_perf_270",
+              "score": 0.011642857142857142,
+              "ranks": {
+                "lexical": 40,
+                "semantic": 3,
+                "keywords": null
+              }
+            }
+          ],
+          "passageCalls": 63,
+          "documents": 1000
+        }
+      ],
+      "maxRss": 920616960,
+      "vectorHash": "0279b09516cf99ee48c915d1abd81c11ecd0914b955bea6dbaa2f663570287b2"
+    }
+  ],
+  "equivalence": {
+    "vectorAndTruncationHashEqualAcrossAllTrials": true,
+    "allTopKIncludingScoresAndRanksEqual": true,
+    "digest": "0279b09516cf99ee48c915d1abd81c11ecd0914b955bea6dbaa2f663570287b2"
+  },
+  "summary": {
+    "coldBeforeMedianMs": 20079.029166999997,
+    "coldAfterMedianMs": 12211.95675,
+    "warmBeforeMedianMs": 67.4698750000025,
+    "warmAfterMedianMs": 65.63891599999988
+  },
+  "checks": {
+    "fullCheckPassed": 265,
+    "nativeBatchTestsPassed": 4,
+    "realLocalBatchControlPassed": 1,
+    "realFlashTestsPassed": 2,
+    "realFlashRequests": 8
+  },
+  "scope": "Cold indexing slice and deferred-case records only; clarification and create/resume-based binding replacement are now user-approved and implemented in a subsequent slice; no npm publication or installed-runtime update",
+  "notes": [
+    "First full check hit npm Pi1.3 install timeout; repeated with isolated clone of existing public npm cache passed all265.",
+    "First native progress message-count assertion included Pi system entry; fixed to count real user/assistant/toolResult roles; no plugin history mutation.",
+    "Real model tests retained complete production System, package Rule and all default tools; no model resampling needed.",
+    "Memory not claimed improved: RSS peaks are measured separately and remain around0.9GB."
+  ],
+  "sourceSha256": {
+    "src/task/search.ts": "86e9c18bcecda414c0250f39011a6690d46e99861972343ad1cb5490979c084e",
+    "src/task/service.ts": "0d5a8047b839ccadb60b4510ba365c38d5bff0e4eca6e99b8ede61b9c8cfe1b1",
+    "src/extension/register.ts": "7e2e2afa63b82c42016b3958f519705fd8d9cfe6ec09ce4104488d116c2229e6"
+  }
+}

@@ -54,6 +54,9 @@
 | `MEMORY_TRIGGER_VALIDATION_2026-10-26.md` | 用户批准的工具摘要调整、固定前后样本、具体交付/阻塞/重开/图片失败和完整发布入口结果 |
 | `TASK_RETRIEVAL_VALIDATION_2026-10-26.md` | 主动初始化、本机检索质量/资源、旧窗口恢复、真实模型与候选兼容验收，保留受阻漏记失败 |
 | [PLUGIN_EFFECT_EVALUATION_2026-10-26.md](PLUGIN_EFFECT_EVALUATION_2026-10-26.md) | 当前源码完整生产环境的多场景效果评估：自然业务、阻塞、恢复歧义、高负载、并发、极限输入与本地检索资源；含逐任务标准、失败溯源和未实施建议，脱敏证据见 [JSON](evaluations/2026-10-26-effects.json) |
+| [DIFFICULT_CASES.md](DIFFICULT_CASES.md) | 用户要求暂存、待后续讨论的漏存阻塞、State工具错误修正及两类窗口提醒混淆；不将候选建议视为已批准实现 |
+| [TASK_CLARIFICATION_AND_INDEX_PLAN.md](TASK_CLARIFICATION_AND_INDEX_PLAN.md) | 本轮澄清接线、移除initialize及保持向量/排名等价的首次索引优化范围，绑定检查按创建/恢复调用判断，搜索不触发门禁 |
+| [TASK_INDEX_BATCHING_VALIDATION.md](TASK_INDEX_BATCHING_VALIDATION.md) | 首次索引通信分块、有界并发派生写入与原生进度；265项检查、真实本地向量/排名等价及完整Flash源码/产物恢复专项 |
 | `TASK_BINDING_AND_RETRIEVAL_PROPOSAL.md` | 已批准的自主初始化、本机混合Top-k及旧窗口恢复契约；简单问答豁免，新增参数/模型/缓存/恢复接线已同步规范 |
 | `STATE_PERFORMANCE_FIX.md` | 用户授权的有界 State 复用、增量重放、工具约束诊断及验收 |
 | `SOURCE_VERIFICATION.md` | 已批准的有界来源定位缓存、直接比较、按需原生投影及验收 |

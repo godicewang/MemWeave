@@ -47,6 +47,20 @@ const checksum = (row: Row) =>
     vector: row.vector,
     truncated: row.truncated,
   });
+export interface SearchProgress {
+  completed: number;
+  total: number;
+  indexed: number;
+}
+interface PreparedRow {
+  task: Task;
+  row: Row | undefined;
+  stamp: string;
+  fingerprint?: string;
+  goal?: string;
+  text?: string;
+  write: boolean;
+}
 export class TaskSearch {
   readonly local: LocalEmbedding;
   readonly paths: MemoryPaths;
@@ -88,88 +102,136 @@ export class TaskSearch {
     input: FindInput,
     settings: SearchSettings,
     signal?: AbortSignal,
+    onProgress?: (progress: SearchProgress) => void,
   ) {
+    onProgress?.({ completed: 0, total: tasks.length, indexed: 0 });
     if (!tasks.length) return [];
     const query = await this.embed([input.query], "query", settings, signal);
     const queryVector = query.vectors[0]!;
     const docs = [];
-    for (const task of tasks) {
+    let indexed = 0;
+    // Only communication is grouped: the worker still infers one text at a time.
+    for (let offset = 0; offset < tasks.length; offset += 16) {
       signal?.throwIfAborted();
-      const info = await stat(this.paths.state(task)),
-        location = this.paths.search(task.task_id);
-      const stamp = digest([
-        info.dev,
-        info.ino,
-        info.size,
-        info.mtimeMs,
-        info.ctimeMs,
-        task.title,
-        task.project_name,
-        task.summary,
-        task.keywords,
-      ]);
-      let row = this.rows.get(task.task_id)?.row;
-      if (!row) {
-        try {
-          const candidate: unknown = JSON.parse(
-            (await readOptional(location.data)) ?? "null",
-          );
-          if (
-            Check(RowSchema, candidate) &&
-            candidate.checksum === checksum(candidate as Row)
-          )
-            row = candidate as Row;
-        } catch {
-          /* A derived index is disposable, never authoritative. */
+      const batch: PreparedRow[] = [];
+      for (const task of tasks.slice(offset, offset + 16)) {
+        signal?.throwIfAborted();
+        const info = await stat(this.paths.state(task)),
+          location = this.paths.search(task.task_id);
+        const stamp = digest([
+          info.dev,
+          info.ino,
+          info.size,
+          info.mtimeMs,
+          info.ctimeMs,
+          task.title,
+          task.project_name,
+          task.summary,
+          task.keywords,
+        ]);
+        let row = this.rows.get(task.task_id)?.row;
+        if (!row) {
+          try {
+            const candidate: unknown = JSON.parse(
+              (await readOptional(location.data)) ?? "null",
+            );
+            if (
+              Check(RowSchema, candidate) &&
+              candidate.checksum === checksum(candidate as Row)
+            )
+              row = candidate as Row;
+          } catch {
+            /* A derived index is disposable, never authoritative. */
+          }
         }
+        const model = settings.embedding.revision;
+        const prepared: PreparedRow = { task, row, stamp, write: false };
+        if (!row || row.stamp !== stamp || row.model !== model) {
+          const state = await this.state.read(task),
+            text = `Goal: ${state.goal}\nTitle: ${task.title}\nKeywords: ${task.keywords.join(", ")}\nProject: ${task.project_name}\nSummary: ${task.summary}`;
+          const fingerprint = digest([model, text]);
+          prepared.write = true;
+          if (row?.fingerprint === fingerprint && row.model === model)
+            prepared.row = { ...row, stamp };
+          else {
+            prepared.text = text;
+            prepared.fingerprint = fingerprint;
+            prepared.goal = state.goal;
+          }
+        }
+        batch.push(prepared);
       }
-      const model = settings.embedding.revision;
-      if (!row || row.stamp !== stamp || row.model !== model) {
-        const state = await this.state.read(task),
-          text = `Goal: ${state.goal}\nTitle: ${task.title}\nKeywords: ${task.keywords.join(", ")}\nProject: ${task.project_name}\nSummary: ${task.summary}`;
-        const fingerprint = digest([model, text]);
-        if (row?.fingerprint === fingerprint && row.model === model)
-          row = { ...row, stamp };
-        else {
-          const output = await this.embed([text], "passage", settings, signal);
-          row = {
+      const changed = batch.filter((item) => item.text !== undefined);
+      if (changed.length) {
+        const output = await this.embed(
+          changed.map((item) => item.text!), "passage", settings, signal,
+        );
+        signal?.throwIfAborted();
+        if (output.vectors.length !== changed.length)
+          throw Error("INVALID_TASK_EMBEDDING");
+        for (const [i, item] of changed.entries()) {
+          item.row = {
             version: 1,
             checksum: "",
-            model,
-            stamp,
-            fingerprint,
-            goal: state.goal,
-            vector: output.vectors[0]!,
-            truncated: output.truncated[0] ?? false,
+            model: settings.embedding.revision,
+            stamp: item.stamp,
+            fingerprint: item.fingerprint!,
+            goal: item.goal!,
+            vector: output.vectors[i]!,
+            truncated: output.truncated[i] ?? false,
           };
         }
-        row.checksum = checksum(row);
-        if (!Check(RowSchema, row) || !row.vector.every(Number.isFinite))
+        indexed += changed.length;
+      }
+      const writes = batch.filter((item) => item.write);
+      // Validate the whole embedding reply before publishing any item from it.
+      for (const { row: candidate, write } of batch) {
+        const row = candidate!;
+        if (!row || row.vector.length !== queryVector.length)
           throw Error("INVALID_TASK_EMBEDDING");
-        const next = row;
-        await withLock(
-          location.lock,
-          () => atomicWrite(location.data, JSON.stringify(next) + "\n"),
-          signal,
+        if (write) {
+          row.checksum = checksum(row);
+          if (!Check(RowSchema, row) || !row.vector.every(Number.isFinite))
+            throw Error("INVALID_TASK_EMBEDDING");
+        }
+      }
+      for (let start = 0; start < writes.length; start += 4) {
+        signal?.throwIfAborted();
+        const settled = await Promise.allSettled(
+          writes.slice(start, start + 4).map(({ task, row }) => {
+            const location = this.paths.search(task.task_id);
+            return withLock(
+              location.lock,
+              () => atomicWrite(location.data, JSON.stringify(row!) + "\n"),
+              signal,
+            );
+          }),
         );
+        for (const result of settled)
+          if (result.status === "rejected") throw result.reason;
       }
-      this.remember(task.task_id, row, settings.cache_max_bytes);
-      if (row.vector.length !== queryVector.length)
-        throw Error("INVALID_TASK_EMBEDDING");
-      let dot = 0,
-        a = 0,
-        b = 0;
-      for (let i = 0; i < row.vector.length; i++) {
-        dot += row.vector[i]! * queryVector[i]!;
-        a += row.vector[i]! ** 2;
-        b += queryVector[i]! ** 2;
+      signal?.throwIfAborted();
+      for (const { task, row: candidate } of batch) {
+        const row = candidate!;
+        this.remember(task.task_id, row, settings.cache_max_bytes);
+        let dot = 0,
+          a = 0,
+          b = 0;
+        for (let i = 0; i < row.vector.length; i++) {
+          dot += row.vector[i]! * queryVector[i]!;
+          a += row.vector[i]! ** 2;
+          b += queryVector[i]! ** 2;
+        }
+        docs.push({
+          ...task,
+          goal: row.goal,
+          vector: [],
+          similarity: a && b ? dot / Math.sqrt(a * b) : 0,
+          index_truncated: row.truncated,
+        });
       }
-      docs.push({
-        ...task,
-        goal: row.goal,
-        vector: [],
-        similarity: a && b ? dot / Math.sqrt(a * b) : 0,
-        index_truncated: row.truncated,
+      onProgress?.({
+        completed: offset + batch.length, total: tasks.length, indexed,
       });
     }
     return rankTasks(

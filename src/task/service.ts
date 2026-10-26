@@ -51,7 +51,7 @@ import {
   type StateReadInput,
 } from "../state/read.ts";
 import { RESUME_TYPE,resumeMetadata,resumeSourceCall,resumeCommitted,receiptForCall,prepareResume } from "./resume-window.ts";
-import { TaskSearch } from "./search.ts";
+import { TaskSearch, type SearchProgress } from "./search.ts";
 import type { Embedder } from "./embedding.ts";
 import { TaskIndex } from "./index-store.ts";
 import {
@@ -497,11 +497,18 @@ export class TaskService {
       ctx.signal,
     );
   }
-  async find(input: FindInput,ctx?:ExtensionContext) {
-    if (!Check(FindSchema,input))throw Error("INVALID_TASK_FIND");
-    if(input.initialize&&!ctx)throw Error("TASK_INITIALIZATION_CONTEXT_REQUIRED");
-    const config=ctx?await this.configuration(ctx):undefined;
-    return this.search.find(await this.index.read(),input,settingsFor(config).task_search,ctx?.signal);
+  async find(
+    input: FindInput,
+    ctx?: ExtensionContext,
+    onProgress?: (progress: SearchProgress) => void,
+  ) {
+    if (!Check(FindSchema, input)) throw Error("INVALID_TASK_FIND");
+    if (input.initialize && !ctx) throw Error("TASK_INITIALIZATION_CONTEXT_REQUIRED");
+    const config = ctx ? await this.configuration(ctx) : undefined;
+    return this.search.find(
+      await this.index.read(), input, settingsFor(config).task_search,
+      ctx?.signal, onProgress,
+    );
   }
   async status(id: string, ctx: ExtensionContext) {
     if (!Check(StatusSchema, { task_id: id }))
