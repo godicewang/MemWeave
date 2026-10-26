@@ -53,6 +53,7 @@
 | `FULL_ENVIRONMENT_VALIDATION_2026-10-26.md` | 完整 Pi/Rule/工具的发布复测、组件/恢复夹具修正、仍未通过的真实专项，以及未实施的轻量工具摘要建议 |
 | `MEMORY_TRIGGER_VALIDATION_2026-10-26.md` | 用户批准的工具摘要调整、固定前后样本、具体交付/阻塞/重开/图片失败和完整发布入口结果 |
 | `TASK_RETRIEVAL_VALIDATION_2026-10-26.md` | 主动初始化、本机检索质量/资源、旧窗口恢复、真实模型与候选兼容验收，保留受阻漏记失败 |
+| [PLUGIN_EFFECT_EVALUATION_2026-10-26.md](PLUGIN_EFFECT_EVALUATION_2026-10-26.md) | 当前源码完整生产环境的多场景效果评估：自然业务、阻塞、恢复歧义、高负载、并发、极限输入与本地检索资源；含逐任务标准、失败溯源和未实施建议，脱敏证据见 [JSON](evaluations/2026-10-26-effects.json) |
 | `TASK_BINDING_AND_RETRIEVAL_PROPOSAL.md` | 已批准的自主初始化、本机混合Top-k及旧窗口恢复契约；简单问答豁免，新增参数/模型/缓存/恢复接线已同步规范 |
 | `STATE_PERFORMANCE_FIX.md` | 用户授权的有界 State 复用、增量重放、工具约束诊断及验收 |
 | `SOURCE_VERIFICATION.md` | 已批准的有界来源定位缓存、直接比较、按需原生投影及验收 |
