@@ -21,10 +21,18 @@ import {
 test("temporary npm registry: installed release upgrade recovers real Task/State/Session and removal preserves them", async (t) => {
   const f = await releaseFixture(t);
   const old = await sourceArtifact(f.root, "9868254");
-  const current = JSON.parse(await readFile(join(repository, "package.json"), "utf8"));
-  const packageName = current.name as string, targetVersion = current.version as string;
-  const oldManifest = JSON.parse(await readFile(join(old, "package.json"), "utf8"));
-  await writeFile(join(old, "package.json"), JSON.stringify({ ...oldManifest, name: packageName }));
+  const current = JSON.parse(
+    await readFile(join(repository, "package.json"), "utf8"),
+  );
+  const packageName = current.name as string,
+    targetVersion = current.version as string;
+  const oldManifest = JSON.parse(
+    await readFile(join(old, "package.json"), "utf8"),
+  );
+  await writeFile(
+    join(old, "package.json"),
+    JSON.stringify({ ...oldManifest, name: packageName }),
+  );
   await writeFile(f.paths.rule, await readFile(join(old, "resources/rule.md")));
   const artifacts = new Map<string, Buffer>([
     [
@@ -33,45 +41,67 @@ test("temporary npm registry: installed release upgrade recovers real Task/State
     ],
     [targetVersion, await readFile(await packArtifact(f.root))],
   ]);
-  const dependencyRoot = join(f.root, "dependency");
-  await mkdir(dependencyRoot);
-  const dependencyBytes = await readFile(
-    await packArtifact(
-      dependencyRoot,
-      join(repository, "node_modules/@huggingface/tokenizers"),
-    ),
-  );
-  const dependencyManifest = JSON.parse(
-    await readFile(
-      join(repository, "node_modules/@huggingface/tokenizers/package.json"),
-      "utf8",
-    ),
-  );
+  // Serve the real installed runtime dependency closure. A tokenizer-only
+  // registry would reject the new local CPU search runtime during an upgrade.
+  const dependencies = new Map<
+    string,
+    {
+      manifest: Record<string, unknown> & {
+        name: string;
+        version: string;
+        dependencies?: Record<string, string>;
+      };
+      bytes: Buffer;
+      route: string;
+    }
+  >();
+  async function collect(name: string) {
+    if (dependencies.has(name)) return;
+    const directory = join(repository, "node_modules", name),
+      manifest = JSON.parse(
+        await readFile(join(directory, "package.json"), "utf8"),
+      );
+    const destination = join(f.root, "dependencies", String(dependencies.size));
+    await mkdir(destination, { recursive: true });
+    const bytes = await readFile(await packArtifact(destination, directory));
+    dependencies.set(name, {
+      manifest,
+      bytes,
+      route: `/dependency-${dependencies.size}.tgz`,
+    });
+    for (const child of Object.keys(manifest.dependencies ?? {}))
+      await collect(child);
+  }
+  for (const name of new Set([
+    ...Object.keys(oldManifest.dependencies ?? {}),
+    ...Object.keys(current.dependencies ?? {}),
+  ]))
+    await collect(name);
   const manifests = new Map([
     [
       "0.0.0-before",
       JSON.parse(await readFile(join(old, "package.json"), "utf8")),
     ],
-    [
-      targetVersion,
-      current,
-    ],
+    [targetVersion, current],
   ]);
   let origin = "";
   const served = new Set<string>();
   const server = createServer((request, response) => {
-    if (decodeURIComponent(request.url ?? "") === "/@huggingface/tokenizers") {
+    const dependency = dependencies.get(
+      decodeURIComponent(request.url ?? "").slice(1),
+    );
+    if (dependency) {
       response.writeHead(200, { "content-type": "application/json" });
       response.end(
         JSON.stringify({
-          name: dependencyManifest.name,
-          "dist-tags": { latest: dependencyManifest.version },
+          name: dependency.manifest.name,
+          "dist-tags": { latest: dependency.manifest.version },
           versions: {
-            [dependencyManifest.version]: {
-              ...dependencyManifest,
+            [dependency.manifest.version]: {
+              ...dependency.manifest,
               dist: {
-                tarball: `${origin}/tokenizers.tgz`,
-                integrity: `sha512-${createHash("sha512").update(dependencyBytes).digest("base64")}`,
+                tarball: `${origin}${dependency.route}`,
+                integrity: `sha512-${createHash("sha512").update(dependency.bytes).digest("base64")}`,
               },
             },
           },
@@ -79,10 +109,13 @@ test("temporary npm registry: installed release upgrade recovers real Task/State
       );
       return;
     }
-    if (request.url === "/tokenizers.tgz") {
-      served.add("tokenizer");
+    const tarball = [...dependencies.values()].find(
+      (d) => d.route === request.url,
+    );
+    if (tarball) {
+      served.add(tarball.manifest.name);
       response.writeHead(200, { "content-type": "application/octet-stream" });
-      response.end(dependencyBytes);
+      response.end(tarball.bytes);
       return;
     }
 
@@ -189,7 +222,10 @@ test("temporary npm registry: installed release upgrade recovers real Task/State
     configBefore = await readFile(f.paths.config);
   const setup = f.paths.setup(join(f.root, "setup-agent"));
   await mkdir(join(f.paths.root, "setup"));
-  await writeFile(setup.marker, '{"version":2,"package_version":"0.0.0-before"}');
+  await writeFile(
+    setup.marker,
+    '{"version":2,"package_version":"0.0.0-before"}',
+  );
   await writeFile(f.paths.rule, "CUSTOM RULE FROM PREVIOUS NPM VERSION");
   const messagesBefore = (await readFile(before.sessionFile, "utf8"))
     .trimEnd()
@@ -229,8 +265,13 @@ test("temporary npm registry: installed release upgrade recovers real Task/State
   assert.equal(after.window, true);
   assert.equal(after.settings, 4);
   const upgradedRule = await readFile(f.paths.rule);
-  assert.ok(upgradedRule.equals(await readFile(join(installed, "resources/rule.md"))));
-  assert.deepEqual(JSON.parse(await readFile(setup.marker, "utf8")), { version: 2, package_version: targetVersion });
+  assert.ok(
+    upgradedRule.equals(await readFile(join(installed, "resources/rule.md"))),
+  );
+  assert.deepEqual(JSON.parse(await readFile(setup.marker, "utf8")), {
+    version: 2,
+    package_version: targetVersion,
+  });
   await assert.rejects(access(setup.settings), { code: "ENOENT" });
   assert.ok(
     (await readFile(f.paths.state(task), "utf8")).startsWith(stateBefore),
@@ -279,7 +320,10 @@ test("temporary npm registry: installed release upgrade recovers real Task/State
     assert.ok(value.equals(await readFile(path)));
   assert.equal(await readFile(auth, "utf8"), authValue);
   assert.equal(settings.getCompactionEnabled(), false);
-  assert.deepEqual([...served].sort(), [targetVersion, "0.0.0-before", "tokenizer"].sort());
+  assert.deepEqual(
+    [...served].sort(),
+    [targetVersion, "0.0.0-before", ...dependencies.keys()].sort(),
+  );
   t.diagnostic(
     "Local registry protocol only, not npmjs.org: two installed versions; Rule refreshed from actual package version without settings writes; independent Pi processes; 7 local HTTP model requests; no real inference",
   );

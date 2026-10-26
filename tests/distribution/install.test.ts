@@ -34,7 +34,7 @@ async function installation(t: TestContext) {
   // Persist this test-only command so resource reloads keep cache writes isolated too.
   await writeFile(join(agentDir, "settings.json"), JSON.stringify({
     compaction: { enabled: false },
-    npmCommand: ["npm", "--cache", join(root, "npm-cache"), "--no-audit", "--no-fund"],
+    npmCommand: ["npm", "--cache", process.env.MEMWEAVE_TEST_NPM_CACHE ?? join(root, "npm-cache"), "--no-audit", "--no-fund"],
   }));
   const settings = SettingsManager.create(cwd, agentDir, { projectTrusted: true });
   const settingsBefore = await readFile(join(agentDir, "settings.json"));
@@ -112,7 +112,7 @@ test("远程 Git：固定 commit 安装/更新、禁用/reload、卸载，保留
 test("npm 本地归档：经原生 PackageManager 安装/禁用/卸载，不自动安装宿主 peer", async t => {
   const h = await installation(t);
   const npmCli = process.env.npm_execpath; assert.ok(npmCli, "Run through npm run test:distribution");
-  const { stdout } = await run(process.execPath, [npmCli, "--cache", join(h.root, "npm-cache"), "pack", "--json", "--ignore-scripts", "--pack-destination", h.root], { cwd: repository });
+  const { stdout } = await run(process.execPath, [npmCli, "--cache", process.env.MEMWEAVE_TEST_NPM_CACHE ?? join(h.root, "npm-cache"), "pack", "--json", "--ignore-scripts", "--pack-destination", h.root], { cwd: repository });
   const archive = (JSON.parse(stdout) as Array<{ filename: string }>)[0]; assert.ok(archive);
   const manifest = JSON.parse(await readFile(join(repository, "package.json"), "utf8"));
   const source = `npm:${manifest.name}@file:${join(h.root, archive.filename)}`;

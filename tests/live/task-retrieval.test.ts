@@ -1,13 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
   fauxAssistantMessage as answer,
   fauxToolCall as call,
 } from "@earendil-works/pi-ai/providers/faux";
-import { productionTaskSession } from "../fixtures/production-session.ts";
+import {
+  productionTaskSession,
+  productionNativeSession,
+  assertProductionPayload,
+} from "../fixtures/production-session.ts";
+import {
+  releaseFixture,
+  packArtifact,
+  unpackArtifact,
+} from "../fixtures/release.ts";
 import { verifyProviderCapacity } from "../../src/pi/model-capacity.ts";
 import { scopeOf } from "../../src/pi/session-memory.ts";
 import { RESUME_TYPE } from "../../src/task/resume-window.ts";
@@ -66,6 +75,7 @@ test(
       paths: source.paths,
       verifyCapacity: verifyProviderCapacity,
     });
+
     await h.runtime.setRuntimeApiKey("deepseek", key as string);
     const model = h.runtime.getModel("deepseek", "deepseek-flash");
     assert.ok(model);
@@ -123,6 +133,98 @@ test(
     assert.deepEqual(h.errors, []);
     t.diagnostic(
       "five real native Tasks arranged with a scripted provider; arithmetic, initialization, local hybrid lookup, selection and restored-window answer used real Flash and the complete production prompt/tools",
+    );
+  },
+);
+
+test(
+  "packed runtime performs local CPU retrieval and restores native history with real Flash",
+  { timeout: 120000 },
+  async (t) => {
+    const source = await productionTaskSession(t);
+    source.faux.setResponses([
+      answer([
+        call("task_create", {
+          title: "Release task lookup",
+          goal: "修复重复付款并保留幂等键",
+          project_name: "MemWeave",
+          summary: "payment idempotency",
+          keywords: ["payment"],
+        }),
+      ]),
+      answer("created"),
+    ]);
+    await source.session.prompt("修复重复付款");
+    source.faux.setResponses([answer("保留支付测试环境别名 COBALT_29。")]);
+    await source.session.prompt(
+      "支付测试环境别名是COBALT_29，这一项仅保留在原生聊天中。",
+    );
+    const task = (await source.tasks.index.read())[0]!;
+    const f = await releaseFixture(t),
+      artifact = await unpackArtifact(f.root, await packArtifact(f.root)),
+      entry = join(f.root, "installed-task-entry.ts");
+    await writeFile(
+      entry,
+      `import {registerLauncher} from ${JSON.stringify(join(artifact, "src/extension/launcher.ts"))};\nimport {memoryPaths} from ${JSON.stringify(join(artifact, "src/storage/paths.ts"))};\nexport default pi=>registerLauncher(pi,{paths:memoryPaths(${JSON.stringify(source.paths.root)}),setupAgentDir:${JSON.stringify(join(f.root, "setup-agent"))}});\n`,
+    );
+    let requests = 0;
+    const h = await productionNativeSession(
+      t,
+      [
+        (pi) => {
+          pi.on("before_provider_request", (event, ctx) => {
+            if (ctx.model?.provider === "deepseek") {
+              requests++;
+              try {
+                assertProductionPayload(event.payload, true);
+              } catch (error) {
+                ctx.abort();
+                throw error;
+              }
+            }
+          });
+        },
+      ],
+      false,
+      512,
+      [entry],
+    );
+    const authPath =
+        process.env.MEMWEAVE_DEEPSEEK_AUTH ??
+        join(homedir(), ".local/share/memweave-dev/pi-agent/auth.json"),
+      auth = await readFile(authPath);
+    t.after(async () => assert.ok(auth.equals(await readFile(authPath))));
+    const key = (
+      JSON.parse(auth.toString()) as { deepseek?: { key?: unknown } }
+    ).deepseek?.key;
+    assert.equal(typeof key, "string");
+    await h.runtime.setRuntimeApiKey("deepseek", key as string);
+    const model = h.runtime.getModel("deepseek", "deepseek-flash");
+    assert.ok(model);
+    await h.session.setModel(model);
+    await h.session.prompt(
+      "请找回此前防止同一笔付款重复扣钱的任务并恢复，告诉我旧讨论中约定的支付测试环境别名。不要执行任何文件或外部业务操作。",
+    );
+    assert.equal(scopeOf(h.manager.getBranch()).task_id, task.task_id);
+    const find = h.manager
+      .getBranch()
+      .find(
+        (e) =>
+          e.type === "message" &&
+          e.message.role === "toolResult" &&
+          e.message.toolName === "task_find",
+      );
+    assert.ok(
+      find?.type === "message" &&
+        find.message.role === "toolResult" &&
+        !find.message.isError,
+    );
+    const final = h.session.agent.state.messages.at(-1);
+    assert.ok(final?.role === "assistant" && final.stopReason === "stop");
+    assert.match(JSON.stringify(final.content), /COBALT_29/);
+    assert.deepEqual(h.errors, []);
+    t.diagnostic(
+      `${requests} real requests; actual npm archive code and its installed dependencies; real local ONNX worker; full native System/tools/Rule; native old-window answer through real Flash`,
     );
   },
 );

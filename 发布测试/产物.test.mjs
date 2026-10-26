@@ -22,7 +22,8 @@ test('同一候选的可重复归档保持发布边界，并通过已打包代�
   const sources = (await readdir(join(repository, 'src'), { recursive: true }))
     .filter((file) => file.endsWith('.ts')).map((file) => `src/${file.replaceAll('\\', '/')}`);
   const expected = ['LICENSE', 'README.md', 'USER_GUIDE.md', 'package.json', 'src/config/defaults.json',
-    'resources/rule.md', ...(await readdir(join(repository, 'resources/tokenizer'))).map((name) => `resources/tokenizer/${name}`), ...sources].sort();
+    'resources/rule.md', ...(await readdir(join(repository, 'resources/tokenizer'))).map((name) => `resources/tokenizer/${name}`),
+    ...(await readdir(join(repository, 'resources/embedding'))).map((name) => `resources/embedding/${name}`), ...sources].sort();
   assert.deepEqual(files, expected, '发布流程/测试/内部文档/凭据不得进入产物');
   for (const file of files) assert.deepEqual(await readFile(join(artifact, file)), await readFile(join(repository, file)), `包内文件偏离候选：${file}`);
   const manifest = JSON.parse(await readFile(join(artifact, 'package.json'), 'utf8'));
