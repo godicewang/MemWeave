@@ -6,7 +6,7 @@
 
 范围：当前 MemWeave 项目的公开评测实验部分
 
-状态：2026-10-27 已实现配置、Pro V2 执行与离线报告，完成单题链路验收及四题双变体真实对照；TB Dockerfile 镜像冻结适配待用户对齐，不能视为已验收。实际范围见 `VALIDATION.md`、结果见 `PUBLIC_BASELINE_2026-10-27.md`，待确认方案见 `DOCKERFILE_FREEZE_PROPOSAL.md`。
+状态：2026-10-27 已完成 Pro V2 四题双变体真实对照；用户现已确认官方 Dockerfile 构建与镜像冻结接线，开始实现 TB 适配，尚不能视为已验收。实际范围见 `VALIDATION.md`、历史结果见 `PUBLIC_BASELINE_2026-10-27.md`，本次已确认方案见 `DOCKERFILE_FREEZE_PROPOSAL.md`。
 
 ## 第一部分 目标和已确认决策
 
@@ -180,6 +180,8 @@ Pi 原生 Session 直接存入 Harbor 的 agent 日志归档位置，作为运�
 
 TB 4.0 官方说明将 Agent 超时调整到 8 小时。这个上限不代表每题必然运行 8 小时；实际付费运行必须另有明确的实验费用和整体停止条件。全局止损提前停止的尝试按中断记录，不伪装成完成的官方评分。[TB 4.0 资源说明](https://www.tbench.ai/news/terminal-bench-4-0)
 
+2026-10-27 用户确认：按官方 Dockerfile/context 原样预构建、固定平台与镜像身份，仓库外运行副本仅改镜像引用及必要的等价继承展开；保留原 verifier 模式和测试上传语义。构建或官方控制失败的候选记录于 admission.json，在模型前依既定顺序替补；具体字段、证据及验收见 [已确认接线方案](DOCKERFILE_FREEZE_PROPOSAL.md)。
+
 #### 8.2 SWE-bench Pro V2
 
 使用 Scale AI 官方仓库的 `v2/tasks/`、对应工具和公开镜像，固定为同一上游提交。不要使用 Harbor 的旧 `adapters/swebenchpro` 转换 V1 数据：该适配器会调整部分测试命令，且与用户选择的 V2 不同。[V2 官方任务与协议](https://github.com/scaleapi/SWE-bench_Pro-os/blob/main/v2/README.md)、[旧适配器范围](https://github.com/harbor-framework/harbor/blob/v0.24.0/adapters/swebenchpro/README.md)
@@ -270,6 +272,8 @@ Pro V2 任务时间到达时按官方流程停止 Agent，并从该次尝试捕�
 字段组的首版具体编码：`root` 为可选的仓库外绝对路径；suite 文件包括 `schema_version/id/repository/revision/tasks_dir/protocol`，只接受本设计两个官方源和完整提交；subset 文件包括 `count/seed/max_cpus/max_memory_mb/max_storage_mb`，资源字段只用于筛题，不覆盖单题资源。其余模型采样遵循 Pi 默认值，首版不提供未验证的通用参数透传。
 
 2026-10-27 用户为首次真实冒烟明确授权：总费用最多 20 美元、整体时限 8 小时（28800 秒）。任务选择须考虑该范围，达到止损后保留部分结果并停止；不据此缩短官方单题时限或自动增加尝试。以后运行仍以其各自显式配置为准。
+
+同日用户为本次 TB 适配后的新正式对照再次确认最多 20 美元、8 小时。新窗口从该次 run 开始，包含原始 Dockerfile 构建、官方控制、两个 Pi 变体及评分；前次窗口已结束，旧结果和费用独立保留。
 
 以下仅说明结构；占位值和未解析引用不能通过实际运行的预检：
 
