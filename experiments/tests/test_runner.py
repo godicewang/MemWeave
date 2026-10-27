@@ -175,5 +175,5 @@ def test_dockerfile_task_cannot_be_falsely_declared_frozen(tmp_path):
 
     from memweave_eval.runner import image_snapshot
 
-    with pytest.raises(ValueError, match="pending runtime-copy"):
+    with pytest.raises(ValueError, match="must be prepared"):
         image_snapshot([make_task(tmp_path, "one")])

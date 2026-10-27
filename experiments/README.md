@@ -2,7 +2,7 @@
 
 在官方任务环境中实际重跑原生 Pi 和 Pi + MemWeave，保存原件，离线生成 JSON、CSV 和 Markdown 对照。只接入 Terminal-Bench 4.0 与 SWE-bench Pro V2，不包含自进化。行为边界见 [实现设计](../docs/experiments/IMPLEMENTATION_DESIGN.md)，实际通过范围见 [验收记录](../docs/experiments/VALIDATION.md)。
 
-当前验收：Pro V2 的完整真实对照已跑通；TB 4.0 的 Dockerfile 镜像冻结适配尚待确认，不宣称已跑通。TB 首题官方评分镜像构建失败，没有发起模型请求；方案见 [待确认提案](../docs/experiments/DOCKERFILE_FREEZE_PROPOSAL.md)。没有可核对的镜像身份时执行器阻断模型阶段。
+当前验收：Pro V2 的完整真实对照已跑通；TB 4.0 的官方 Dockerfile 镜像冻结接线已获确认并实现，47 项检查与真实 Docker 接线探针通过，官方控制和模型对照另行记录。TB 先前首题官方评分镜像构建失败的原件保留；边界见 [已确认方案](../docs/experiments/DOCKERFILE_FREEZE_PROPOSAL.md)。没有可核对的镜像身份时执行器阻断模型阶段。
 
 ## 安装实验依赖
 
@@ -41,6 +41,8 @@ docker buildx version
 
 首次模型冒烟的用户授权是**两个任务集合计最多 20 美元、8 小时**。如果分开运行，须分配总额度，例如每个任务集最多 10 美元、14400 秒；不能把两个模板各自的上限相加当成新授权。模板默认也按这份分配填写。官方单题超时保持不变，整体止损可能提前取消任务，结果保留为中断。
 
+2026-10-27 用户为本次 TB 接线后的新运行再次授权最多 20 美元、8 小时，从该次正式 run 开始，包含构建、控制、解题与评分。先前首次窗口与新窗口独立记录；不据此自动放大后续运行。
+
 唯一认证来源为仓库外 `~/.local/share/memweave-dev/pi-agent/auth.json` 的 DeepSeek API-key 条目；只把所需条目作为私有文件交给容器。不要把密钥粘贴到 YAML、命令参数或 Git。初始模型为 `deepseek-flash`、thinking off；两个变体使用同样设置。费用来自 Pi 原生 usage 的估算，缺失为未知；不是账单或精确硬消费上限。
 
 ## 三个入口
@@ -55,6 +57,8 @@ uv run --locked memweave-eval report /absolute/path/to/runs/RUN_ID
 
 `run` 要求实验源码已提交。它解析精确上游，做 Docker/架构/容量预检，执行官方 oracle 与 nop 控制测试，冻结清单与镜像身份，然后顺序运行两个变体的 Harbor Job。每个任务/变体/重复均是独立冷启动；Harbor 管理任务并发。新调用始终生成新 run_id；没有自动重试、续跑或 best-of-N。Ctrl-C、时间和估算费用止损都会收尾并保留已有原件。
 
+TB 使用原始 Dockerfile 和 context 构建两阶段镜像，运行副本只调整镜像引用及必要的等价继承展开；TOML 排版 diff 单独保存，其他文件逐字不变。按公开 Harbor resolver 保持共享/独立 verifier、资源、网络与测试上传语义。构建或官方控制失败时，按 selection.json 的既定候补顺序在模型阶段前替换并记录；整体止损不触发替补，模型开始后不因答错换题。独立 verifier 资源也参与并发容量检查。
+
 Pro V2 解题 Job 显式关闭 verifier，按官方口径捕获包含未跟踪文件的补丁，并为捕获保留官方 60 秒收尾时间。只有对应原尝试及补丁存在时，才交给同一上游的 `PatchReplayAgent` 在全新沙箱评分。离线 Agent 阶段检查模型端点可达、通用外网被阻断；不能放宽网络绕过失败。主评分来自重评分，模型费用来自原始解题尝试。
 
 `report` 不连接 Docker、网络或模型。它校验原件哈希并重建派生报告，保留全部计划行。缺失判分不计作失败得分，也不删除分母；未知费用不写成零。退出码：0 为流程完整（包括有效的未解出题），1 为配置/预检/程序错误，2 为取消、止损或不完整结果。
@@ -62,6 +66,8 @@ Pro V2 解题 Job 显式关闭 verifier，按官方口径捕获包含未跟踪�
 ## 查看结果和诊断
 
 - `selection.json`：冻结前筛选依据、任务哈希和排除原因。
+- `admission.json`：TB 按固定候选顺序的构建/控制准入与失败原因，不含模型成绩。
+- `preparation/`、`runtime-tasks/`：TB 原始构建日志、镜像身份、配置 diff、等价校验和仓库外运行副本；均纳入证据索引。
 - `experiment.lock.json`：配置、源码/包/上游/工具/镜像身份及全部计划行。
 - `run.json`：Job 路径、原尝试与 Pro 补丁关联、停止原因和完整性。
 - `harbor/`：原生 Job/Trial、评分输出、直接写入的 Pi Session、派生 ATIF、Pro 补丁和允许的记忆快照。

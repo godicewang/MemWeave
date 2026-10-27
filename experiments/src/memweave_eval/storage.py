@@ -51,7 +51,11 @@ def contained(root: Path, relative: str) -> Path:
 
 def evidence_index(root: Path) -> list[dict]:
     records = []
-    for p in sorted((root / "harbor").rglob("*")):
+    candidates = [p for name in ("harbor", "preparation", "runtime-tasks")
+                  for p in (root / name).rglob("*")]
+    if (root / "admission.json").exists():
+        candidates.append(root / "admission.json")
+    for p in sorted(candidates):
         if p.is_symlink():
             raise ValueError("evidence contains a symlink")
         if not p.is_file():

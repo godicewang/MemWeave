@@ -17,6 +17,7 @@ from pathlib import Path, PurePosixPath
 
 import yaml
 
+from .images import TaskPreparationError, prepare_task, verify_prepared_task
 from .report import generate_report
 from .spec import REPOSITORY, Experiment, Subset, Suite
 from .storage import atomic_json, check_private_evidence, evidence_index, file_digest
@@ -41,6 +42,8 @@ def image_snapshot(paths: list[Path]) -> dict:
     from harbor.models.task.paths import TaskPaths
     from harbor.models.task.verifier_mode import resolve_verifier_environment_definition
 
+    from .images import inspect_image
+
     result = {}
     for path in paths:
         config = TaskConfig.model_validate_toml((path / "task.toml").read_text())
@@ -48,21 +51,12 @@ def image_snapshot(paths: list[Path]) -> dict:
         verifier = resolve_verifier_environment_definition(config, TaskPaths(path))
         if verifier is not None:
             definitions.append((path.name + ":verifier", verifier.directory, verifier.config))
-        for key, directory, environment in definitions:
+        for key, _directory, environment in definitions:
             if not environment.docker_image:
                 raise ValueError(
-                    "Dockerfile task image freezing requires the pending runtime-copy adaptation; see docs/experiments/DOCKERFILE_FREEZE_PROPOSAL.md"
+                    "Dockerfile task must be prepared before image freezing"
                 )
-            name = environment.docker_image
-            info = json.loads(
-                subprocess.check_output(["docker", "image", "inspect", name], text=True, timeout=30)
-            )[0]
-            result[key] = {
-                "reference": name,
-                "id": info["Id"],
-                "repo_digests": info.get("RepoDigests", []),
-                "platform": info["Os"] + "/" + info["Architecture"],
-            }
+            result[key] = inspect_image(environment.docker_image)
     return result
 
 
@@ -263,14 +257,18 @@ def execute_harbor(config: dict, root: Path, env: dict, deadline: float, budget:
             raise
 
 
-def docker_preflight(spec: Experiment, selected: list[dict]) -> dict:
+def docker_preflight(spec: Experiment, selected: list[dict], preparations=None) -> dict:
+    requirements = list(selected)
+    for record in (preparations or {}).values():
+        if record.get("verifier_resources"):
+            requirements.append({"resources": record["verifier_resources"]})
     info = json.loads(
         subprocess.check_output(["docker", "info", "--format", "{{json .}}"], text=True, timeout=30)
     )
     subprocess.run(["docker", "compose", "version"], check=True, capture_output=True, timeout=30)
     available_mb = info["MemTotal"] // (1024 * 1024)
     concurrency = effective_concurrency(
-        spec.execution.concurrency, selected, cpus=info["NCPU"], memory_mb=available_mb
+        spec.execution.concurrency, requirements, cpus=info["NCPU"], memory_mb=available_mb
     )
     disk = subprocess.check_output(
         [
@@ -288,7 +286,7 @@ def docker_preflight(spec: Experiment, selected: list[dict]) -> dict:
         timeout=300,
     )
     available_disk = int(disk.splitlines()[-1].split()[3])
-    if concurrency * max(t["resources"]["storage_mb"] for t in selected) > available_disk:
+    if concurrency * max(t["resources"]["storage_mb"] for t in requirements) > available_disk:
         raise ValueError("official task storage envelope exceeds Docker capacity")
     # Real execution of the requested ISA; never infer amd64 compatibility from a flag.
     probe = subprocess.run(
@@ -341,6 +339,76 @@ def control_ok(job: Path, task_id: str, expected: int) -> bool:
         not raw.get("exception_info")
         and (raw.get("verifier_result") or {}).get("rewards", {}).get("reward") == expected
     )
+
+
+def admit_tb_tasks(spec, subset, candidates, task_root, root, state, env, deadline, execute):
+    """Prepare and control ordered candidates, exclusively before the model plan freezes."""
+    admission = {"schema_version": 1, "attempts": [], "admitted": []}
+    admitted, paths, preparations = [], [], {}
+    queue = iter(candidates)
+    batch_number = 0
+    while len(admitted) < subset.count:
+        batch = []
+        while len(batch) < subset.count - len(admitted):
+            if time.monotonic() >= deadline:
+                raise TimeoutError("experiment stop during task admission")
+            candidate = next(queue, None)
+            if candidate is None:
+                break
+            task_id = candidate["task_id"]
+            attempt = {"task_id": task_id, "source_sha256": candidate["sha256"],
+                       "status": "preparing"}
+            admission["attempts"].append(attempt)
+            atomic_json(root / "admission.json", admission)
+            try:
+                record = prepare_task(task_root / task_id, root, spec.execution.platform,
+                                      deadline, env, subset.model_dump())
+            except TaskPreparationError as exc:
+                attempt.update(status="preparation_failed", reason=str(exc))
+                atomic_json(root / "admission.json", admission)
+                continue
+            attempt.update(status="prepared", preparation=record["manifest_path"])
+            atomic_json(root / "admission.json", admission)
+            batch.append((candidate, record, attempt))
+        if not batch:
+            raise ValueError("insufficient tasks passed official preparation and controls")
+        batch_number += 1
+        batch_paths = [root / record["runtime_path"] for _, record, _ in batch]
+        batch_records = {task["task_id"]: record for task, record, _ in batch}
+        capacity = docker_preflight(spec, [t for t, _, _ in batch], batch_records)
+        frozen_images = image_snapshot(batch_paths)
+        controls, control_codes = {}, {}
+        for control in ("oracle", "nop"):
+            name = f"control-{control}-a{batch_number:03d}"
+            controls[control] = name
+            state["jobs"][name] = {"path": "harbor/" + name, "purpose": "official_" + control}
+            atomic_json(root / "run.json", state)
+            cfg = build_job_config(spec, root, name, batch_paths, control=control)
+            cfg["n_concurrent_trials"] = capacity["effective_concurrency"]
+            code = execute(cfg, required=False)
+            control_codes[control] = code
+            if code < 0 or (code and all(control_ok(root / "harbor" / name,
+                           t["task_id"], int(control == "oracle")) for t, _, _ in batch)):
+                raise RuntimeError("official control Job failed outside its task results")
+        if image_snapshot(batch_paths) != frozen_images:
+            raise ValueError("task image changed during official controls")
+        for task, record, attempt in batch:
+            task_id = task["task_id"]
+            verify_prepared_task(root, record)
+            attempt["controls"] = {k: "harbor/" + v for k, v in controls.items()}
+            attempt["control_exit_codes"] = control_codes
+            failed = [control for control, expected in (("oracle", 1), ("nop", 0))
+                      if not control_ok(root / "harbor" / controls[control], task_id, expected)]
+            if failed:
+                attempt.update(status="control_failed", reason="official " + ", ".join(failed))
+            else:
+                attempt["status"] = "admitted"
+                admitted.append(task)
+                paths.append(root / record["runtime_path"])
+                preparations[task_id] = record
+                admission["admitted"].append(task_id)
+            atomic_json(root / "admission.json", admission)
+    return admitted, paths, preparations
 
 
 def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
@@ -405,32 +473,40 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                 yaml.safe_dump({"services": {"main": {"platform": spec.execution.platform}}})
             )
 
-            def execute(cfg):
+            def execute(cfg, *, required=True):
                 cfg["environment"]["extra_docker_compose"] = [str(platform_overlay)]
                 code = execute_harbor(cfg, root, env, deadline, spec.limits.max_cost_usd)
-                if code:
+                if code and required:
                     raise RuntimeError(
                         f"Harbor Job {cfg['job_name']} exited {code}; see private console log"
                     )
+                return code
 
-            for control in ("oracle", "nop"):
-                state["jobs"]["control-" + control] = {
-                    "path": "harbor/control-" + control,
-                    "purpose": "official_" + control,
-                }
-                atomic_json(root / "run.json", state)
-                cfg = build_job_config(spec, root, f"control-{control}", paths, control=control)
-                execute(cfg)
-            for task in selected:
-                task_id = task["task_id"]
-                if not control_ok(root / "harbor/control-oracle", task_id, 1):
-                    raise ValueError(
-                        f"official oracle control failed: {task_id}; do not modify tests"
-                    )
-                if not control_ok(root / "harbor/control-nop", task_id, 0):
-                    raise ValueError(
-                        f"official empty control failed: {task_id}; review before admitting"
-                    )
+            preparations = {}
+            if suite.protocol == "tb4":
+                selected, paths, preparations = admit_tb_tasks(
+                    spec, subset, selection["selected"] + selection["reserves"],
+                    upstream / suite.tasks_dir, root, state, env, deadline, execute)
+                docker = docker_preflight(spec, selected, preparations)
+                spec = spec.model_copy(update={"execution": spec.execution.model_copy(
+                    update={"concurrency": docker["effective_concurrency"]})})
+            else:
+                for control in ("oracle", "nop"):
+                    state["jobs"]["control-" + control] = {
+                        "path": "harbor/control-" + control,
+                        "purpose": "official_" + control,
+                    }
+                    atomic_json(root / "run.json", state)
+                    cfg = build_job_config(spec, root, f"control-{control}", paths, control=control)
+                    execute(cfg)
+                for task in selected:
+                    task_id = task["task_id"]
+                    if not control_ok(root / "harbor/control-oracle", task_id, 1):
+                        raise ValueError(
+                            f"official oracle control failed: {task_id}; do not modify tests")
+                    if not control_ok(root / "harbor/control-nop", task_id, 0):
+                        raise ValueError(
+                            f"official empty control failed: {task_id}; review before admitting")
             images = image_snapshot(paths)
             if any(file_digest(REPOSITORY / path) != digest for path, digest in code_files.items()):
                 raise ValueError(
@@ -465,6 +541,7 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                 },
                 "docker": docker,
                 "images": images,
+                "preparations": preparations,
                 "tooling_sha256": {
                     p.relative_to(upstream).as_posix(): file_digest(p)
                     for p in sorted((upstream / "v2/tooling").rglob("*.py"))
@@ -477,6 +554,14 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
             lock_written = True
             env = tool_environment(spec, upstream, inference=True)
             credential = json.loads(auth_file().read_text())["deepseek"]["key"].encode()
+
+            def verify_inputs():
+                for task in selected:
+                    if task_digest(upstream / suite.tasks_dir / task["task_id"]) != task["sha256"]:
+                        raise ValueError("official task changed after freezing")
+                for record in preparations.values():
+                    verify_prepared_task(root, record)
+
             for rep in range(1, spec.execution.repetitions + 1):
                 order = spec.variants if rep % 2 else list(reversed(spec.variants))
                 for variant in order:
@@ -487,12 +572,7 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                         raise ValueError("experiment implementation changed after freezing")
                     if image_snapshot(paths) != images:
                         raise ValueError("task image changed after freezing; start a new run")
-                    for task in selected:
-                        if (
-                            task_digest(upstream / suite.tasks_dir / task["task_id"])
-                            != task["sha256"]
-                        ):
-                            raise ValueError("official task changed after freezing")
+                    verify_inputs()
                     name = f"{variant.id}-r{rep}"
                     state["jobs"][name] = {"path": f"harbor/{name}", "purpose": "solve"}
                     atomic_json(root / "run.json", state)
@@ -536,6 +616,7 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                             protocol=suite.protocol,
                         )
                         execute(replay)
+                    verify_inputs()
                     if image_snapshot(paths) != images:
                         raise ValueError(
                             "task image changed during execution; results are incomplete"

@@ -3,7 +3,7 @@ name = "memweave-eval"
 version = "0.1.0"
 description = "Reproducible public benchmark experiments for native Pi and MemWeave"
 requires-python = ">=3.12,<3.14"
-dependencies = ["harbor==0.24.0", "pydantic>=2.12,<3", "pyyaml>=6.0.2,<7"]
+dependencies = ["harbor==0.24.0", "pydantic>=2.12,<3", "pyyaml>=6.0.2,<7", "toml>=0.10.2,<0.11"]
 
 [project.scripts]
 memweave-eval = "memweave_eval.cli:main"
