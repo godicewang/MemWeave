@@ -1,0 +1,1575 @@
+{
+  "schema_version": 1,
+  "derived_at_utc": "2026-10-27T07:50:02.868360+00:00",
+  "audit_program_path": "/Users/godice/.local/share/memweave-experiments/analysis/20261027-public-audit/derive.py",
+  "audit_program_sha256": "34092a20e5dab494c91ae696cc860b6b6b9e8c3e0310069665493b2b2f7e924b",
+  "pro_run": "20261026T175852Z-5aecadab61",
+  "pro_index_sha256": "94b5c7d566a21f0e5bc10e609764ea159b21e759a860f6163294af4ba1835874",
+  "pro_originals_verified": 296,
+  "pro_privacy_check_passed": true,
+  "pro_summary": {
+    "variants": {
+      "pi-native": {
+        "planned": 4,
+        "scored": 4,
+        "successes": 4,
+        "coverage_success_rate": 1.0,
+        "valid_success_rate": 1.0,
+        "cost_usd": 0.059617428,
+        "known_cost_usd": 0.059617428,
+        "missing_cost_count": 0,
+        "execution_statuses": {
+          "scored": 4
+        },
+        "agent_seconds": 1718.5915510000002
+      },
+      "pi-memweave": {
+        "planned": 4,
+        "scored": 4,
+        "successes": 3,
+        "coverage_success_rate": 0.75,
+        "valid_success_rate": 0.75,
+        "cost_usd": 0.06087816,
+        "known_cost_usd": 0.06087816,
+        "missing_cost_count": 0,
+        "execution_statuses": {
+          "scored": 4
+        },
+        "agent_seconds": 835.8145519999999
+      }
+    },
+    "pairs": {
+      "both": 3,
+      "native_only": 1,
+      "memweave_only": 0,
+      "neither": 0,
+      "missing": 0
+    },
+    "memweave_minus_native": {
+      "successful_attempts": -1,
+      "cost_usd": 0.0012607320000000005
+    },
+    "complete": true,
+    "suite": "swe-bench-pro-v2"
+  },
+  "pro_trials": [
+    {
+      "task_id": "instance_NodeBB__NodeBB-f2082d7de85eb62a70819f4f3396dd85626a0c0a-vd59a5728dfc977f44533186ace531248c2917516",
+      "label": "NodeBB",
+      "variant": "pi-native",
+      "success": true,
+      "usage": {
+        "input_tokens": 1101097,
+        "cache_tokens": 1075456,
+        "output_tokens": 8686,
+        "cost_usd": 0.024568236
+      },
+      "uncached_input_tokens": 25641,
+      "phase_seconds": {
+        "environment_setup": 2.534378,
+        "agent_setup": 124.24979,
+        "agent_execution": 157.099098,
+        "verifier": 14.367371
+      },
+      "solve_wall_seconds": 294.915207,
+      "regrade_wall_seconds": 30.43641,
+      "solve_plus_regrade_wall_seconds": 325.35161700000003,
+      "model_returns": 56,
+      "message_roles": {
+        "system": 1,
+        "user": 1,
+        "assistant": 56,
+        "toolResult": 55
+      },
+      "tool_calls": {
+        "bash": 54,
+        "edit": 1
+      },
+      "tool_errors": [
+        {
+          "tool": "bash",
+          "call_line": 94,
+          "result_line": 95,
+          "message_head": "pid\npid.yaml\n/usr/bin/sed: can't read public/openapi/write/posts/{pid}.yaml: No such file or directory\n\n\nCommand exited with code 2"
+        }
+      ],
+      "stop_reasons": {
+        "toolUse": 55,
+        "stop": 1
+      },
+      "compactions": 0,
+      "first_input_tokens": 2246,
+      "user_content_sha256": [
+        "9e1b77f60eb775f2887b87c0b2b6d676b13fd5d5d1a7f74181501993f52d9d31"
+      ],
+      "stored_system_content_sha256": [
+        "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126"
+      ],
+      "tool_call_result_pairs_complete": true,
+      "patch_files": [
+        "public/openapi/write.yaml",
+        "public/openapi/write/posts/pid/raw.yaml",
+        "public/openapi/write/posts/pid/summary.yaml",
+        "src/api/posts.js",
+        "src/controllers/write/posts.js",
+        "src/routes/write/posts.js"
+      ],
+      "persistent_test_sources": [],
+      "state_operations": null,
+      "window": null,
+      "validation_calls": [
+        {
+          "call_line": 40,
+          "result_line": 41,
+          "call_to_result_seconds": 2.777,
+          "command_first_line": "cd /app && timeout 300 npx mocha test/posts.js --grep \"raw post\" 2>&1 | tail -30",
+          "validation_commands": [
+            "npx mocha"
+          ],
+          "observed_output_summary": [
+            "0 passing (15ms)",
+            "1 failing"
+          ]
+        },
+        {
+          "call_line": 44,
+          "result_line": 45,
+          "call_to_result_seconds": 9.424,
+          "command_first_line": "cd /app && (redis-server --daemonize yes --port 6379) && sleep 1 && timeout 400 npx mocha test/posts.js 2>&1 | tail -20",
+          "validation_commands": [
+            "npx mocha"
+          ],
+          "observed_output_summary": [
+            "118 passing (6s)"
+          ]
+        },
+        {
+          "call_line": 46,
+          "result_line": 47,
+          "call_to_result_seconds": 1.86,
+          "command_first_line": "cd /app && cat > /tmp/newmethods.js <<'EOF'",
+          "validation_commands": [
+            "npx mocha"
+          ],
+          "observed_output_summary": []
+        },
+        {
+          "call_line": 48,
+          "result_line": 49,
+          "call_to_result_seconds": 1.891,
+          "command_first_line": "cd /app && sed -i \"s|require('./src/|require('../src/|g\" /tmp/newmethods.js && cp /tmp/newmethods.js test/zz-newmethods.js && timeout 300 npx mocha test/zz-newmethods.js 2>&1 | tai",
+          "validation_commands": [
+            "npx mocha"
+          ],
+          "observed_output_summary": []
+        },
+        {
+          "call_line": 50,
+          "result_line": 51,
+          "call_to_result_seconds": 1.938,
+          "command_first_line": "cd /app && cp /tmp/newmethods.js test/zz-newmethods.js && timeout 300 npx mocha test/zz-newmethods.js 2>&1 | grep -v winston | tail -40; rm test/zz-newmethods.js",
+          "validation_commands": [
+            "npx mocha"
+          ],
+          "observed_output_summary": []
+        },
+        {
+          "call_line": 52,
+          "result_line": 53,
+          "call_to_result_seconds": 1.796,
+          "command_first_line": "cd /app && cp /tmp/newmethods.js test/zz-newmethods.js && timeout 300 npx mocha test/zz-newmethods.js > /tmp/out.txt 2>&1; echo \"exit=$?\"; rm test/zz-newmethods.js; wc -l /tmp/out.",
+          "validation_commands": [
+            "npx mocha"
+          ],
+          "observed_output_summary": []
+        },
+        {
+          "call_line": 58,
+          "result_line": 59,
+          "call_to_result_seconds": 1.834,
+          "command_first_line": "cd /app && cp /tmp/newmethods.js test/newmethods.js && timeout 300 npx mocha test/newmethods.js > /tmp/out.txt 2>&1; echo \"exit=$?\"; rm test/newmethods.js; tail -40 /tmp/out.txt",
+          "validation_commands": [
+            "npx mocha"
+          ],
+          "observed_output_summary": []
+        },
+        {
+          "call_line": 60,
+          "result_line": 61,
+          "call_to_result_seconds": 1.862,
+          "command_first_line": "cd /app && sed -i \"1i console.log('LOADED NEWMETHODS');\" /tmp/newmethods.js && cp /tmp/newmethods.js test/newmethods.js && timeout 300 npx mocha test/newmethods.js 2>&1 | tail -20;",
+          "validation_commands": [
+            "npx mocha"
+          ],
+          "observed_output_summary": []
+        },
+        {
+          "call_line": 64,
+          "result_line": 65,
+          "call_to_result_seconds": 1.834,
+          "command_first_line": "cd /app && cp /tmp/newmethods.js test/newmethods.js && timeout 300 npx mocha test/newmethods.js --reporter spec --bail false 2>&1 | tail -30; rm test/newmethods.js",
+          "validation_commands": [
+            "npx mocha"
+          ],
+          "observed_output_summary": []
+        },
+        {
+          "call_line": 66,
+          "result_line": 67,
+          "call_to_result_seconds": 1.922,
+          "command_first_line": "cd /app && cp /tmp/newmethods.js test/newmethods.js && timeout 300 npx mocha test/newmethods.js --grep \"getRaw\" 2>&1 | tail -30; rm test/newmethods.js",
+          "validation_commands": [
+            "npx mocha"
+          ],
+          "observed_output_summary": []
+        },
+        {
+          "call_line": 70,
+          "result_line": 71,
+          "call_to_result_seconds": 3.056,
+          "command_first_line": "cd /app && python3 - <<'EOF'",
+          "validation_commands": [
+            "npx mocha"
+          ],
+          "observed_output_summary": [
+            "1 passing (529ms)",
+            "1 failing"
+          ]
+        },
+        {
+          "call_line": 74,
+          "result_line": 75,
+          "call_to_result_seconds": 3.111,
+          "command_first_line": "cd /app && python3 - <<'EOF'",
+          "validation_commands": [
+            "npx mocha"
+          ],
+          "observed_output_summary": [
+            "6 passing (543ms)"
+          ]
+        },
+        {
+          "call_line": 86,
+          "result_line": 87,
+          "call_to_result_seconds": 13.728,
+          "command_first_line": "cd /app && timeout 400 npx mocha test/api.js > /tmp/api.txt 2>&1; echo exit=$?; tail -8 /tmp/api.txt",
+          "validation_commands": [
+            "npx mocha"
+          ],
+          "observed_output_summary": []
+        },
+        {
+          "call_line": 92,
+          "result_line": 93,
+          "call_to_result_seconds": 14.103,
+          "command_first_line": "cd /app && git stash && timeout 400 npx mocha test/api.js > /tmp/api2.txt 2>&1; echo exit=$?; grep -n \"passing\\|failing\\|^  1)\" /tmp/api2.txt | tail; git stash pop",
+          "validation_commands": [
+            "npx mocha"
+          ],
+          "observed_output_summary": [
+            "96:  215 passing (11s)",
+            "97:  1 failing"
+          ]
+        },
+        {
+          "call_line": 102,
+          "result_line": 103,
+          "call_to_result_seconds": 13.922,
+          "command_first_line": "cd /app && cat > public/openapi/write/posts/pid/raw.yaml <<'EOF'",
+          "validation_commands": [
+            "npx mocha"
+          ],
+          "observed_output_summary": [
+            "96:  215 passing (11s)",
+            "97:  1 failing"
+          ]
+        },
+        {
+          "call_line": 114,
+          "result_line": 115,
+          "call_to_result_seconds": 5.254,
+          "command_first_line": "cd /app && npx eslint src/api/posts.js src/controllers/write/posts.js src/routes/write/posts.js && cp /tmp/newmethods.js test/newmethods.js && timeout 300 npx mocha test/newmethods",
+          "validation_commands": [
+            "npx mocha"
+          ],
+          "observed_output_summary": [
+            "6 passing (313ms)"
+          ]
+        }
+      ],
+      "largest_bash_call_result_intervals": [
+        {
+          "call_line": 92,
+          "result_line": 93,
+          "call_to_result_seconds": 14.103,
+          "command_first_line": "cd /app && git stash && timeout 400 npx mocha test/api.js > /tmp/api2.txt 2>&1; echo exit=$?; grep -n \"passing\\|failing\\|^  1)\" /tmp/api2.txt | tail; git stash pop",
+          "validation_commands": [
+            "npx mocha"
+          ]
+        },
+        {
+          "call_line": 102,
+          "result_line": 103,
+          "call_to_result_seconds": 13.922,
+          "command_first_line": "cd /app && cat > public/openapi/write/posts/pid/raw.yaml <<'EOF'",
+          "validation_commands": [
+            "npx mocha"
+          ]
+        },
+        {
+          "call_line": 86,
+          "result_line": 87,
+          "call_to_result_seconds": 13.728,
+          "command_first_line": "cd /app && timeout 400 npx mocha test/api.js > /tmp/api.txt 2>&1; echo exit=$?; tail -8 /tmp/api.txt",
+          "validation_commands": [
+            "npx mocha"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "path": "harbor/pi-native-r1/instance_NodeBB__NodeBB-f2082d7d__iTz887v/agent/pi/sessions/2026-10-26T18-38-25-168Z_01a17981-b18e-70cc-80f8-2559c392ea99.jsonl",
+          "sha256": "c49c5b566b4da1e3887ea8f3a6ec87adfe9a6e04a9e9966e844b60d8b362264d"
+        },
+        {
+          "path": "harbor/pi-native-r1/instance_NodeBB__NodeBB-f2082d7d__iTz887v/agent/model.patch",
+          "sha256": "a23bf11c96bfb4d92d9e454f78b56bcb515831c2c5e2f1c9179c19fb115131c5"
+        },
+        {
+          "path": "harbor/pi-native-r1-regrade/instance_NodeBB__NodeBB-f2082d7d__Ws5gmcC/result.json",
+          "sha256": "b63bb5f89fc18f31f6faaa4cd608605e96dd89544ee0d7a3b5975358a70489a1"
+        }
+      ]
+    },
+    {
+      "task_id": "instance_ansible__ansible-e22e103cdf8edc56ff7d9b848a58f94f1471a263-v1055803c3a812189a1133297f7f5468579283f86",
+      "label": "ansible",
+      "variant": "pi-native",
+      "success": true,
+      "usage": {
+        "input_tokens": 301813,
+        "cache_tokens": 282624,
+        "output_tokens": 4254,
+        "cost_usd": 0.012557244
+      },
+      "uncached_input_tokens": 19189,
+      "phase_seconds": {
+        "environment_setup": 2.505308,
+        "agent_setup": 100.463684,
+        "agent_execution": 41.015357,
+        "verifier": 154.301793
+      },
+      "solve_wall_seconds": 155.049345,
+      "regrade_wall_seconds": 170.319613,
+      "solve_plus_regrade_wall_seconds": 325.368958,
+      "model_returns": 17,
+      "message_roles": {
+        "system": 1,
+        "user": 1,
+        "assistant": 17,
+        "toolResult": 18
+      },
+      "tool_calls": {
+        "bash": 18
+      },
+      "tool_errors": [],
+      "stop_reasons": {
+        "toolUse": 16,
+        "stop": 1
+      },
+      "compactions": 0,
+      "first_input_tokens": 2815,
+      "user_content_sha256": [
+        "de00fe78aeb1eedee0c247949a999eb8480535f83b59c84e0e508b27d6dd2ab8"
+      ],
+      "stored_system_content_sha256": [
+        "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126"
+      ],
+      "tool_call_result_pairs_complete": true,
+      "patch_files": [
+        "changelogs/fragments/winrm-kinit-cmd-args.yml",
+        "docs/docsite/rst/user_guide/windows_winrm.rst",
+        "lib/ansible/plugins/connection/winrm.py",
+        "test/units/plugins/connection/test_winrm.py"
+      ],
+      "persistent_test_sources": [
+        "test/units/plugins/connection/test_winrm.py"
+      ],
+      "state_operations": null,
+      "window": null,
+      "validation_calls": [
+        {
+          "call_line": 22,
+          "result_line": 23,
+          "call_to_result_seconds": 1.78,
+          "command_first_line": "cd /app && python - <<'EOF'",
+          "validation_commands": [
+            "python -m pytest"
+          ],
+          "observed_output_summary": [
+            "============================== 34 passed in 1.34s =============================="
+          ]
+        },
+        {
+          "call_line": 30,
+          "result_line": 31,
+          "call_to_result_seconds": 1.891,
+          "command_first_line": "cd /app && git status --short && python -c \"",
+          "validation_commands": [
+            "python -m pytest"
+          ],
+          "observed_output_summary": [
+            "============================== 66 passed in 1.36s =============================="
+          ]
+        },
+        {
+          "call_line": 34,
+          "result_line": 35,
+          "call_to_result_seconds": 1.586,
+          "command_first_line": "cd /app && python - <<'EOF'",
+          "validation_commands": [
+            "python -m pytest"
+          ],
+          "observed_output_summary": [
+            "============================== 34 passed in 1.19s =============================="
+          ]
+        },
+        {
+          "call_line": 38,
+          "result_line": 39,
+          "call_to_result_seconds": 1.369,
+          "command_first_line": "cd /app && python - <<'EOF'",
+          "validation_commands": [
+            "python -m pytest"
+          ],
+          "observed_output_summary": [
+            "============================== 34 passed in 0.97s =============================="
+          ]
+        }
+      ],
+      "largest_bash_call_result_intervals": [
+        {
+          "call_line": 30,
+          "result_line": 31,
+          "call_to_result_seconds": 1.891,
+          "command_first_line": "cd /app && git status --short && python -c \"",
+          "validation_commands": [
+            "python -m pytest"
+          ]
+        },
+        {
+          "call_line": 22,
+          "result_line": 23,
+          "call_to_result_seconds": 1.78,
+          "command_first_line": "cd /app && python - <<'EOF'",
+          "validation_commands": [
+            "python -m pytest"
+          ]
+        },
+        {
+          "call_line": 34,
+          "result_line": 35,
+          "call_to_result_seconds": 1.586,
+          "command_first_line": "cd /app && python - <<'EOF'",
+          "validation_commands": [
+            "python -m pytest"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "path": "harbor/pi-native-r1/instance_ansible__ansible-e22e10__qe5Jedk/agent/pi/sessions/2026-10-26T18-38-01-397Z_01a17981-54b3-75dc-bedd-30c7284033f3.jsonl",
+          "sha256": "93993a592bfa8d1f3e48b7d5436be2607afe57164e8eada49b4ad3a7d2294a73"
+        },
+        {
+          "path": "harbor/pi-native-r1/instance_ansible__ansible-e22e10__qe5Jedk/agent/model.patch",
+          "sha256": "3d222a4c4bc52db86b21fbf3c3b77d2dd3874732dc7b681f68418b07ebbe7ffe"
+        },
+        {
+          "path": "harbor/pi-native-r1-regrade/instance_ansible__ansible-e22e10__JBfnMZR/result.json",
+          "sha256": "4e1d30d75b1c6f899f59e48094a51000f97237dc459331e19f058b022ab96562"
+        }
+      ]
+    },
+    {
+      "task_id": "instance_element-hq__element-web-b007ea81b2ccd001b00f332bee65070aa7fc00f9-vnan",
+      "label": "element-hq",
+      "variant": "pi-native",
+      "success": true,
+      "usage": {
+        "input_tokens": 237397,
+        "cache_tokens": 223360,
+        "output_tokens": 5199,
+        "cost_usd": 0.01179006
+      },
+      "uncached_input_tokens": 14037,
+      "phase_seconds": {
+        "environment_setup": 1.956844,
+        "agent_setup": 90.657515,
+        "agent_execution": 174.129424,
+        "verifier": 13.124146
+      },
+      "solve_wall_seconds": 277.916901,
+      "regrade_wall_seconds": 28.357654,
+      "solve_plus_regrade_wall_seconds": 306.274555,
+      "model_returns": 17,
+      "message_roles": {
+        "system": 1,
+        "user": 1,
+        "assistant": 17,
+        "toolResult": 18
+      },
+      "tool_calls": {
+        "bash": 15,
+        "edit": 3
+      },
+      "tool_errors": [
+        {
+          "tool": "bash",
+          "call_line": 20,
+          "result_line": 21,
+          "message_head": "(no output)\n\nCommand exited with code 1"
+        }
+      ],
+      "stop_reasons": {
+        "toolUse": 16,
+        "stop": 1
+      },
+      "compactions": 0,
+      "first_input_tokens": 2515,
+      "user_content_sha256": [
+        "e35cf261bc28879f6997680d15b10478243cdff7f65c101520f1bfa27d532102"
+      ],
+      "stored_system_content_sha256": [
+        "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126"
+      ],
+      "tool_call_result_pairs_complete": true,
+      "patch_files": [
+        "src/utils/arrays.ts",
+        "test/utils/arrays-test.ts"
+      ],
+      "persistent_test_sources": [
+        "test/utils/arrays-test.ts"
+      ],
+      "state_operations": null,
+      "window": null,
+      "validation_calls": [
+        {
+          "call_line": 16,
+          "result_line": 17,
+          "call_to_result_seconds": 10.804,
+          "command_first_line": "cd /app && cat > test/utils/tmp-smoothing-test.ts <<'EOF'",
+          "validation_commands": [
+            "npx jest"
+          ],
+          "observed_output_summary": [
+            "Test Suites: 1 passed, 1 total",
+            "Tests:       1 passed, 1 total"
+          ]
+        },
+        {
+          "call_line": 18,
+          "result_line": 19,
+          "call_to_result_seconds": 3.277,
+          "command_first_line": "cd /app && npx jest test/utils/tmp-smoothing-test.ts 2>&1 | grep -A2 \"console.log\" | grep \"=>\"",
+          "validation_commands": [
+            "npx jest"
+          ],
+          "observed_output_summary": []
+        },
+        {
+          "call_line": 20,
+          "result_line": 21,
+          "call_to_result_seconds": 3.112,
+          "command_first_line": "cd /app && npx jest test/utils/tmp-smoothing-test.ts 2>&1 | grep -B1 -A3 \"10 \\]\" | grep \"=>\"",
+          "validation_commands": [
+            "npx jest"
+          ],
+          "observed_output_summary": []
+        },
+        {
+          "call_line": 22,
+          "result_line": 23,
+          "call_to_result_seconds": 3.323,
+          "command_first_line": "cd /app && npx jest test/utils/tmp-smoothing-test.ts 2>&1 | grep \"console.log\" -A1 | grep \"\\[\"",
+          "validation_commands": [
+            "npx jest"
+          ],
+          "observed_output_summary": []
+        },
+        {
+          "call_line": 24,
+          "result_line": 25,
+          "call_to_result_seconds": 3.127,
+          "command_first_line": "cd /app && npx jest test/utils/tmp-smoothing-test.ts 2>&1 | tr -d '\\n' | sed 's/console.log/\\n/g' | grep \"=>\"",
+          "validation_commands": [
+            "npx jest"
+          ],
+          "observed_output_summary": []
+        },
+        {
+          "call_line": 30,
+          "result_line": 31,
+          "call_to_result_seconds": 18.992,
+          "command_first_line": "cd /app && rm test/utils/tmp-smoothing-test.ts && npx jest test/utils/arrays-test.ts 2>&1 | tail -15 && npx tsc --noEmit --jsx react 2>&1 | tail -10",
+          "validation_commands": [
+            "npx jest",
+            "npx tsc"
+          ],
+          "observed_output_summary": [
+            "Test Suites: 1 passed, 1 total",
+            "Tests:       29 passed, 29 total"
+          ]
+        },
+        {
+          "call_line": 36,
+          "result_line": 37,
+          "call_to_result_seconds": 9.887,
+          "command_first_line": "cd /app && npx jest test/utils/arrays-test.ts 2>&1 | tail -8; npx eslint test/utils/arrays-test.ts 2>&1 | tail -10",
+          "validation_commands": [
+            "npx jest"
+          ],
+          "observed_output_summary": [
+            "Test Suites: 1 passed, 1 total",
+            "Tests:       36 passed, 36 total"
+          ]
+        },
+        {
+          "call_line": 38,
+          "result_line": 39,
+          "call_to_result_seconds": 12.205,
+          "command_first_line": "cd /app && npx tsc --noEmit --jsx react 2>&1 | grep -E \"arrays\" | head; echo \"exit-grep:$?\"; git diff --stat",
+          "validation_commands": [
+            "npx tsc"
+          ],
+          "observed_output_summary": []
+        }
+      ],
+      "largest_bash_call_result_intervals": [
+        {
+          "call_line": 14,
+          "result_line": 15,
+          "call_to_result_seconds": 70.514,
+          "command_first_line": "cd /app && cat > /tmp/check.ts <<'EOF'",
+          "validation_commands": []
+        },
+        {
+          "call_line": 30,
+          "result_line": 31,
+          "call_to_result_seconds": 18.992,
+          "command_first_line": "cd /app && rm test/utils/tmp-smoothing-test.ts && npx jest test/utils/arrays-test.ts 2>&1 | tail -15 && npx tsc --noEmit --jsx react 2>&1 | tail -10",
+          "validation_commands": [
+            "npx jest",
+            "npx tsc"
+          ]
+        },
+        {
+          "call_line": 38,
+          "result_line": 39,
+          "call_to_result_seconds": 12.205,
+          "command_first_line": "cd /app && npx tsc --noEmit --jsx react 2>&1 | grep -E \"arrays\" | head; echo \"exit-grep:$?\"; git diff --stat",
+          "validation_commands": [
+            "npx tsc"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "path": "harbor/pi-native-r1/instance_element-hq__element-web__ntSZmfG/agent/pi/sessions/2026-10-26T18-40-26-004Z_01a17983-8993-7513-9367-3d9f6a5c2871.jsonl",
+          "sha256": "21edc560e070fdc7928e309a4b8f28cf7d03714a3c981e4c8225ccfdb086ba83"
+        },
+        {
+          "path": "harbor/pi-native-r1/instance_element-hq__element-web__ntSZmfG/agent/model.patch",
+          "sha256": "6640154ec81afc13196ce013599cabd5ae3017d28a7d2e354e7542d6305b78a6"
+        },
+        {
+          "path": "harbor/pi-native-r1-regrade/instance_element-hq__element-web__evm2PtV/result.json",
+          "sha256": "00437c97c18bc3707d5efa930966c01ba70a863abd7436ee47297aaccd5b6170"
+        }
+      ]
+    },
+    {
+      "task_id": "instance_flipt-io__flipt-c1fd7a81ef9f23e742501bfb26d914eb683262aa",
+      "label": "flipt-io",
+      "variant": "pi-native",
+      "success": true,
+      "usage": {
+        "input_tokens": 229044,
+        "cache_tokens": 216448,
+        "output_tokens": 4687,
+        "cost_usd": 0.010701888
+      },
+      "uncached_input_tokens": 12596,
+      "phase_seconds": {
+        "environment_setup": 2.482091,
+        "agent_setup": 85.692088,
+        "agent_execution": 1346.347672,
+        "verifier": 441.34388
+      },
+      "solve_wall_seconds": 1445.694797,
+      "regrade_wall_seconds": 457.115257,
+      "solve_plus_regrade_wall_seconds": 1902.810054,
+      "model_returns": 22,
+      "message_roles": {
+        "system": 1,
+        "user": 1,
+        "assistant": 22,
+        "toolResult": 26
+      },
+      "tool_calls": {
+        "bash": 23,
+        "edit": 3
+      },
+      "tool_errors": [
+        {
+          "tool": "edit",
+          "call_line": 24,
+          "result_line": 25,
+          "message_head": "Could not find edits[1] in /app/internal/config/authentication.go. The oldText must match exactly including all whitespace and newlines."
+        }
+      ],
+      "stop_reasons": {
+        "toolUse": 21,
+        "stop": 1
+      },
+      "compactions": 0,
+      "first_input_tokens": 2047,
+      "user_content_sha256": [
+        "2ee05a6cf7b3118eb3b3a7978e98dc53676ab7190c78febb048557da6ce93cce"
+      ],
+      "stored_system_content_sha256": [
+        "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126"
+      ],
+      "tool_call_result_pairs_complete": true,
+      "patch_files": [
+        "internal/config/authentication.go",
+        "internal/config/config_test.go",
+        "internal/config/testdata/authentication/github_missing_client_id.yml",
+        "internal/config/testdata/authentication/github_missing_client_secret.yml",
+        "internal/config/testdata/authentication/github_missing_redirect_address.yml",
+        "internal/config/testdata/authentication/github_no_org_scope.yml",
+        "internal/config/testdata/authentication/oidc_missing_client_id.yml",
+        "internal/config/testdata/authentication/oidc_missing_client_secret.yml",
+        "internal/config/testdata/authentication/oidc_missing_redirect_address.yml"
+      ],
+      "persistent_test_sources": [
+        "internal/config/config_test.go"
+      ],
+      "state_operations": null,
+      "window": null,
+      "validation_calls": [
+        {
+          "call_line": 40,
+          "result_line": 41,
+          "call_to_result_seconds": 524.065,
+          "command_first_line": "cd /app && go test ./internal/config/ -run TestLoad 2>&1 | tail -30",
+          "validation_commands": [
+            "go test"
+          ],
+          "observed_output_summary": [
+            "FAIL\tgo.flipt.io/flipt/internal/config\t0.237s"
+          ]
+        },
+        {
+          "call_line": 42,
+          "result_line": 43,
+          "call_to_result_seconds": 3.291,
+          "command_first_line": "cd /app && go test ./internal/config/ -run TestLoad 2>&1 | grep -E \"^\\s+--- FAIL|Messages\" | head -30",
+          "validation_commands": [
+            "go test"
+          ],
+          "observed_output_summary": []
+        },
+        {
+          "call_line": 44,
+          "result_line": 45,
+          "call_to_result_seconds": 4.104,
+          "command_first_line": "cd /app && for f in github_missing_client_id github_missing_client_secret github_missing_redirect_address oidc_missing_client_id oidc_missing_client_secret oidc_missing_redirect_ad",
+          "validation_commands": [
+            "go test"
+          ],
+          "observed_output_summary": [
+            "ok  \tgo.flipt.io/flipt/internal/config\t0.239s"
+          ]
+        },
+        {
+          "call_line": 46,
+          "result_line": 48,
+          "call_to_result_seconds": 620.897,
+          "command_first_line": "cd /app && go build ./... && go test ./internal/config/ 2>&1 | tail -5",
+          "validation_commands": [
+            "go test",
+            "go build"
+          ],
+          "observed_output_summary": [
+            "ok  \tgo.flipt.io/flipt/internal/config\t0.251s"
+          ]
+        },
+        {
+          "call_line": 49,
+          "result_line": 50,
+          "call_to_result_seconds": 159.806,
+          "command_first_line": "cd /app && go test ./internal/server/auth/... ./cmd/... 2>&1 | grep -v \"^ok\\|no test files\" | head -20",
+          "validation_commands": [
+            "go test"
+          ],
+          "observed_output_summary": []
+        }
+      ],
+      "largest_bash_call_result_intervals": [
+        {
+          "call_line": 46,
+          "result_line": 48,
+          "call_to_result_seconds": 620.897,
+          "command_first_line": "cd /app && go build ./... && go test ./internal/config/ 2>&1 | tail -5",
+          "validation_commands": [
+            "go test",
+            "go build"
+          ]
+        },
+        {
+          "call_line": 46,
+          "result_line": 47,
+          "call_to_result_seconds": 620.896,
+          "command_first_line": "cd /app && grep -rn \"AuthenticationMethodOIDCProvider{\\|AuthenticationMethodGithubConfig{\" --include=*.go | grep -v \"internal/config/\" | head -20",
+          "validation_commands": []
+        },
+        {
+          "call_line": 40,
+          "result_line": 41,
+          "call_to_result_seconds": 524.065,
+          "command_first_line": "cd /app && go test ./internal/config/ -run TestLoad 2>&1 | tail -30",
+          "validation_commands": [
+            "go test"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "path": "harbor/pi-native-r1/instance_flipt-io__flipt-c1fd7a8__BqGJ7hx/agent/pi/sessions/2026-10-26T18-42-41-448Z_01a17985-9aa6-77be-8797-4a93419ac206.jsonl",
+          "sha256": "189b8037a4eff18eeb1474e6fecbb11ab4e6f3ffa152503985f8ca262df8b3bd"
+        },
+        {
+          "path": "harbor/pi-native-r1/instance_flipt-io__flipt-c1fd7a8__BqGJ7hx/agent/model.patch",
+          "sha256": "3b9443df4918fa6925ab97f0159febdc4a2ca1a2236c137d858a268a64636ad8"
+        },
+        {
+          "path": "harbor/pi-native-r1-regrade/instance_flipt-io__flipt-c1fd7a8__Mimcr8C/result.json",
+          "sha256": "ccb488f921c71c1b0d0c86235e5e62a730479a992f2304383915825dfe918ebd"
+        }
+      ]
+    },
+    {
+      "task_id": "instance_NodeBB__NodeBB-f2082d7de85eb62a70819f4f3396dd85626a0c0a-vd59a5728dfc977f44533186ace531248c2917516",
+      "label": "NodeBB",
+      "variant": "pi-memweave",
+      "success": true,
+      "usage": {
+        "input_tokens": 355688,
+        "cache_tokens": 330880,
+        "output_tokens": 3378,
+        "cost_usd": 0.01348128
+      },
+      "uncached_input_tokens": 24808,
+      "phase_seconds": {
+        "environment_setup": 2.521863,
+        "agent_setup": 275.141983,
+        "agent_execution": 53.637719,
+        "verifier": 14.310743
+      },
+      "solve_wall_seconds": 342.675582,
+      "regrade_wall_seconds": 29.715639,
+      "solve_plus_regrade_wall_seconds": 372.39122100000003,
+      "model_returns": 19,
+      "message_roles": {
+        "system": 1,
+        "user": 1,
+        "assistant": 19,
+        "toolResult": 24
+      },
+      "tool_calls": {
+        "bash": 19,
+        "task_create": 1,
+        "edit": 3,
+        "state_append": 1
+      },
+      "tool_errors": [],
+      "stop_reasons": {
+        "toolUse": 18,
+        "stop": 1
+      },
+      "compactions": 0,
+      "first_input_tokens": 9530,
+      "user_content_sha256": [
+        "9e1b77f60eb775f2887b87c0b2b6d676b13fd5d5d1a7f74181501993f52d9d31"
+      ],
+      "stored_system_content_sha256": [
+        "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126"
+      ],
+      "tool_call_result_pairs_complete": true,
+      "patch_files": [
+        "src/api/posts.js",
+        "src/controllers/write/posts.js",
+        "src/routes/write/posts.js"
+      ],
+      "persistent_test_sources": [],
+      "state_operations": {
+        "update_goal": 1,
+        "append_fact": 3
+      },
+      "window": {
+        "last_record_line": 6,
+        "recent_turns": 200,
+        "evict_turns": 40,
+        "has_boundary": false,
+        "pending_count": 0,
+        "record_count": 1
+      },
+      "validation_calls": [
+        {
+          "call_line": 50,
+          "result_line": 51,
+          "call_to_result_seconds": 2.579,
+          "command_first_line": "cd /app && timeout 300 npx mocha test/posts.js 2>&1 | tail -20",
+          "validation_commands": [
+            "npx mocha"
+          ],
+          "observed_output_summary": [
+            "0 passing (8ms)",
+            "1 failing"
+          ]
+        },
+        {
+          "call_line": 59,
+          "result_line": 60,
+          "call_to_result_seconds": 8.668,
+          "command_first_line": "cd /app && timeout 600 npx mocha test/posts.js 2>&1 | tail -25",
+          "validation_commands": [
+            "npx mocha"
+          ],
+          "observed_output_summary": [
+            "118 passing (6s)"
+          ]
+        }
+      ],
+      "largest_bash_call_result_intervals": [
+        {
+          "call_line": 59,
+          "result_line": 60,
+          "call_to_result_seconds": 8.668,
+          "command_first_line": "cd /app && timeout 600 npx mocha test/posts.js 2>&1 | tail -25",
+          "validation_commands": [
+            "npx mocha"
+          ]
+        },
+        {
+          "call_line": 50,
+          "result_line": 51,
+          "call_to_result_seconds": 2.579,
+          "command_first_line": "cd /app && timeout 300 npx mocha test/posts.js 2>&1 | tail -20",
+          "validation_commands": [
+            "npx mocha"
+          ]
+        },
+        {
+          "call_line": 40,
+          "result_line": 41,
+          "call_to_result_seconds": 2.414,
+          "command_first_line": "cd /app && npx eslint src/api/posts.js src/controllers/write/posts.js src/routes/write/posts.js 2>&1 | tail -20",
+          "validation_commands": []
+        }
+      ],
+      "evidence": [
+        {
+          "path": "harbor/pi-memweave-r1/instance_NodeBB__NodeBB-f2082d7d__2TUozEk/agent/pi/sessions/2026-10-26T19-18-34-413Z_01a179a6-74ab-7473-a013-71bb71bced18.jsonl",
+          "sha256": "4f937cfdec615df03f3de25fda2d5b72deba694924efc56fd3639f8cf9622533"
+        },
+        {
+          "path": "harbor/pi-memweave-r1/instance_NodeBB__NodeBB-f2082d7d__2TUozEk/agent/model.patch",
+          "sha256": "76fa5cd7466e9394daa282b4abce58df5ae0dc859609c9711193e5f4e0fa9518"
+        },
+        {
+          "path": "harbor/pi-memweave-r1-regrade/instance_NodeBB__NodeBB-f2082d7d__ySv6Mmf/result.json",
+          "sha256": "7273d0f2c1229d1afb45aa534d4f3b7705c655c4708a7747265678090042f913"
+        }
+      ]
+    },
+    {
+      "task_id": "instance_ansible__ansible-e22e103cdf8edc56ff7d9b848a58f94f1471a263-v1055803c3a812189a1133297f7f5468579283f86",
+      "label": "ansible",
+      "variant": "pi-memweave",
+      "success": true,
+      "usage": {
+        "input_tokens": 276233,
+        "cache_tokens": 250752,
+        "output_tokens": 2974,
+        "cost_usd": 0.012717612
+      },
+      "uncached_input_tokens": 25481,
+      "phase_seconds": {
+        "environment_setup": 2.500674,
+        "agent_setup": 245.998593,
+        "agent_execution": 33.519792,
+        "verifier": 154.303632
+      },
+      "solve_wall_seconds": 293.218778,
+      "regrade_wall_seconds": 169.750141,
+      "solve_plus_regrade_wall_seconds": 462.968919,
+      "model_returns": 16,
+      "message_roles": {
+        "system": 1,
+        "user": 1,
+        "assistant": 16,
+        "toolResult": 15
+      },
+      "tool_calls": {
+        "bash": 6,
+        "task_create": 1,
+        "read": 3,
+        "edit": 3,
+        "state_append": 2
+      },
+      "tool_errors": [
+        {
+          "tool": "state_append",
+          "call_line": 46,
+          "result_line": 48,
+          "message_head": "STATE_CONTENT_TOO_LONG: field=items[0].content; actual=106; max=100 Unicode code points; shorten the content and retry"
+        }
+      ],
+      "stop_reasons": {
+        "toolUse": 15,
+        "stop": 1
+      },
+      "compactions": 0,
+      "first_input_tokens": 10100,
+      "user_content_sha256": [
+        "de00fe78aeb1eedee0c247949a999eb8480535f83b59c84e0e508b27d6dd2ab8"
+      ],
+      "stored_system_content_sha256": [
+        "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126"
+      ],
+      "tool_call_result_pairs_complete": true,
+      "patch_files": [
+        "changelogs/fragments/winrm-kinit-args.yaml",
+        "lib/ansible/plugins/connection/winrm.py"
+      ],
+      "persistent_test_sources": [],
+      "state_operations": {
+        "update_goal": 1,
+        "append_decision": 1,
+        "append_fact": 1
+      },
+      "window": {
+        "last_record_line": 6,
+        "recent_turns": 200,
+        "evict_turns": 40,
+        "has_boundary": false,
+        "pending_count": 0,
+        "record_count": 1
+      },
+      "validation_calls": [
+        {
+          "call_line": 40,
+          "result_line": 41,
+          "call_to_result_seconds": 1.719,
+          "command_first_line": "cd /app && python -m pytest test/units/plugins/connection/test_winrm.py -q 2>&1 | tail -20",
+          "validation_commands": [
+            "python -m pytest"
+          ],
+          "observed_output_summary": [
+            "============================== 26 passed in 1.34s =============================="
+          ]
+        }
+      ],
+      "largest_bash_call_result_intervals": [
+        {
+          "call_line": 40,
+          "result_line": 41,
+          "call_to_result_seconds": 1.719,
+          "command_first_line": "cd /app && python -m pytest test/units/plugins/connection/test_winrm.py -q 2>&1 | tail -20",
+          "validation_commands": [
+            "python -m pytest"
+          ]
+        },
+        {
+          "call_line": 31,
+          "result_line": 32,
+          "call_to_result_seconds": 0.16,
+          "command_first_line": "cd /app && python -c \"",
+          "validation_commands": []
+        },
+        {
+          "call_line": 25,
+          "result_line": 26,
+          "call_to_result_seconds": 0.113,
+          "command_first_line": "cd /app && head -10 lib/ansible/plugins/connection/winrm.py && grep -n \"^import\\|^from\" lib/ansible/plugins/connection/winrm.py | head -20 && sed -n 290,330p lib/ansible/plugins/co",
+          "validation_commands": []
+        }
+      ],
+      "evidence": [
+        {
+          "path": "harbor/pi-memweave-r1/instance_ansible__ansible-e22e10__Lsv8xSK/agent/pi/sessions/2026-10-26T19-18-05-198Z_01a179a6-028d-75f6-a1ec-dd12020c0f58.jsonl",
+          "sha256": "91e9e414ebea5b63164f4241e76b81813c26c701d6b85ba3f0da9b1fa438295e"
+        },
+        {
+          "path": "harbor/pi-memweave-r1/instance_ansible__ansible-e22e10__Lsv8xSK/agent/model.patch",
+          "sha256": "e3fcf1ad757d16c4ae16450d5f0fc21f2b955ecd52ee6ff8e4bb89e0a9eecf8b"
+        },
+        {
+          "path": "harbor/pi-memweave-r1-regrade/instance_ansible__ansible-e22e10__5jwr76Y/result.json",
+          "sha256": "b1b217afa3c00c5d51593e5308a14fc77c9c74e603d6c7fd8f2d1b17100a3643"
+        }
+      ]
+    },
+    {
+      "task_id": "instance_element-hq__element-web-b007ea81b2ccd001b00f332bee65070aa7fc00f9-vnan",
+      "label": "element-hq",
+      "variant": "pi-memweave",
+      "success": false,
+      "usage": {
+        "input_tokens": 144087,
+        "cache_tokens": 122112,
+        "output_tokens": 2351,
+        "cost_usd": 0.010146372
+      },
+      "uncached_input_tokens": 21975,
+      "phase_seconds": {
+        "environment_setup": 2.472099,
+        "agent_setup": 227.109552,
+        "agent_execution": 61.113257,
+        "verifier": 13.26096
+      },
+      "solve_wall_seconds": 301.922043,
+      "regrade_wall_seconds": 28.433993,
+      "solve_plus_regrade_wall_seconds": 330.35603599999996,
+      "model_returns": 9,
+      "message_roles": {
+        "system": 1,
+        "user": 1,
+        "assistant": 9,
+        "toolResult": 8
+      },
+      "tool_calls": {
+        "bash": 4,
+        "read": 1,
+        "task_create": 1,
+        "edit": 1,
+        "state_append": 1
+      },
+      "tool_errors": [],
+      "stop_reasons": {
+        "toolUse": 8,
+        "stop": 1
+      },
+      "compactions": 0,
+      "first_input_tokens": 9799,
+      "user_content_sha256": [
+        "e35cf261bc28879f6997680d15b10478243cdff7f65c101520f1bfa27d532102"
+      ],
+      "stored_system_content_sha256": [
+        "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126"
+      ],
+      "tool_call_result_pairs_complete": true,
+      "patch_files": [
+        "src/utils/arrays.ts"
+      ],
+      "persistent_test_sources": [],
+      "state_operations": {
+        "update_goal": 1,
+        "append_fact": 2,
+        "append_decision": 1
+      },
+      "window": {
+        "last_record_line": 6,
+        "recent_turns": 200,
+        "evict_turns": 40,
+        "has_boundary": false,
+        "pending_count": 0,
+        "record_count": 1
+      },
+      "validation_calls": [
+        {
+          "call_line": 21,
+          "result_line": 22,
+          "call_to_result_seconds": 11.702,
+          "command_first_line": "cd /app && npx tsc --noEmit --jsx react 2>&1 | head -20",
+          "validation_commands": [
+            "npx tsc"
+          ],
+          "observed_output_summary": []
+        },
+        {
+          "call_line": 24,
+          "result_line": 25,
+          "call_to_result_seconds": 23.225,
+          "command_first_line": "cd /app && npx tsc --noEmit --jsx react 2>&1 | grep \"utils/arrays\" ; npx jest test/utils/arrays-test.ts 2>&1 | tail -20",
+          "validation_commands": [
+            "npx jest",
+            "npx tsc"
+          ],
+          "observed_output_summary": [
+            "Test Suites: 1 passed, 1 total",
+            "Tests:       29 passed, 29 total"
+          ]
+        }
+      ],
+      "largest_bash_call_result_intervals": [
+        {
+          "call_line": 24,
+          "result_line": 25,
+          "call_to_result_seconds": 23.225,
+          "command_first_line": "cd /app && npx tsc --noEmit --jsx react 2>&1 | grep \"utils/arrays\" ; npx jest test/utils/arrays-test.ts 2>&1 | tail -20",
+          "validation_commands": [
+            "npx jest",
+            "npx tsc"
+          ]
+        },
+        {
+          "call_line": 21,
+          "result_line": 22,
+          "call_to_result_seconds": 11.702,
+          "command_first_line": "cd /app && npx tsc --noEmit --jsx react 2>&1 | head -20",
+          "validation_commands": [
+            "npx tsc"
+          ]
+        },
+        {
+          "call_line": 9,
+          "result_line": 10,
+          "call_to_result_seconds": 0.091,
+          "command_first_line": "cd /app && ls test/utils/ 2>/dev/null | head -50 && grep -rn \"arrayFastResample\" --include=*.ts --include=*.tsx src test | head -20",
+          "validation_commands": []
+        }
+      ],
+      "evidence": [
+        {
+          "path": "harbor/pi-memweave-r1/instance_element-hq__element-web__7K7fLN2/agent/pi/sessions/2026-10-26T19-22-39-559Z_01a179aa-3246-7218-a0f3-f6d3ed925878.jsonl",
+          "sha256": "0cf0b6c307f4f1c624ef7262461a346269c33ff5d290f75d7597b6bbe3de9537"
+        },
+        {
+          "path": "harbor/pi-memweave-r1/instance_element-hq__element-web__7K7fLN2/agent/model.patch",
+          "sha256": "e9bc43d2cf98d100e441b5c782bfe77ddb5cf6542d0bf278ab42fd3f98fc8731"
+        },
+        {
+          "path": "harbor/pi-memweave-r1-regrade/instance_element-hq__element-web__TJThMBy/result.json",
+          "sha256": "d11fa47cc7c652f519484c07ae3310b67d9b0c5fac2c67567d313ea226e297d7"
+        }
+      ]
+    },
+    {
+      "task_id": "instance_flipt-io__flipt-c1fd7a81ef9f23e742501bfb26d914eb683262aa",
+      "label": "flipt-io",
+      "variant": "pi-memweave",
+      "success": true,
+      "usage": {
+        "input_tokens": 639616,
+        "cache_tokens": 598016,
+        "output_tokens": 7054,
+        "cost_usd": 0.024532896
+      },
+      "uncached_input_tokens": 41600,
+      "phase_seconds": {
+        "environment_setup": 2.48361,
+        "agent_setup": 239.361089,
+        "agent_execution": 687.543784,
+        "verifier": 435.215612
+      },
+      "solve_wall_seconds": 940.416462,
+      "regrade_wall_seconds": 450.973265,
+      "solve_plus_regrade_wall_seconds": 1391.389727,
+      "model_returns": 28,
+      "message_roles": {
+        "system": 1,
+        "user": 1,
+        "assistant": 28,
+        "toolResult": 39
+      },
+      "tool_calls": {
+        "bash": 20,
+        "read": 4,
+        "task_create": 1,
+        "edit": 8,
+        "write": 6
+      },
+      "tool_errors": [
+        {
+          "tool": "edit",
+          "call_line": 31,
+          "result_line": 32,
+          "message_head": "Could not find edits[4] in /app/internal/config/authentication.go. The oldText must match exactly including all whitespace and newlines."
+        },
+        {
+          "tool": "edit",
+          "call_line": 37,
+          "result_line": 38,
+          "message_head": "Could not find edits[4] in /app/internal/config/authentication.go. The oldText must match exactly including all whitespace and newlines."
+        },
+        {
+          "tool": "bash",
+          "call_line": 47,
+          "result_line": 48,
+          "message_head": "Command timed out after 300 seconds"
+        },
+        {
+          "tool": "edit",
+          "call_line": 66,
+          "result_line": 67,
+          "message_head": "Could not find the exact text in /app/internal/config/testdata/authentication/github_no_org_scope.yml. The old text must match exactly including all whitespace and newlin"
+        }
+      ],
+      "stop_reasons": {
+        "toolUse": 27,
+        "stop": 1
+      },
+      "compactions": 0,
+      "first_input_tokens": 9331,
+      "user_content_sha256": [
+        "2ee05a6cf7b3118eb3b3a7978e98dc53676ab7190c78febb048557da6ce93cce"
+      ],
+      "stored_system_content_sha256": [
+        "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126"
+      ],
+      "tool_call_result_pairs_complete": true,
+      "patch_files": [
+        "internal/config/authentication.go",
+        "internal/config/config_test.go",
+        "internal/config/errors.go",
+        "internal/config/testdata/authentication/github_missing_client_id.yml",
+        "internal/config/testdata/authentication/github_missing_client_secret.yml",
+        "internal/config/testdata/authentication/github_missing_redirect_address.yml",
+        "internal/config/testdata/authentication/github_no_org_scope.yml",
+        "internal/config/testdata/authentication/oidc_missing_client_id.yml",
+        "internal/config/testdata/authentication/oidc_missing_client_secret.yml",
+        "internal/config/testdata/authentication/oidc_missing_redirect_address.yml"
+      ],
+      "persistent_test_sources": [
+        "internal/config/config_test.go"
+      ],
+      "state_operations": {
+        "update_goal": 1
+      },
+      "window": {
+        "last_record_line": 6,
+        "recent_turns": 200,
+        "evict_turns": 40,
+        "has_boundary": false,
+        "pending_count": 0,
+        "record_count": 1
+      },
+      "validation_calls": [
+        {
+          "call_line": 47,
+          "result_line": 48,
+          "call_to_result_seconds": 294.049,
+          "command_first_line": "cd /app && go build ./internal/config/ && go test ./internal/config/ 2>&1 | tail -30",
+          "validation_commands": [
+            "go test",
+            "go build"
+          ],
+          "observed_output_summary": [
+            "Command timed out after 300 seconds"
+          ]
+        },
+        {
+          "call_line": 50,
+          "result_line": 51,
+          "call_to_result_seconds": 133.911,
+          "command_first_line": "cd /app && go build ./internal/config/ 2>&1 | head -20",
+          "validation_commands": [
+            "go build"
+          ],
+          "observed_output_summary": []
+        },
+        {
+          "call_line": 53,
+          "result_line": 54,
+          "call_to_result_seconds": 106.762,
+          "command_first_line": "cd /app && go test ./internal/config/ -run 'TestLoad|TestAuthentication' -count=1 2>&1 | tail -40",
+          "validation_commands": [
+            "go test"
+          ],
+          "observed_output_summary": [
+            "FAIL\tgo.flipt.io/flipt/internal/config\t0.213s"
+          ]
+        },
+        {
+          "call_line": 73,
+          "result_line": 74,
+          "call_to_result_seconds": 4.468,
+          "command_first_line": "cd /app && go test ./internal/config/ -run 'TestLoad|TestAuthentication' -count=1 2>&1 | tail -30",
+          "validation_commands": [
+            "go test"
+          ],
+          "observed_output_summary": [
+            "ok  \tgo.flipt.io/flipt/internal/config\t0.200s"
+          ]
+        },
+        {
+          "call_line": 76,
+          "result_line": 77,
+          "call_to_result_seconds": 3.568,
+          "command_first_line": "cd /app && go test ./internal/config/ -count=1 2>&1 | tail -20",
+          "validation_commands": [
+            "go test"
+          ],
+          "observed_output_summary": [
+            "ok  \tgo.flipt.io/flipt/internal/config\t0.214s"
+          ]
+        },
+        {
+          "call_line": 94,
+          "result_line": 95,
+          "call_to_result_seconds": 4.222,
+          "command_first_line": "cd /app && go test ./internal/config/ -count=1 2>&1 | tail -40",
+          "validation_commands": [
+            "go test"
+          ],
+          "observed_output_summary": [
+            "ok  \tgo.flipt.io/flipt/internal/config\t0.251s"
+          ]
+        }
+      ],
+      "largest_bash_call_result_intervals": [
+        {
+          "call_line": 47,
+          "result_line": 48,
+          "call_to_result_seconds": 294.049,
+          "command_first_line": "cd /app && go build ./internal/config/ && go test ./internal/config/ 2>&1 | tail -30",
+          "validation_commands": [
+            "go test",
+            "go build"
+          ]
+        },
+        {
+          "call_line": 50,
+          "result_line": 51,
+          "call_to_result_seconds": 133.911,
+          "command_first_line": "cd /app && go build ./internal/config/ 2>&1 | head -20",
+          "validation_commands": [
+            "go build"
+          ]
+        },
+        {
+          "call_line": 53,
+          "result_line": 54,
+          "call_to_result_seconds": 106.762,
+          "command_first_line": "cd /app && go test ./internal/config/ -run 'TestLoad|TestAuthentication' -count=1 2>&1 | tail -40",
+          "validation_commands": [
+            "go test"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "path": "harbor/pi-memweave-r1/instance_flipt-io__flipt-c1fd7a8__ou9i4Fw/agent/pi/sessions/2026-10-26T19-23-41-194Z_01a179ab-2308-7072-be62-601fe1f3660c.jsonl",
+          "sha256": "ecc981d2a34ac39cf534b33dfe188aae29e31d0299ea773d13f01243ba1a5d00"
+        },
+        {
+          "path": "harbor/pi-memweave-r1/instance_flipt-io__flipt-c1fd7a8__ou9i4Fw/agent/model.patch",
+          "sha256": "3343ccd8aa40beb74d86f52936324e4e96ce42f7dc9023f6fd6fc1f606f48e6a"
+        },
+        {
+          "path": "harbor/pi-memweave-r1-regrade/instance_flipt-io__flipt-c1fd7a8__cZMgdnY/result.json",
+          "sha256": "05e5ef8fc36b4e53b574a2d730e04adc8eebe9c68a9aa60cf02733bc69f9ccd2"
+        }
+      ]
+    }
+  ],
+  "pro_pairs": [
+    {
+      "label": "NodeBB",
+      "user_inputs_identical": true,
+      "stored_original_system_identical": true,
+      "first_input_overhead_tokens": 7284,
+      "plugin_relative_change_pct": {
+        "model_returns": -66.07142857142857,
+        "agent_seconds": -65.85739849378385,
+        "model_cost": -45.12719594520339,
+        "solve_plus_regrade_wall_seconds": 14.458082130878115
+      }
+    },
+    {
+      "label": "ansible",
+      "user_inputs_identical": true,
+      "stored_original_system_identical": true,
+      "first_input_overhead_tokens": 7285,
+      "plugin_relative_change_pct": {
+        "model_returns": -5.882352941176472,
+        "agent_seconds": -18.275020744059344,
+        "model_cost": 1.2770955155446462,
+        "solve_plus_regrade_wall_seconds": 42.290439089767126
+      }
+    },
+    {
+      "label": "element-hq",
+      "user_inputs_identical": true,
+      "stored_original_system_identical": true,
+      "first_input_overhead_tokens": 7284,
+      "plugin_relative_change_pct": {
+        "model_returns": -47.05882352941176,
+        "agent_seconds": -64.90354381462838,
+        "model_cost": -13.941303097694146,
+        "solve_plus_regrade_wall_seconds": 7.862710305790799
+      }
+    },
+    {
+      "label": "flipt-io",
+      "user_inputs_identical": true,
+      "stored_original_system_identical": true,
+      "first_input_overhead_tokens": 7284,
+      "plugin_relative_change_pct": {
+        "model_returns": 27.27272727272727,
+        "agent_seconds": -48.932671827726836,
+        "model_cost": 129.23895297726907,
+        "solve_plus_regrade_wall_seconds": -26.87710872269755
+      }
+    }
+  ],
+  "tb_snapshot": {
+    "run_id": "20261027T045540Z-9e55c85ba9",
+    "state": {
+      "schema_version": 1,
+      "run_id": "20261027T045540Z-9e55c85ba9",
+      "jobs": {
+        "control-oracle-a001": {
+          "path": "harbor/control-oracle-a001",
+          "purpose": "official_oracle"
+        },
+        "control-nop-a001": {
+          "path": "harbor/control-nop-a001",
+          "purpose": "official_nop"
+        },
+        "pi-native-r1": {
+          "path": "harbor/pi-native-r1",
+          "purpose": "solve"
+        }
+      },
+      "stop_reason": null,
+      "started_at": "2026-10-27T04:55:40.402610+00:00",
+      "complete": false
+    },
+    "known_estimated_cost_usd": 2.6622604080000007,
+    "finished_trials": [
+      {
+        "task_id": "terminal-bench/music-harmony",
+        "job": "pi-native-r1",
+        "reward": {
+          "rewards": {
+            "reward": 0.0
+          }
+        },
+        "exception_type": null,
+        "path": "harbor/pi-native-r1/music-harmony__rS7unxH/result.json",
+        "sha256": "4c6269b1dda1ffb32bbe14549e6b7b23303d80e91eb9d6317584d9a26afec096"
+      }
+    ],
+    "comparative_claims_allowed": false
+  },
+  "limits": [
+    "Single repetition per task; no causal memory attribution",
+    "Stored system message hashes do not represent post-hook provider request bytes",
+    "Tool timestamp intervals include shell execution and waiting, not CPU time",
+    "TB observations are a snapshot; pending scores remain unknown"
+  ]
+}

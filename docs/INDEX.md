@@ -32,8 +32,10 @@
 | `GITHUB_PACKAGES_VALIDATION.md` | GitHub 0.1.0 镜像实际发布、原归档一致性与简版主页验收 |
 | `IMPLEMENTATION_PLAN.md` | 当前进度、阶段依赖、交付范围和进入条件 |
 | [experiments/IMPLEMENTATION_DESIGN.md](experiments/IMPLEMENTATION_DESIGN.md) | 2026-10-26 确认的公开基线实验设计：Terminal-Bench 4.0 与 SWE-bench Pro V2 子集的实际重跑、记录和比较；不含自进化，不改变产品运行时契约 |
-| [experiments/VALIDATION.md](experiments/VALIDATION.md) | 实验 CLI、31 项检查、实际 Pro V2 双变体/全新沙箱重评分、费用及 TB Dockerfile 接入受阻范围；不将单题结果外推为记忆优势 |
+| [experiments/VALIDATION.md](experiments/VALIDATION.md) | 实验 CLI、47 项检查、实际 Pro V2 双变体/全新沙箱重评分、官方 TB Dockerfile 接线与四题控制准入；模型对照仍在运行 |
 | [experiments/PUBLIC_BASELINE_2026-10-27.md](experiments/PUBLIC_BASELINE_2026-10-27.md) | 公开 Pro V2 四仓库真实对照：原生 4/4、插件 3/4，输入/缓存/费用/阶段时间、Element Web 算法失败与 TB 未进入模型阶段的原因；含可复查汇总 JSON |
+| [experiments/TB4_BASELINE_2026-10-27.md](experiments/TB4_BASELINE_2026-10-27.md) | 原样官方 Dockerfile 构建/冻结、失败候补与四题 oracle/nop 准入；本次 TB 真实模型运行及结果范围 |
+| [experiments/PLUGIN_AUDIT_2026-10-27.md](experiments/PLUGIN_AUDIT_2026-10-27.md) | 逐份原件审计：同分低费用 good case、冷启动/费用取舍、Element 端点与不终止 bad case、Task/State/Window 实际覆盖及 Terminal 未完成边界 |
 | [experiments/LOCAL_BASELINE_DESIGN.md](experiments/LOCAL_BASELINE_DESIGN.md) | local_baseline 待确认草案：发布功能回归与 MW-001—MW-011 真实 Pi 能力评测分层；评分口径和本轮预算确认后实现 |
 | `PHASE_0_VALIDATION.md` | 阶段 0 的实际测试证据、复现命令、兼容与未验证范围 |
 | `PHASE_1_VALIDATION.md` | 配置/Rule 正式模块、精确容量、HTTP 重试与真实 DeepSeek 验收 |
@@ -58,7 +60,7 @@
 | `TASK_RETRIEVAL_VALIDATION_2026-10-26.md` | 主动初始化、本机检索质量/资源、旧窗口恢复、真实模型与候选兼容验收，保留受阻漏记失败 |
 | [PLUGIN_EFFECT_EVALUATION_2026-10-26.md](PLUGIN_EFFECT_EVALUATION_2026-10-26.md) | 当前源码完整生产环境的多场景效果评估：自然业务、阻塞、恢复歧义、高负载、并发、极限输入与本地检索资源；含逐任务标准、失败溯源和未实施建议，脱敏证据见 [JSON](evaluations/2026-10-26-effects.json) |
 | [LONG_TASK_COMPARISON_2026-10-26.md](LONG_TASK_COMPARISON_2026-10-26.md) | 真实 DeepSeek Flash 的原生 Pi / MemWeave 80 阶段持续工程任务对照：48 批结果、逐阶段用量、窗口与 State、共同业务缺陷和整数精度边界；明确材料可见性、评分修订及单样本限制，不替代公开 benchmark 或发布验收 |
-| [DIFFICULT_CASES.md](DIFFICULT_CASES.md) | 用户要求暂存的MW-001至MW-011：漏存与延迟补记、工具纠正/依赖、窗口提醒、Task检索与Goal、记忆取舍、来源解释及阅读/验收质量；区分插件行为、模型业务缺陷与观察风险，不将候选建议视为已批准实现 |
+| [DIFFICULT_CASES.md](DIFFICULT_CASES.md) | 用户要求记录的MW-001至MW-012：记忆、工具、检索、来源与验收质量，以及公开实验的端点/不终止和短任务费用/冷启动取舍；区分插件行为、模型业务缺陷与观察风险，不将候选建议视为已批准实现 |
 | [TASK_CLARIFICATION_AND_INDEX_PLAN.md](TASK_CLARIFICATION_AND_INDEX_PLAN.md) | 本轮澄清接线、移除initialize及保持向量/排名等价的首次索引优化范围，绑定检查按创建/恢复调用判断，搜索不触发门禁 |
 | [TASK_INDEX_BATCHING_VALIDATION.md](TASK_INDEX_BATCHING_VALIDATION.md) | 首次索引通信分块、有界并发派生写入与原生进度；265项检查、真实本地向量/排名等价及完整Flash源码/产物恢复专项 |
 | [TASK_CLARIFICATION_VALIDATION.md](TASK_CLARIFICATION_VALIDATION.md) | task_clarify原生等待/真实输入、删除initialize、创建/恢复失败才门禁、旧回执兼容；275项检查、双宿主专项与真实Flash验证，保留暂缓的认知失败 |

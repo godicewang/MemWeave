@@ -1,0 +1,204 @@
+{
+  "schema_version": 1,
+  "purpose": "Post-hoc code diagnostic; no new Pi attempt or official score",
+  "audit_program_path": "/Users/godice/.local/share/memweave-experiments/analysis/20261027-public-audit/element-posthoc.cjs",
+  "audit_program_sha256": "a0b340deda672158aed6f4ad6c481efb2a45eb4d56fe5cd38739d55963f2a4c2",
+  "node": "v24.22.0",
+  "timeout_ms": 500,
+  "repetitions": 3,
+  "run_id": "20261026T175852Z-5aecadab61",
+  "base_function_sha256": "643c1d4ac96b9d2c20a2c1f76af242b985712f9b0873b075904b30c09fb189d6",
+  "derived_at_utc": "2026-10-27T07:50:03.008Z",
+  "variants": [
+    {
+      "variant": "pi-native",
+      "patch_path": "harbor/pi-native-r1/instance_element-hq__element-web__ntSZmfG/agent/model.patch",
+      "patch_sha256": "6640154ec81afc13196ce013599cabd5ae3017d28a7d2e354e7542d6305b78a6",
+      "smoothing_function_sha256": "87cbdbe2f4e64e1130840d213b9d629d2df904a1b1a1df67d712460a133d063e",
+      "cases": [
+        {
+          "name": "identity-control",
+          "input": [
+            1,
+            2,
+            3
+          ],
+          "points": 3,
+          "runs": [
+            {
+              "output": [
+                1,
+                2,
+                3
+              ]
+            },
+            {
+              "output": [
+                1,
+                2,
+                3
+              ]
+            },
+            {
+              "output": [
+                1,
+                2,
+                3
+              ]
+            }
+          ]
+        },
+        {
+          "name": "single-point-positive-target",
+          "input": [
+            1,
+            2,
+            3
+          ],
+          "points": 1,
+          "runs": [
+            {
+              "output": [
+                2
+              ]
+            },
+            {
+              "output": [
+                2
+              ]
+            },
+            {
+              "output": [
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "name": "endpoint-sensitive-two-points",
+          "input": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "points": 2,
+          "runs": [
+            {
+              "output": [
+                2,
+                4
+              ]
+            },
+            {
+              "output": [
+                2,
+                4
+              ]
+            },
+            {
+              "output": [
+                2,
+                4
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "pi-memweave",
+      "patch_path": "harbor/pi-memweave-r1/instance_element-hq__element-web__7K7fLN2/agent/model.patch",
+      "patch_sha256": "e9bc43d2cf98d100e441b5c782bfe77ddb5cf6542d0bf278ab42fd3f98fc8731",
+      "smoothing_function_sha256": "12cd457719306b5c6634c75777a63f6279a15fe4fe3d69549fc40fac975424be",
+      "cases": [
+        {
+          "name": "identity-control",
+          "input": [
+            1,
+            2,
+            3
+          ],
+          "points": 3,
+          "runs": [
+            {
+              "output": [
+                1,
+                2,
+                3
+              ]
+            },
+            {
+              "output": [
+                1,
+                2,
+                3
+              ]
+            },
+            {
+              "output": [
+                1,
+                2,
+                3
+              ]
+            }
+          ]
+        },
+        {
+          "name": "single-point-positive-target",
+          "input": [
+            1,
+            2,
+            3
+          ],
+          "points": 1,
+          "runs": [
+            {
+              "error_code": "ERR_SCRIPT_EXECUTION_TIMEOUT"
+            },
+            {
+              "error_code": "ERR_SCRIPT_EXECUTION_TIMEOUT"
+            },
+            {
+              "error_code": "ERR_SCRIPT_EXECUTION_TIMEOUT"
+            }
+          ]
+        },
+        {
+          "name": "endpoint-sensitive-two-points",
+          "input": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "points": 2,
+          "runs": [
+            {
+              "output": [
+                1,
+                4
+              ]
+            },
+            {
+              "output": [
+                1,
+                4
+              ]
+            },
+            {
+              "output": [
+                1,
+                4
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
