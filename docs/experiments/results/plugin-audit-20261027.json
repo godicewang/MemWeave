@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "derived_at_utc": "2026-10-27T07:50:02.868360+00:00",
+  "derived_at_utc": "2026-10-27T08:00:47.131554+00:00",
   "audit_program_path": "/Users/godice/.local/share/memweave-experiments/analysis/20261027-public-audit/derive.py",
-  "audit_program_sha256": "34092a20e5dab494c91ae696cc860b6b6b9e8c3e0310069665493b2b2f7e924b",
+  "audit_program_sha256": "59f8e8666f7376e9b06f8d18674dbc31340ca2e0d2e9ed4f5e1b8ae763f47286",
   "pro_run": "20261026T175852Z-5aecadab61",
   "pro_index_sha256": "94b5c7d566a21f0e5bc10e609764ea159b21e759a860f6163294af4ba1835874",
   "pro_originals_verified": 296,
@@ -1526,6 +1526,152 @@
       }
     }
   ],
+  "prior_nodebb_runs_not_pooled": [
+    {
+      "run_id": "20261026T164818Z-53a5126492",
+      "indexed_originals_verified": 70,
+      "index_sha256": "cb7a55749e0c893274dd4ff5fb9b640fb10a6c5f6dc8b80a63a3704ec77ac5f4",
+      "privacy_check_passed": true,
+      "same_model_package_suite_revision": true,
+      "complete": false,
+      "primary_independent_task_count_increment": 0,
+      "trials": [
+        {
+          "task_id": "instance_NodeBB__NodeBB-f2082d7de85eb62a70819f4f3396dd85626a0c0a-vd59a5728dfc977f44533186ace531248c2917516",
+          "variant_id": "pi-native",
+          "success": true,
+          "usage": {
+            "input_tokens": 797425,
+            "cache_tokens": 771200,
+            "output_tokens": 7685,
+            "cost_usd": 0.0217167
+          },
+          "phase_seconds": {
+            "environment_setup": 2.465538,
+            "agent_setup": 88.315196,
+            "agent_execution": 80.82228,
+            "verifier": 13.574899
+          },
+          "elapsed_seconds": 182.883661,
+          "regrade_elapsed_seconds": 29.74112,
+          "diagnostics": null,
+          "memory_tool_errors": []
+        },
+        {
+          "task_id": "instance_NodeBB__NodeBB-f2082d7de85eb62a70819f4f3396dd85626a0c0a-vd59a5728dfc977f44533186ace531248c2917516",
+          "variant_id": "pi-memweave",
+          "success": null,
+          "usage": {
+            "input_tokens": null,
+            "cache_tokens": null,
+            "output_tokens": null,
+            "cost_usd": null
+          },
+          "phase_seconds": {
+            "environment_setup": 2.490266,
+            "agent_setup": 61.298843,
+            "agent_execution": null,
+            "verifier": null
+          },
+          "elapsed_seconds": 74.749016,
+          "regrade_elapsed_seconds": null,
+          "diagnostics": null,
+          "memory_tool_errors": []
+        }
+      ],
+      "setup_failure": {
+        "exception_type": "NonZeroAgentExitCodeError",
+        "phase": "agent_setup",
+        "cause": "nvm clone: TLS connection terminated",
+        "before_model_attempt": true,
+        "result_path": "harbor/pi-memweave-r1/instance_NodeBB__NodeBB-f2082d7d__qs3K8tZ/result.json",
+        "result_sha256": "2566444060270ddc017b7c2a4f390aebc07eadda201df2fbcbaa1b1cde368640"
+      }
+    },
+    {
+      "run_id": "20261026T165811Z-9853d73783",
+      "indexed_originals_verified": 92,
+      "index_sha256": "dd3e5b4ae235700a3e8dae6508511b048f33aaa75387c712be79e0ad6b547684",
+      "privacy_check_passed": true,
+      "same_model_package_suite_revision": true,
+      "complete": true,
+      "primary_independent_task_count_increment": 0,
+      "trials": [
+        {
+          "task_id": "instance_NodeBB__NodeBB-f2082d7de85eb62a70819f4f3396dd85626a0c0a-vd59a5728dfc977f44533186ace531248c2917516",
+          "variant_id": "pi-native",
+          "success": true,
+          "usage": {
+            "input_tokens": 1015700,
+            "cache_tokens": 985856,
+            "output_tokens": 7247,
+            "cost_usd": 0.023564736
+          },
+          "phase_seconds": {
+            "environment_setup": 2.462216,
+            "agent_setup": 81.364698,
+            "agent_execution": 163.743677,
+            "verifier": 13.362983
+          },
+          "elapsed_seconds": 258.506204,
+          "regrade_elapsed_seconds": 29.246392,
+          "diagnostics": {
+            "model_responses_with_usage": 41,
+            "tool_calls": {
+              "bash": 41,
+              "edit": 7,
+              "write": 2
+            },
+            "compaction_events": 0,
+            "invalid_lines": 0
+          },
+          "memory_tool_errors": [],
+          "session_path": "harbor/pi-native-r1/instance_NodeBB__NodeBB-f2082d7d__wn4yJFH/agent/pi/sessions/2026-10-26T17-00-42-139Z_01a17928-3b1a-7057-b88c-c6e55d9fa2eb.jsonl",
+          "session_sha256": "d2911c99fea5a28c06c5da57f45ee4b25ad2a523c4f9d57806d1f3437ac26998"
+        },
+        {
+          "task_id": "instance_NodeBB__NodeBB-f2082d7de85eb62a70819f4f3396dd85626a0c0a-vd59a5728dfc977f44533186ace531248c2917516",
+          "variant_id": "pi-memweave",
+          "success": true,
+          "usage": {
+            "input_tokens": 285134,
+            "cache_tokens": 250368,
+            "output_tokens": 3506,
+            "cost_usd": 0.016139208
+          },
+          "phase_seconds": {
+            "environment_setup": 2.46546,
+            "agent_setup": 204.676938,
+            "agent_execution": 35.735986,
+            "verifier": 13.256178
+          },
+          "elapsed_seconds": 253.860348,
+          "regrade_elapsed_seconds": 29.116567,
+          "diagnostics": {
+            "model_responses_with_usage": 16,
+            "tool_calls": {
+              "bash": 10,
+              "edit": 4,
+              "read": 6,
+              "state_append": 2,
+              "task_create": 1
+            },
+            "compaction_events": 0,
+            "invalid_lines": 0
+          },
+          "memory_tool_errors": [
+            {
+              "result_line": 56,
+              "message_head": "STATE_CONTENT_TOO_LONG: field=items[0].content; actual=110; max=100 Unicode code points; shorten the content and retry"
+            }
+          ],
+          "session_path": "harbor/pi-memweave-r1/instance_NodeBB__NodeBB-f2082d7d__4sLFHLr/agent/pi/sessions/2026-10-26T17-07-35-016Z_01a1792e-87e6-77af-ab46-af33024f9fd9.jsonl",
+          "session_sha256": "0797a50203d62f1f45e7ee04d0f56c1b1492b6dcb6543aeb320c68869e4f30cd"
+        }
+      ],
+      "setup_failure": null
+    }
+  ],
   "tb_snapshot": {
     "run_id": "20261027T045540Z-9e55c85ba9",
     "state": {
@@ -1549,7 +1695,7 @@
       "started_at": "2026-10-27T04:55:40.402610+00:00",
       "complete": false
     },
-    "known_estimated_cost_usd": 2.6622604080000007,
+    "known_estimated_cost_usd": 2.7320332920000006,
     "finished_trials": [
       {
         "task_id": "terminal-bench/music-harmony",

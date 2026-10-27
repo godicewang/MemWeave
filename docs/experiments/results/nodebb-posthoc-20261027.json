@@ -1,0 +1,338 @@
+{
+  "schema_version": 1,
+  "purpose": "Post-hoc dependency-stub contract diagnostic; no new Pi trial, official score or live NodeBB authorization claim",
+  "derived_at_utc": "2026-10-27T07:59:04.330Z",
+  "node": "v24.22.0",
+  "repetitions": 3,
+  "audit_program_path": "/Users/godice/.local/share/memweave-experiments/analysis/20261027-public-audit/nodebb-posthoc.cjs",
+  "audit_program_sha256": "56b658c83fdbb1d9cbe22a4601e63850763e17cfe09ebb826acee8bd8c5bb4ef",
+  "variants": [
+    {
+      "run_id": "20261026T165811Z-9853d73783",
+      "variant": "pi-native",
+      "official_success": true,
+      "patch_path": "harbor/pi-native-r1/instance_NodeBB__NodeBB-f2082d7d__wn4yJFH/agent/model.patch",
+      "patch_sha256": "38dbae01acef9dcbc9854ac2883e4ea8f8839b7fc9b10bbd44527d23a47e69e3",
+      "function_sha256": "7376b72302a1783aa6371af78197fd767208aa76eba4e08f23e52c090f486859",
+      "cases": [
+        {
+          "name": "ordinary-reader",
+          "read": true,
+          "admin": false,
+          "moderator": false,
+          "view_deleted": false,
+          "expected": null,
+          "outputs": [
+            null,
+            null,
+            null
+          ],
+          "meets_text_requirement": true
+        },
+        {
+          "name": "non-admin-with-view-deleted",
+          "read": true,
+          "admin": false,
+          "moderator": false,
+          "view_deleted": true,
+          "expected": null,
+          "outputs": [
+            null,
+            null,
+            null
+          ],
+          "meets_text_requirement": true
+        },
+        {
+          "name": "admin-control",
+          "read": true,
+          "admin": true,
+          "moderator": false,
+          "view_deleted": false,
+          "expected": "fixture-raw",
+          "outputs": [
+            "fixture-raw",
+            "fixture-raw",
+            "fixture-raw"
+          ],
+          "meets_text_requirement": true
+        },
+        {
+          "name": "moderator-control",
+          "read": true,
+          "admin": false,
+          "moderator": true,
+          "view_deleted": false,
+          "expected": "fixture-raw",
+          "outputs": [
+            "fixture-raw",
+            "fixture-raw",
+            "fixture-raw"
+          ],
+          "meets_text_requirement": true
+        },
+        {
+          "name": "read-denied-control",
+          "read": false,
+          "admin": true,
+          "moderator": false,
+          "view_deleted": true,
+          "expected": null,
+          "outputs": [
+            null,
+            null,
+            null
+          ],
+          "meets_text_requirement": true
+        }
+      ]
+    },
+    {
+      "run_id": "20261026T165811Z-9853d73783",
+      "variant": "pi-memweave",
+      "official_success": true,
+      "patch_path": "harbor/pi-memweave-r1/instance_NodeBB__NodeBB-f2082d7d__4sLFHLr/agent/model.patch",
+      "patch_sha256": "bfed0e44f03952aa24e4464323d06ba45923a327151d6f4b69569959c6d4b306",
+      "function_sha256": "58043901f0b66cc4a9ee5340da2c8e6d8088b9d1b2a014d5c16888d797c13671",
+      "cases": [
+        {
+          "name": "ordinary-reader",
+          "read": true,
+          "admin": false,
+          "moderator": false,
+          "view_deleted": false,
+          "expected": null,
+          "outputs": [
+            null,
+            null,
+            null
+          ],
+          "meets_text_requirement": true
+        },
+        {
+          "name": "non-admin-with-view-deleted",
+          "read": true,
+          "admin": false,
+          "moderator": false,
+          "view_deleted": true,
+          "expected": null,
+          "outputs": [
+            "fixture-raw",
+            "fixture-raw",
+            "fixture-raw"
+          ],
+          "meets_text_requirement": false
+        },
+        {
+          "name": "admin-control",
+          "read": true,
+          "admin": true,
+          "moderator": false,
+          "view_deleted": false,
+          "expected": "fixture-raw",
+          "outputs": [
+            "fixture-raw",
+            "fixture-raw",
+            "fixture-raw"
+          ],
+          "meets_text_requirement": true
+        },
+        {
+          "name": "moderator-control",
+          "read": true,
+          "admin": false,
+          "moderator": true,
+          "view_deleted": false,
+          "expected": "fixture-raw",
+          "outputs": [
+            "fixture-raw",
+            "fixture-raw",
+            "fixture-raw"
+          ],
+          "meets_text_requirement": true
+        },
+        {
+          "name": "read-denied-control",
+          "read": false,
+          "admin": true,
+          "moderator": false,
+          "view_deleted": true,
+          "expected": null,
+          "outputs": [
+            null,
+            null,
+            null
+          ],
+          "meets_text_requirement": true
+        }
+      ]
+    },
+    {
+      "run_id": "20261026T175852Z-5aecadab61",
+      "variant": "pi-native",
+      "official_success": true,
+      "patch_path": "harbor/pi-native-r1/instance_NodeBB__NodeBB-f2082d7d__iTz887v/agent/model.patch",
+      "patch_sha256": "a23bf11c96bfb4d92d9e454f78b56bcb515831c2c5e2f1c9179c19fb115131c5",
+      "function_sha256": "8d3bbbdf9bd6ce62038f626b0f06e8af9b6e5d0418a76931d3be538d351730ff",
+      "cases": [
+        {
+          "name": "ordinary-reader",
+          "read": true,
+          "admin": false,
+          "moderator": false,
+          "view_deleted": false,
+          "expected": null,
+          "outputs": [
+            null,
+            null,
+            null
+          ],
+          "meets_text_requirement": true
+        },
+        {
+          "name": "non-admin-with-view-deleted",
+          "read": true,
+          "admin": false,
+          "moderator": false,
+          "view_deleted": true,
+          "expected": null,
+          "outputs": [
+            null,
+            null,
+            null
+          ],
+          "meets_text_requirement": true
+        },
+        {
+          "name": "admin-control",
+          "read": true,
+          "admin": true,
+          "moderator": false,
+          "view_deleted": false,
+          "expected": "fixture-raw",
+          "outputs": [
+            "fixture-raw",
+            "fixture-raw",
+            "fixture-raw"
+          ],
+          "meets_text_requirement": true
+        },
+        {
+          "name": "moderator-control",
+          "read": true,
+          "admin": false,
+          "moderator": true,
+          "view_deleted": false,
+          "expected": "fixture-raw",
+          "outputs": [
+            "fixture-raw",
+            "fixture-raw",
+            "fixture-raw"
+          ],
+          "meets_text_requirement": true
+        },
+        {
+          "name": "read-denied-control",
+          "read": false,
+          "admin": true,
+          "moderator": false,
+          "view_deleted": true,
+          "expected": null,
+          "outputs": [
+            null,
+            null,
+            null
+          ],
+          "meets_text_requirement": true
+        }
+      ]
+    },
+    {
+      "run_id": "20261026T175852Z-5aecadab61",
+      "variant": "pi-memweave",
+      "official_success": true,
+      "patch_path": "harbor/pi-memweave-r1/instance_NodeBB__NodeBB-f2082d7d__2TUozEk/agent/model.patch",
+      "patch_sha256": "76fa5cd7466e9394daa282b4abce58df5ae0dc859609c9711193e5f4e0fa9518",
+      "function_sha256": "d3d0cd78389ec728a8525dd7ea881a78f757d01d0ab966033202577397b4ef2a",
+      "cases": [
+        {
+          "name": "ordinary-reader",
+          "read": true,
+          "admin": false,
+          "moderator": false,
+          "view_deleted": false,
+          "expected": null,
+          "outputs": [
+            null,
+            null,
+            null
+          ],
+          "meets_text_requirement": true
+        },
+        {
+          "name": "non-admin-with-view-deleted",
+          "read": true,
+          "admin": false,
+          "moderator": false,
+          "view_deleted": true,
+          "expected": null,
+          "outputs": [
+            null,
+            null,
+            null
+          ],
+          "meets_text_requirement": true
+        },
+        {
+          "name": "admin-control",
+          "read": true,
+          "admin": true,
+          "moderator": false,
+          "view_deleted": false,
+          "expected": "fixture-raw",
+          "outputs": [
+            "fixture-raw",
+            "fixture-raw",
+            "fixture-raw"
+          ],
+          "meets_text_requirement": true
+        },
+        {
+          "name": "moderator-control",
+          "read": true,
+          "admin": false,
+          "moderator": true,
+          "view_deleted": false,
+          "expected": "fixture-raw",
+          "outputs": [
+            "fixture-raw",
+            "fixture-raw",
+            "fixture-raw"
+          ],
+          "meets_text_requirement": true
+        },
+        {
+          "name": "read-denied-control",
+          "read": false,
+          "admin": true,
+          "moderator": false,
+          "view_deleted": true,
+          "expected": null,
+          "outputs": [
+            null,
+            null,
+            null
+          ],
+          "meets_text_requirement": true
+        }
+      ]
+    }
+  ],
+  "mismatches": [
+    {
+      "run": "20261026T165811Z-9853d73783",
+      "variant": "pi-memweave",
+      "scenario": "non-admin-with-view-deleted"
+    }
+  ]
+}
