@@ -216,3 +216,9 @@ S21缓存的首次离线导入验证暴露Docker containerd的身份口径：Id�
 §22内部证据字段（不新增CLI参数）：`network-probe.json.attempts`保存每次相同探针的完整无凭据判定与`elapsed_seconds`，顶层仍保存最终判定；`bootstrap_lineage.retained_primary_attempts`保存只缺首次评分的Pro原件行及result／patch／group lock摘要和原镜像；阶段`plan.operation`区分`solve`与`score_only`，已正常评分侧只走既有included_keys继承。group lock的`inherited_primary`列出本组继承原件，新推理计划不含它们；组状态`incomplete`表示某侧严格证明Pi前失败，其余组可继续。缺字段的旧阶段保持既有解释，不重新解释历史评分；阶段计划总行数与新增真实解题次数分别报告。
 
 每个已注册solve Job还必须用其冻结agents清单与实际result中的(task,variant)逐一对齐，不能因为允许部分题对而忽略一个已派发却缺原件的侧；缺原件／未知费用仍拒绝继续。单侧续跑Job只声明该次真正需要的Agent，评分-only不声明模型Job。
+
+### 23 容器观察显式关闭可写层Size计量
+
+204027阶段21:19 UTC因docker ps全JSON查询返回snapshotter.Usage/lstat ENOENT而保护性关闭；Docker随后的普通查询正常，VM有约40GiB available、磁盘约100GiB空闲，没有本次VM OOM证据。上游已记录同一问题：全字段JSON隐式请求可写层Size，临时文件删除与计量走访相遇可导致整次列表失败（[Moby #53920](https://github.com/moby/moby/issues/53920)，其说明也给出显式size=false的调用方规避方式）。
+
+按环境自主修复授权，仅在现有观察命令加--size=false；保留JSON结构、ID／标签／状态等元数据和15秒频率，Size不再作为实时测量。资源准入仍用原CPU／内存／VM文件系统余量，Session用量观察及其他Docker／解析错误仍失败停止，不用错误冒充空列表。先增测试再修改；以无模型文件增删容器验证旧调用与修复调用，记录失败率。所有正常首分、S22官方0及费用继承，S14插件／S23两侧正常原补丁只补缺失首次评分，S14原生基础设施取消则保留历史后补齐；不重启VM、不改模型／候选／官方任务或评分协议。

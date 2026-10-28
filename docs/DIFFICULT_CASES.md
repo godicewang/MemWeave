@@ -135,6 +135,8 @@ MW-001至MW-003的首批来源：[多场景评估报告](PLUGIN_EFFECT_EVALUATIO
 
 **场景D（49题T05，2026-10-29）：** 原始Session也只有一条真实user，assistant在19:03:58 UTC写未分配的[U2]，在20:09:37写[U11]；前者早于两次窗口移出。末条明确承认RSS约195MB超过64MB，却以“需要我继续把内存压到64MB以内，还是有其他优先事项？”结束原本要求完成的任务。没有真人追加问题或缩小目标，也没有task_clarify调用。正文编号、实际角色及请求级程序消息须分别审计；本例不声称插件伪造了持久化user或Window唯一导致停止。业务与验证缺口见MW-011M，机器可核对原件为仓库外`analysis/long49/t05-identity-diagnostic-20261029/official-and-session-audit.json`。
 
+**场景E（49题S14 Vuls，2026-10-29，新阶段204027，官方评分待完成）：** 插件assistant entry7b0acc26在20:54:57 UTC正常stop，正文为“<system>Tool ran without output. When you do not need the tool output, do not use a tool at all.</system>”。该条含真实DeepSeek responseId与正usage（input3451、cacheRead40192、output27），不是一个真实system-role事件；前一edit entrya9f775d8明确返回“Successfully replaced 1 block(s) in /app/scanner/debian.go.”及diff，结果并非空，也没有isError。全Session只有1个真实user、未移出Recent Window；字面量只出现于这一条assistant，已读Pi1.4 SDK／插件／实验接线源码未找到相同文本。至少可以确认模型／供应商响应侧输出了伪角色样式，不能据此断言由插件独自造成，也不能把它解释成实验平台拒绝继续。暂不以未完成评分判断补丁对错，保持该次自然结束，不追发提示。原件摘要与Session SHA：仓库外s14-role-marker-audit-20261029/observed.json。
+
 ## MW-009：Task绑定与依赖绑定的业务工具被放在同一批调用
 
 **状态：已恢复的依赖顺序误用，待讨论；保护机制生效。**
@@ -257,6 +259,18 @@ MW-001至MW-003的首批来源：[多场景评估报告](PLUGIN_EFFECT_EVALUATIO
 
 **资源与记忆边界：** 图构建tracemalloc约41MB不等于完整RSS；TokenFactory.cache及used仍无界，main未调用已写出的finalize，逐行读CSV本身也不保证总内存有界。插件已测得完整运行约195MB并把它存入F8，末条也如实承认超限，却停止等待选择；不能简单称“忘了64MB”。归档Goal未列64MB或合并时间／跨租户约束，Goal＋9F＋1D共11事件、容量未满。两次N200／B40提交边界bba75d75和0681465b，原生无压缩；未做消融，不能证明两次移出造成业务算法错误或存在State丢写。插件279次有usage返回、0.399074568美元；原生240次、0.292006332美元，插件费用高36.7%。解题约4018秒对3908秒，并无本题效率优势。只记录冻结基线及认知／验收缺口，不修改生产插件或重跑择优。
 
+**场景N（49题S16 Teleport异步审计，2026-10-29）：** 原生首次正常解题在183257阶段结束后因另一侧模型前故障未评分；204027只为同一原补丁补首次官方评分、插件完成首次真实解题，双方最终都是0。官方必需名称10个、各通过8个；17是所有已通过名称计数，不能混作必需集合的分母。两边都缺TestAuditWriter/Backoff及其父TestAuditWriter，评分无exception；原生收到context done，插件在10秒内未收集到完整异步上传。原native补丁a2804e21…绑定未变，未为分数重跑模型。
+
+**插件的生命周期缺口：** NewAuditWriter确实从cfg.Context单独创建recoverCtx，tryResumeStream也改读它；但Close和Complete又各自调用recoverCancel，完成／关闭仍会取消正在恢复的上下文。这直接违背本题“关闭不放弃在途恢复”的明确要求。State F2及末条解释却写该恢复不会被Complete／Close中断，说明保存了与真实调用链相反的结论；F5“lib/events tests pass”只覆盖自己可见测试，新增自测也未覆盖“已接受事件＋阻塞＋退避＋Complete＋恢复交付”完整链路。
+
+**确定性取消边界诊断：** 提取本次提交Close／Complete两个原样方法，显式最小结构仅提供它们所需的两个cancel函数；在同一官方初始镜像、离线0.25CPU／512MiB容器各调用三次，六次均parent仍存活、closeCtx已取消、recoverCtx也被取消，方法均返回nil。原方法正文、补丁SHA、完整程序及六个结果见仓库外s16-context-diagnostic-20261029/source-binding.json／result.json。这只验证取消边界，不冒充完整stream测试或官方重评分；完整链路失败证据仍取首次官方日志，原分不变。
+
+**原生对照与未覆盖接线：** 原生恢复等待改用cfg.Context，在此点比插件更贴近要求；但把backoffCtx.Done作为“正在退避”的判据，而enterBackoff先换成未取消context、到期再取消，信号含义反了。期间反复等待enqueue超时，最终触发调用ctx超时，与官方Backoff失败相符。插件基于backoffUntil判定的方向正确，但恢复链路仍不成立，不能称整题胜出。原生还新增AsyncTeeStreamer并接到srv／kube两个实际调用点；插件补丁只改events内实现／测试，没有改现有同步fanout调用点。新增类和构建通过不足以证明实际会话路径已经异步；这也是静态接线缺口，不把它说成官方本次0分的唯一断言。
+
+**记忆与费用边界：** 插件55次usage返回、Goal＋5F，task_create错误2次、state_append错误3次，未移出Recent Window；原生30次返回。按固定峰值价格估算分别约0.055103／0.026115美元，插件高111%。本例支持对跨模块生命周期、端到端验证和State结论质量的审查，不支持“窗口移出导致遗忘”或生产持久化丢写；只记录冻结样本，不中途修插件或择优重跑。官方原件与补丁索引见同目录official-audit.json。
+
+**场景O（49题S19交付残留，2026-10-29）：** 插件与原生首次官方28／28、均1，插件费用与Agent阶段各少11.4%／18.9%，但不能只报节省而忽略验证与交付差异。原生保留约20项自建测试；插件删了临时测试，最终补丁另含二进制applications/mail/core标记。无模型只读初始镜像确认该路径原先不存在；只能确认解题过程中新增二进制残留，未保留其内容／大小，不能无证据断言由哪一条命令产生或包含何数据。插件正常成绩保留，但官方通过不代表工作区洁净，较少测试／输出也不能自动解释成更好的长期记忆。相同类型残留也出现在RS01两侧的Redis持久化文件及S05原生core，非插件专属；补丁重放格式边界见MW-013C。
+
 ## MW-012：短任务的Token、模型费用与冷启动耗时出现相反方向
 
 **状态：已观察到的效能取舍和评测口径case；不是功能报错，也没有证明某种固定协议优化有效。**
@@ -284,3 +298,7 @@ MW-001至MW-003的首批来源：[多场景评估报告](PLUGIN_EFFECT_EVALUATIO
 **已确认处理边界：** 用户批准以固定Node内置HTTPS检查原端点、超时和离线边界，先记录脱敏失败详情；不装curl、不放宽网络、不改Pi工具或产品Rule。仅这份经明确旧／新SHA对验证的探针变化允许继承父结果；计费中断保留不重跑，精确证明Pi前0模型才可进入首次真实解题。公共故障停止模型，有原时限余额且观测可靠时允许无模型官方评分完成原补丁。测试与真实无模型网络验收另行记录，不把边界预检当能力成绩；此次记录不授权更广的取消／恢复引擎。
 
 **MW-013场景B（49题S16，2026-10-29）：** 官方镜像及双侧完整SDK预检均通过后，插件侧固定Node探针得到model TOTAL_TIMEOUT／outside ECONNRESET；已核对冻结Pi适配器SHA0680e465…、探针SHA57a62831…、空model.patch、无Session／pi.txt且agent_result全null，确在Pi前失败，不记能力0。原生正常结束并捕获原补丁，但旧成对证据检查在首次评分前抛公共fatal，随后取消T07原生及S18双方；S18中断补丁仍完成官方评分并单列，累计费用3.727987032美元全部保留。该问题属于实验传输／收尾接线，不能归到MemWeave模型效果。恢复边界按实验执行方案§22：保留正常侧的第一次评分（T07插件0也保留）、已完成Pro只为原补丁补首次评分、只补缺失或取消侧；不恢复旧认知、不把旁观诊断交给新Agent。原件及0模型证明见仓库外s16-pre-pi-failure-proof.json。
+
+**MW-013场景C（二进制标记与官方重放回退）：** 当前Pro捕获的git diff对上述二进制只输出“Binary files … differ”，没有可恢复的binary payload。S19插件的首次官方replay.json记录git apply／3way先报二进制错误，官方既有patch --fuzz=3回退后整体apply_rc=0，随后官方28／28。不能把哈希交接绑定通过表述成全部工作区逐字节复原，也不能仅凭中间stderr就宣布官方成绩无效。
+
+**本次业务文本的独立核验：** 在相同原始镜像、无网络／模型的新诊断容器按原样官方回退命令应用原补丁，再从同一初始git状态仅排除core标记、精确git apply两份业务文本，helper与hook逐个SHA完全相同；回退产生的core是0字节占位，业务代码没有被回退改写。诊断s19-replay-diagnostic-20261029/replay-comparison.json，原评分／补丁均未改。扫描整个当前谱系只发现4份含二进制标记的原始补丁，另三份为RS01两侧Redis rdb及S05原生core；原件清单primary-binary-patch-audit.json。它们是运行残留，不是所选PR要求的二进制交付；不在本批中静默清洗、补造原二进制或择优重评。该格式边界属于实验限制，未来若任务本身要求二进制修改，必须先明确完整捕获与重放的准入；本次S19仅对已核对的两份业务文本给出保真结论。

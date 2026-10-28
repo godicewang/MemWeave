@@ -387,3 +387,46 @@
 - 2026-10-29 04:28:42 CST 人工复核：T07:solving→finished；S18:solving→regrading；模型返回2036，在途{}，峰值5，累计估算$3.727987，停止原因ValueError: Pi produced no model evidence; check shared setup/authentication。
 
 - 2026-10-29 04:30:39 CST 人工复核：S18:regrading→finished；模型返回2036，在途{}，峰值5，累计估算$3.727987，停止原因ValueError: Pi produced no model evidence; check shared setup/authentication。
+
+- 2026-10-29 04:40:51 CST 人工复核：模型返回0，在途{}，峰值0，累计估算$3.727987，停止原因None。
+
+- 2026-10-29 04:41:45 CST 人工复核：S20:未开始→preparing；S16:未开始→preparing；S19:未开始→preparing；S18:未开始→preparing；S14:未开始→preparing；模型返回0，在途{}，峰值0，累计估算$3.727987，停止原因None。
+
+- 2026-10-29 04:43:13 CST 人工复核：S20:preparing→software_preflight；模型返回0，在途{}，峰值0，累计估算$3.727987，停止原因None。
+
+- 2026-10-29 04:40 CST继续阶段204027-ecbac503ae启动，冻结实验实现5091268；全部137开发检查、Ruff、真实S22无模型完整SDK／新Node探针通过。严格只读计划保留43条首次已评分（含T07插件0）、S16原生仅补首次评分、还需54次新解题，继承全部3.727987032美元与9条历史中断。原Node程序／端点／每次超时逐字不变，最多3次严格传输重验。新阶段原件、预算flags及继承摘要已检查，生产候选不变。
+- 新队列前五组S14／16／18／19／20软件就绪rank0，正在各自官方准入；T07／S21／22也rank0，后续主机缓存下载继续。实时助手已支持单侧继承和score-only原件引用，部分继承不再提前标整题完成；不复制Session、不把中断或空白计0。
+
+- 2026-10-29 04:44:34 CST 人工复核：S20:software_preflight→solving；S16:preparing→software_preflight；模型返回0，在途{'pi-native': 1, 'pi-memweave': 1}，峰值2，累计估算$3.727987，停止原因None。
+
+- 2026-10-29 04:47:02 CST 人工复核：S16:software_preflight→solving；S19:preparing→solving；模型返回134，在途{'pi-native': 2, 'pi-memweave': 3}，峰值5，累计估算$3.850310，停止原因None。
+
+- 2026-10-29 04:48:33 CST 人工复核：S20:solving→regrading；模型返回189，在途{'pi-memweave': 2, 'pi-native': 1}，峰值5，累计估算$3.902702，停止原因None。
+
+- 2026-10-29 04:50:06 CST 人工复核：S20:regrading→finished；模型返回199，在途{'pi-memweave': 2, 'pi-native': 1}，峰值5，累计估算$3.911199，停止原因None。
+
+- 2026-10-29 04:51:44 CST 人工复核：模型返回215，在途{'pi-memweave': 2, 'pi-native': 1}，峰值5，累计估算$3.924840，停止原因None。
+
+- 2026-10-29 04:55:04 CST 人工复核：S16:solving→regrading；S19:solving→regrading；S14:preparing→solving；模型返回296，在途{'pi-native': 1}，峰值5，累计估算$3.995620，停止原因None。
+
+- 新阶段S20双方官方70／70、正常1／1，完整22题对；S16及S19转官方重放评分。实际S16新solve仅pi-memweave，原生原补丁a2804e21…从183257/9L6fFui交接，新复制SHA相等、评分两个Agent均为官方PatchReplayAgent，无原生模型重跑；机器回执continuation-preflight-20261029/real-handoff.json。
+- S14插件观察到新的来源表达异常：assistant 7b0acc26以正常stop结束，正usage／responseId存在，正文是<system>Tool ran without output…</system>；其前一edit结果明确成功且非空，并非真实system消息。Session只1个真实user，未移出窗口，已读SDK／插件／实验源码未找到该字面量；不据此唯一归因插件或供应商层。官方评分尚未完成，先记观察，不把它当评分器拒绝，也不追发提示改善原样本。原件摘要s14-role-marker-audit-20261029/observed.json。
+
+- 2026-10-29 05:00:15 CST 人工复核：S16:regrading→finished；S19:regrading→finished；S21:未开始→solving；S22:未开始→preparing；模型返回375，在途{'pi-native': 2, 'pi-memweave': 1}，峰值5，累计估算$4.069003，停止原因None。
+
+- 2026-10-29 05:01:38 CST 人工复核：模型返回399，在途{'pi-native': 2}，峰值5，累计估算$4.089743，停止原因None。
+
+- 2026-10-29 05:03:44 CST 人工复核：S21:solving→regrading；模型返回403，在途{'pi-native': 1}，峰值5，累计估算$4.092406，停止原因None。
+
+- 2026-10-29 05:05:48 CST 人工复核：S21:regrading→finished；S22:preparing→software_preflight；S23:未开始→preparing；模型返回403，在途{'pi-native': 1}，峰值5，累计估算$4.092406，停止原因None。
+
+- 2026-10-29：完整25题对。S19同分1／1、官方28／28，插件费用低11.4%、Agent阶段少18.9%，非缓存输入却更高；首次同分效率good case，未发生Window移出，不作State因果推断。机器原件s19-comparison-audit-20261029.json。
+- S16官方需10个测试名，两边8通过、0分；插件Close／Complete各主动recoverCancel，与F2及末条所称“不放弃恢复”相反。同一原镜像原样两个方法＋显式最小context结构三轮共六次，父context活、recoverCtx取消，0模型／不改分；原生backoff signal反转。完整official日志和独立边界诊断分开，记录MW011N。S16原生实际只补首次评分的跨阶段绑定已核对。
+
+- 2026-10-29 05:11:38 CST 人工复核：S22:software_preflight→regrading；模型返回544，在途{'pi-native': 1}，峰值5，累计估算$4.203220，停止原因None。
+
+- 2026-10-29 05:16:21 CST 人工复核：S22:regrading→finished；S23:preparing→solving；T08:未开始→preparing；模型返回605，在途{'pi-native': 2, 'pi-memweave': 1}，峰值5，累计估算$4.274519，停止原因None。
+
+- 2026-10-29 05:18:51 CST 人工复核：模型返回647，在途{'pi-native': 1}，峰值5，累计估算$4.318621，停止原因None。
+
+- 2026-10-29 05:20:16 CST 人工复核：S14:solving→regrading；S23:solving→regrading；T08:preparing→software_preflight；模型返回647，在途{}，峰值5，累计估算$4.318621，停止原因ValueError: continuous observation failed: CalledProcessError: Command '['docker', 'ps', '--format', '{{json .}}']' returned non-zero exit status 1.。
