@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import importlib.metadata
 import json
 import math
@@ -420,26 +421,50 @@ def prepare_pair_runtimes(spec, group, paths, images, cold_lock, check, execute,
         raise PairPreparationError(str(exc)) from exc
 
 
-def readiness(spec, row, source):
-    """Advisory rank only; actual admission always verifies the complete inputs."""
-    env = tomllib.loads((source / "task.toml").read_text()).get("environment", {})
-    ref = env.get("docker_image")
-    if not ref:
-        return 3
-    query = subprocess.run(
-        ["docker", "image", "inspect", ref], check=False, capture_output=True, text=True, timeout=15
-    )
-    if query.returncode:
-        return 3
-    data = json.loads(query.stdout)[0]
-    image = {
-        "reference": ref,
-        "id": data["Id"],
-        "platform": data["Os"] + "/" + data["Architecture"],
-    }
+def ready_order(slots, ranks):
+    result = []
+    for rank in sorted(set(ranks.values())):
+        rows = [r for r in slots if ranks[r["task_id"]] == rank]
+        result.extend(interleave([r for r in rows if r["suite"] == "swe-bench-pro-v2"],
+                                 [r for r in rows if r["suite"] == "terminal-bench-4"]))
+    return result
+
+
+def readiness(spec, row, source, gid=None):
+    """Advisory cache readiness; original builds and complete admission still run."""
+    from harbor.models.task.config import TaskConfig
+    from harbor.models.task.paths import TaskPaths
+    from harbor.models.task.verifier_mode import resolve_verifier_environment_definition
+
+    config = TaskConfig.model_validate_toml((source / "task.toml").read_text())
+    definitions = [("main", source / "environment", config.environment)]
+    verifier = resolve_verifier_environment_definition(config, TaskPaths(source))
+    if verifier is not None and verifier.bundled_tests:
+        definitions.append(("verifier", verifier.directory, verifier.config))
+    platform = spec.execution.platform if spec is not None else "linux/amd64"
+    images = {}
+    for role, directory, definition in definitions:
+        refs = [definition.docker_image] if definition.docker_image else []
+        if not refs and gid:
+            context = task_digest(directory)
+            key = hashlib.sha256(f"{gid}\0{source.name}\0{role}\0{platform}\0{context}".encode()).hexdigest()
+            refs = ["memweave-eval:"+key, "memweave-eval-prewarm:"+key]
+        found = None
+        for ref in refs:
+            query = subprocess.run(["docker", "image", "inspect", ref], check=False,
+                                   capture_output=True, text=True, timeout=15)
+            if not query.returncode:
+                data = json.loads(query.stdout)[0]
+                if data["Os"]+"/"+data["Architecture"] == platform:
+                    found = {"reference": ref, "id": data["Id"], "platform": platform}
+                    break
+        if found is None:
+            return 3
+        key = row["task_id"] + (":verifier" if role == "verifier" else "")
+        images[key] = found
+    image = images[row["task_id"]]
     image["libc"] = image_libc(image["id"], image["platform"])
-    ready = software_cached(spec, {row["task_id"]: image})
-    return 0 if ready else 1
+    return 0 if software_cached(spec, images) else 1
 
 
 class PairService(ObservationService):
@@ -591,14 +616,10 @@ def run_pairs(spec):
                     / catalog["sources"][actual["suite"]]["tasks_dir"]
                     / actual["task_id"]
                 )
-                rank[slot["task_id"]] = readiness(spec, actual, source)
-            queues = {
-                suite: sorted(
-                    [r for r in slots if r["suite"] == suite], key=lambda r: rank[r["task_id"]]
-                )
-                for suite in catalog["sources"]
-            }
-            ordered = interleave(queues["swe-bench-pro-v2"], queues["terminal-bench-4"])
+                ordinal = next(i for i, r in enumerate(catalog["selected"], 1)
+                               if r["task_id"] == slot["task_id"])
+                rank[slot["task_id"]] = readiness(spec, actual, source, f"g{ordinal:02d}")
+            ordered = ready_order(slots, rank)
             atomic_json(
                 root / "schedule.lock.json",
                 {

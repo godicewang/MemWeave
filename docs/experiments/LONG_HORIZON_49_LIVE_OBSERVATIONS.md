@@ -156,3 +156,7 @@
 - 2026-10-29 02:18:23 CST 人工复核：T03:solving→finished；T07:未开始→preparing；S25:未开始→preparing；模型返回470，在途{}，峰值3，累计估算$0.901430，停止原因None。
 
 - Phase171721 closed after all paid solves/grades ended:14 normal pairs, no invalid_evidence, total estimated USD0.90142992. Remaining35 require continuation; no normal0 is rerun for a higher score. The phase closed to repair common daemon registry EOFs. Range utility has6 new boundary tests; all124 experiment tests pass and Ruff passes. A real Docker OCI import fixture preserved its exact manifest digest, RepoDigest, linux/amd64 platform and filesystem digest; no Agent/model ran. The fixture was removed. Real public S10 preload is next.
+
+- 2026-10-29 02:27:53 CST 人工复核：S16:blocked→preparing；S10:blocked→preparing；S15:blocked→preparing；S14:blocked→preparing；S08:preparation_failed→preparing；模型返回0，在途{}，峰值0，累计估算$0.901430，停止原因None。
+
+- Readiness correction verified: all126 experiment tests and Ruff pass; actual frozen T04/T05/T06/T07 prebuilt main/verifier tags now return warm rank1. Zero-inference phase182559 is retained separately; continuation still imports the14 normal pairs from171721, preserving its already-admitted S08 reserve binding and all USD0.90142992. No inference or new fees occurred in182559. No Pi/Harbor model-execution method or production candidate changed.

@@ -453,3 +453,52 @@ def test_tb_interrupted_recovery_keeps_real_result_without_inventing_patch(tmp_p
     row['suite_id'] = 'swe-bench-pro-v2'
     with pytest.raises(ValueError, match='incomplete'):
         validate_started_row(tmp_path, row, interrupted=False)
+
+
+def test_ready_order_never_puts_cold_swe_before_prebuilt_tb():
+    from memweave_eval.paired import ready_order
+
+    slots = [{'task_id': 'cold'+str(i), 'suite': 'swe-bench-pro-v2'} for i in range(6)]
+    slots += [{'task_id': 'warm', 'suite': 'terminal-bench-4'},
+              {'task_id': 'ready', 'suite': 'swe-bench-pro-v2'}]
+    rank = {r['task_id']: 3 for r in slots}
+    rank.update(warm=1, ready=0)
+    result = ready_order(slots, rank)
+    assert [r['task_id'] for r in result][:2] == ['ready', 'warm']
+    assert {r['task_id'] for r in result} == set(rank)
+
+
+def test_prebuilt_dockerfile_readiness_is_advisory_and_checks_both_contexts(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    import memweave_eval.paired as module
+
+    (tmp_path/'task.toml').write_text('[environment]\ncpus=1\nmemory_mb=1024\nstorage_mb=1024\n')
+    (tmp_path/'environment').mkdir()
+    (tmp_path/'environment/Dockerfile').write_text('FROM scratch\n')
+    with (tmp_path/'task.toml').open('a') as stream:
+        stream.write('\n[verifier]\nenvironment_mode="separate"\n')
+    (tmp_path/'tests').mkdir()
+    (tmp_path/'tests/Dockerfile').write_text('FROM verifier\n')
+    import hashlib
+
+    from memweave_eval.suites import task_digest
+    key = hashlib.sha256(f"g39\0{tmp_path.name}\0verifier\0linux/amd64\0{task_digest(tmp_path/'tests')}".encode()).hexdigest()
+    verifier_ref = 'memweave-eval-prewarm:'+key
+    missing = [False]
+    calls = []
+    def execute(args, **kwargs):
+        ref = args[-1]
+        if missing[0] and ref == verifier_ref:
+            return SimpleNamespace(returncode=1, stdout='')
+        calls.append(ref)
+        if ref.startswith('memweave-eval-prewarm:'):
+            return SimpleNamespace(returncode=0, stdout='[{"Id":"sha256:one","Os":"linux","Architecture":"amd64"}]')
+        return SimpleNamespace(returncode=1, stdout='')
+    monkeypatch.setattr(module.subprocess, 'run', execute)
+    monkeypatch.setattr(module, 'image_libc', lambda *_: 'gnu')
+    monkeypatch.setattr(module, 'software_cached', lambda *_: False)
+    assert module.readiness(None, {'task_id':'one'}, tmp_path, 'g39') == 1
+    assert verifier_ref in calls
+    missing[0] = True
+    assert module.readiness(None, {'task_id':'one'}, tmp_path, 'g39') == 3
