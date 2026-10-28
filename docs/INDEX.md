@@ -33,6 +33,7 @@
 | `IMPLEMENTATION_PLAN.md` | 当前进度、阶段依赖、交付范围和进入条件 |
 | [experiments/IMPLEMENTATION_DESIGN.md](experiments/IMPLEMENTATION_DESIGN.md) | 2026-10-26 确认的公开基线实验设计：Terminal-Bench 4.0 与 SWE-bench Pro V2 子集的实际重跑、记录和比较；不含自进化，不改变产品运行时契约 |
 | [experiments/LONG_HORIZON_49_SELECTION.md](experiments/LONG_HORIZON_49_SELECTION.md) | 2026-10-28 用户确认的49题长程定向清单：SWE 35、TB 14，四档7/7/14/21；逐题结构审查、源哈希与候补，环境准入和执行接线待完成，本轮未运行 |
+| [experiments/LONG_HORIZON_49_PROGRESS_REPORT_2026-10-28.md](experiments/LONG_HORIZON_49_PROGRESS_REPORT_2026-10-28.md) | 49题运行阶段报告：S01闭环、S06评分不稳定、S03中断补丁对照与探针修复；不是最终98行结果 |
 | [experiments/RUNTIME_CACHE_DESIGN.md](experiments/RUNTIME_CACHE_DESIGN.md) | 2026-10-28 用户确认的软件准备复用：官方任务镜像不变、固定资源缓存、全部变体模型前预检、每次试验独立配置/会话/记忆；不复用已解题容器 |
 | [experiments/VALIDATION.md](experiments/VALIDATION.md) | 实验 CLI、47 项开发检查、Pro V2 双变体/全新沙箱重评分、TB四题控制及最终执行；TB插件三题准备失败，有效评测不完整 |
 | [experiments/PUBLIC_BASELINE_2026-10-27.md](experiments/PUBLIC_BASELINE_2026-10-27.md) | 公开 Pro V2 四仓库真实对照：原生 4/4、插件 3/4，输入/缓存/费用/阶段时间、Element Web 算法失败与 TB 未进入模型阶段的原因；含可复查汇总 JSON |
@@ -62,7 +63,7 @@
 | `TASK_RETRIEVAL_VALIDATION_2026-10-26.md` | 主动初始化、本机检索质量/资源、旧窗口恢复、真实模型与候选兼容验收，保留受阻漏记失败 |
 | [PLUGIN_EFFECT_EVALUATION_2026-10-26.md](PLUGIN_EFFECT_EVALUATION_2026-10-26.md) | 当前源码完整生产环境的多场景效果评估：自然业务、阻塞、恢复歧义、高负载、并发、极限输入与本地检索资源；含逐任务标准、失败溯源和未实施建议，脱敏证据见 [JSON](evaluations/2026-10-26-effects.json) |
 | [LONG_TASK_COMPARISON_2026-10-26.md](LONG_TASK_COMPARISON_2026-10-26.md) | 真实 DeepSeek Flash 的原生 Pi / MemWeave 80 阶段持续工程任务对照：48 批结果、逐阶段用量、窗口与 State、共同业务缺陷和整数精度边界；明确材料可见性、评分修订及单样本限制，不替代公开 benchmark 或发布验收 |
-| [DIFFICULT_CASES.md](DIFFICULT_CASES.md) | 用户要求记录的MW-001至MW-012：记忆、工具、检索、来源与验收质量，以及公开实验的端点/不终止和短任务费用/冷启动取舍；区分插件行为、模型业务缺陷与观察风险，不将候选建议视为已批准实现 |
+| [DIFFICULT_CASES.md](DIFFICULT_CASES.md) | 用户要求记录的MW-001至MW-013：记忆、工具、检索、来源与验收质量，以及公开实验的端点/不终止和短任务费用/冷启动取舍；区分插件行为、模型业务缺陷与观察风险，不将候选建议视为已批准实现 |
 | [TASK_CLARIFICATION_AND_INDEX_PLAN.md](TASK_CLARIFICATION_AND_INDEX_PLAN.md) | 本轮澄清接线、移除initialize及保持向量/排名等价的首次索引优化范围，绑定检查按创建/恢复调用判断，搜索不触发门禁 |
 | [TASK_INDEX_BATCHING_VALIDATION.md](TASK_INDEX_BATCHING_VALIDATION.md) | 首次索引通信分块、有界并发派生写入与原生进度；265项检查、真实本地向量/排名等价及完整Flash源码/产物恢复专项 |
 | [TASK_CLARIFICATION_VALIDATION.md](TASK_CLARIFICATION_VALIDATION.md) | task_clarify原生等待/真实输入、删除initialize、创建/恢复失败才门禁、旧回执兼容；275项检查、双宿主专项与真实Flash验证，保留暂缓的认知失败 |
