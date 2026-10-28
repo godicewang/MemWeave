@@ -192,3 +192,27 @@ def test_archive_rejects_hard_links_and_duplicate_members(tmp_path):
             stream.addfile(item)
         with pytest.raises(ValueError):
             validate_archive(p, "node")
+def test_gnu_recipe_is_preserved_and_musl_is_separate(tmp_path):
+    from test_spec import configuration
+
+    from memweave_eval.private_runtime import GNU_RECIPE
+    from memweave_eval.runtime_cache import create_plan
+    from memweave_eval.spec import Experiment
+
+    data = configuration(tmp_path)
+    # Reuse this module's package fixture format.
+    import io
+    import tarfile
+    package = tmp_path / "package.tgz"
+    with tarfile.open(package, "w:gz") as t:
+        for name in ("package/resources/embedding/e5-small.json", "package/src/storage/paths.ts"):
+            value = b"{}"
+            item = tarfile.TarInfo(name); item.size = len(value); t.addfile(item, io.BytesIO(value))
+    data["subject"]["package"] = str(package)
+    spec = Experiment.model_validate(data)
+    common = {"reference": "fixed", "id": "sha256:fixed", "platform": "linux/amd64"}
+    gnu = create_plan(spec, {"task": common})["entries"]["fixed"]
+    musl = create_plan(spec, {"task": dict(common, libc="musl")})["entries"]["fixed"]
+    assert gnu["base"]["identity"]["recipe"] == GNU_RECIPE
+    assert gnu["base"] != musl["base"]
+    assert gnu["models"] == musl["models"]

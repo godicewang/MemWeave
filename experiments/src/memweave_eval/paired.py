@@ -32,6 +32,7 @@ from .campaign import (
     variant_results,
 )
 from .images import verify_prepared_task
+from .private_runtime import image_libc
 from .report import session_diagnostics
 from .runner import (
     auth_file,
@@ -208,21 +209,16 @@ def completed_info(spec, catalog):
     tasks = {r["task_id"] for r in rows}
     if not rows or len(keys) != len(rows) or keys != {(t, v) for t in tasks for v in VARIANTS}:
         raise ValueError("completed parent must contain whole unique pairs")
-    if not tasks <= selected or any(
-        r.get("solve_status") not in ("completed_patch", "cancelled")
-        or not r.get("session_diagnostics", {}).get("model_responses_with_usage")
-        for r in rows
-    ):
-        raise ValueError("completed pair has incomplete solve/primary score/model evidence")
+    if not tasks <= selected:
+        raise ValueError("completed parent task is outside frozen selection")
+    for row in rows:
+        validate_started_row(parent, row, interrupted=False)
     interrupted = sorted({r["task_id"] for r in rows if r.get("success") is None
                           or r.get("solve_status") == "cancelled"
                           or r.get("retained_interrupted")})
     for row in rows:
         if row["task_id"] in interrupted:
-            path = Path(row["solve_source"])
-            path = path if path.is_absolute() else parent / path
-            if not (path.parent / "agent/model.patch").is_file():
-                raise ValueError("interrupted model pair has no captured patch")
+            validate_started_row(parent, row, interrupted=True)
     groups = set()
     for job in state["jobs"].values():
         if job["purpose"] != "solve":
@@ -294,6 +290,23 @@ def completed_info(spec, catalog):
     }, rows
 
 
+
+def validate_started_row(parent, row, *, interrupted):
+    allowed = {"completed_patch", "cancelled"}
+    if row.get("suite_id") == "terminal-bench-4":
+        allowed.add("scored")
+    if (row.get("solve_status") not in allowed
+            or not row.get("session_diagnostics", {}).get("model_responses_with_usage")):
+        raise ValueError("completed pair has incomplete solve/primary score/model evidence")
+    if interrupted:
+        path = Path(row["solve_source"])
+        path = path if path.is_absolute() else parent / path
+        if row.get("suite_id") == "terminal-bench-4":
+            if not path.is_file():
+                raise ValueError("interrupted TB pair has no original result")
+        elif not (path.parent / "agent/model.patch").is_file():
+            raise ValueError("interrupted model pair has no captured patch")
+
 def pre_pi_failure(parent, row, adapter_sha):
     """Only the audited legacy probe exception proves Pi never launched."""
     if adapter_sha != "67b9481b7e7b9cc08e00b91dfd1855e10ca6825df3ed60c131f85996d79f0192":
@@ -320,34 +333,37 @@ def pre_pi_failure(parent, row, adapter_sha):
 def verify_adapters(lock):
     old = lock["implementation_files"]
     base = "experiments/src/memweave_eval/"
-    names = ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py",
-             "network_probe.py", "public_archive.py")
-    current = {base+n: file_digest(REPOSITORY/(base+n)) for n in names}
+    pinned = {
+        "pi_agent.py": "0680e465b92628bc7478be41b7cf04b8d5ff3024c6cf0fb2083cbf8bc82c8abf",
+        "runtime_cache.py": "836c83bec3c6babf70e9082027b0a9c8a1101b5cdc83c62a803f2f267450552a",
+        "runner.py": "5a753285ba1bbcd5a71002a68d6bbdbad12f6aa49c80d1931c25fa2f8ea2c58c",
+        "images.py": "cd7e5ceecde76b5bd2b4df91f423ff72ff41d5b14117b54b520d9cf0bf90b3f5",
+        "network_probe.py": "57a62831b10be9fc29ac7683a225b82f8c92e3585513355769fddc66a2b8aa4b",
+        "public_archive.py": "c9f479fb64c2aaf821c794113181cee395b2b5844f609d138d3e6a4521bf59be",
+        "private_runtime.py": "fc68bb73a39aac027a7263958325e043e480c8222524c19a51f89abd833f1b39",
+    }
+    current = {base+n: file_digest(REPOSITORY/(base+n)) for n in pinned}
     if all(old.get(path) == digest for path, digest in current.items()):
         return None
-    legacy = "67b9481b7e7b9cc08e00b91dfd1855e10ca6825df3ed60c131f85996d79f0192"
-    probe = "2599b4fb16c93592eab936942c0ddd7e177ed13eb047d69fe40e745dd0954eed"
-    new_pi = "551512dc149c519954a9cbf45394fdc72f6c979552006ad7f1bb7214e37442f6"
-    old_image = "7ffc3eacce8481e584f2fa20b49b00e5fcf1bfca5ac8cc0fc901b0daeaf3a1a1"
-    new_image = "cd7e5ceecde76b5bd2b4df91f423ff72ff41d5b14117b54b520d9cf0bf90b3f5"
-    helper = "57a62831b10be9fc29ac7683a225b82f8c92e3585513355769fddc66a2b8aa4b"
-    public = "c9f479fb64c2aaf821c794113181cee395b2b5844f609d138d3e6a4521bf59be"
-    approved = (
-        old.get(base+"pi_agent.py") in (legacy, probe)
-        and current[base+"pi_agent.py"] == new_pi
-        and old.get(base+"images.py") in (old_image, new_image)
-        and current[base+"images.py"] == new_image
-        and old.get(base+"network_probe.py") == (None if old.get(base+"pi_agent.py") == legacy else helper)
-        and current[base+"network_probe.py"] == helper
-        and old.get(base+"public_archive.py") is None
-        and current[base+"public_archive.py"] == public
-        and all(old.get(base+n) == current[base+n] for n in ("runtime_cache.py", "runner.py"))
-    )
+    previous = {
+        "pi_agent.py": {"67b9481b7e7b9cc08e00b91dfd1855e10ca6825df3ed60c131f85996d79f0192",
+                        "2599b4fb16c93592eab936942c0ddd7e177ed13eb047d69fe40e745dd0954eed",
+                        "551512dc149c519954a9cbf45394fdc72f6c979552006ad7f1bb7214e37442f6"},
+        "runtime_cache.py": {"7cc13d6026e87cc44f5a2ac37d5d235cb63d547381025bca2b71eb6ae93910d2"},
+        "runner.py": {"8d73afc35a334d3b4a3bcd9b2943b13b4d79cc3dd0d37d1ebc2b8cd51324dfe5"},
+        "images.py": {"7ffc3eacce8481e584f2fa20b49b00e5fcf1bfca5ac8cc0fc901b0daeaf3a1a1", pinned["images.py"]},
+        "network_probe.py": {None, pinned["network_probe.py"]},
+        "public_archive.py": {None, pinned["public_archive.py"]},
+        "private_runtime.py": {None},
+    }
+    approved = all(current[base+n] == digest for n, digest in pinned.items()) and all(
+        old.get(base+n) in allowed for n, allowed in previous.items())
     if not approved:
-        changed = [n for n in names if old.get(base+n) != current[base+n]]
+        changed = [n for n in pinned if old.get(base+n) != current[base+n]]
         raise ValueError("Pi/protocol adapter changed since completed phase: " + ",".join(changed))
-    return {"reason": "approved preparation and Node probe", "approval": "user 2026-10-29",
-            "old": {base+n: old.get(base+n) for n in names}, "current": current}
+    return {"reason": "approved preparation, Node probe and private musl runtime",
+            "approval": "user 2026-10-29 environment autonomy; run proposal section 12",
+            "old": {base+n: old.get(base+n) for n in pinned}, "current": current}
 
 
 def software_cached(spec, images):
@@ -377,20 +393,31 @@ def software_writer_busy(spec, images):
     return False
 
 
+
+class PairPreparationError(ValueError):
+    """No inference was admitted; retain this image's failure without cancelling peers."""
+
+
 def prepare_pair_runtimes(spec, group, paths, images, cold_lock, check, execute, deadline):
     check()
-    if software_cached(spec, images):
-        return prepare_runtimes(spec, group, paths, images, {"jobs": {}}, execute, deadline)
-    while not cold_lock.acquire(timeout=0.5):
-        check()
     try:
-        check()
-        while software_writer_busy(spec, images):
+        if software_cached(spec, images):
+            return prepare_runtimes(spec, group, paths, images, {"jobs": {}}, execute, deadline)
+        while not cold_lock.acquire(timeout=0.5):
             check()
-            time.sleep(0.5)
-        return prepare_runtimes(spec, group, paths, images, {"jobs": {}}, execute, deadline)
-    finally:
-        cold_lock.release()
+        try:
+            check()
+            while software_writer_busy(spec, images):
+                check()
+                time.sleep(0.5)
+            return prepare_runtimes(spec, group, paths, images, {"jobs": {}}, execute, deadline)
+        finally:
+            cold_lock.release()
+    except TimeoutError:
+        raise
+    except Exception as exc:
+        check()  # Observation/financial failures must remain campaign-wide.
+        raise PairPreparationError(str(exc)) from exc
 
 
 def readiness(spec, row, source):
@@ -410,6 +437,7 @@ def readiness(spec, row, source):
         "id": data["Id"],
         "platform": data["Os"] + "/" + data["Architecture"],
     }
+    image["libc"] = image_libc(image["id"], image["platform"])
     ready = software_cached(spec, {row["task_id"]: image})
     return 0 if ready else 1
 
@@ -626,7 +654,7 @@ def run_pairs(spec):
                     pool.release(weight)
 
             executor = ThreadPoolExecutor(max_workers=spec.execution.concurrency // 2)
-            futures = [executor.submit(worker, row) for row in ordered]
+            futures = {executor.submit(worker, row): row for row in ordered}
             try:
                 for future in as_completed(futures):
                     try:
@@ -634,6 +662,18 @@ def run_pairs(spec):
                     except TimeoutError as exc:
                         with lock:
                             state["stop_reason"] = state["stop_reason"] or str(exc)
+                    except PairPreparationError as exc:
+                        if spec.completion_mode != "all_tasks":
+                            service.fatal.set()
+                            state["stop_reason"] = str(exc)
+                        with lock:
+                            task = futures[future]["task_id"]
+                            state["tasks"].setdefault(task, {}).update(
+                                status="preparation_failed", preparation_error=str(exc))
+                            for group in state["groups"]:
+                                if task in group["tasks"]:
+                                    group["status"] = "preparation_failed"
+                            atomic_json(root / "run.json", state)
                     except Exception as exc:  # noqa: BLE001 -- shared pipeline must fail closed.
                         service.fatal.set()
                         with lock:
@@ -648,7 +688,8 @@ def run_pairs(spec):
             state["complete"] = (
                 not state["stop_reason"]
                 and len(state["tasks"]) == len(slots)
-                and all(t["status"] != "blocked" for t in state["tasks"].values())
+                and len(state["groups"]) == len(slots)
+                and all(g["status"] == "finished" for g in state["groups"])
             )
         except BaseException as exc:  # noqa: BLE001 -- preserve partial official results.
             state["stop_reason"] = state["stop_reason"] or type(exc).__name__ + (

@@ -130,10 +130,12 @@ schema2增加completion_mode=window/all_tasks（旧默认window）及unlimited_c
 
 ### 12 已审议：musl镜像兼容与准备故障隔离
 
-S09已实测Alpine3.20/musl1.2.5，官方GNU Node24.22二进制缺fcntl64，尚未进入Pi。按用户2026-10-29自主修复授权，为musl任务提供Agent私有GNU运行库：从已冻结的干净Ubuntu官方任务镜像只导出明确列出的系统运行库和许可，采用官方Ubuntu patchelf包，只调整私有Node的ELF解释器／RPATH到容器内独立Agent前缀；不覆盖官方系统libc，不设置全局LD_LIBRARY_PATH，不改业务仓库、Pi JS或插件。原生和插件使用相同Node24.22与私有库，子进程和onnx本地embedding均须真实验收。源码／工具／库／归档摘要记录，配置、Session和认知仍独立。
+S09已实测Alpine3.20/musl1.2.5，官方GNU Node24.22二进制缺fcntl64，尚未进入Pi。按用户2026-10-29自主修复授权，为musl任务提供Agent私有GNU运行库：从已冻结的干净Ubuntu官方任务镜像只导出明确列出的系统运行库和许可，保留官方Node原始二进制，以独立GNU loader包装入口，并以私有启动兼容文件恢复正常node路径的process.execPath／argv[0]，确保fork子进程沿用同一入口；不覆盖官方系统libc，不设置全局LD_LIBRARY_PATH，不改业务仓库、Pi JS或插件。原生和插件使用相同Node24.22与私有库，子进程和onnx本地embedding均须真实验收。源码／库／归档摘要记录；patchelf原型失败已留证，不用于正式入口，配置、Session和认知仍独立。
 
 GNU镜像的准备路径保持此前02776f5相同组件与字节规则，显式沿用已审计GNU准备recipe 214780dd31b908ff78644ee5fd1a62fa4f82dd22afcb28f038a47d0998a32823，保留原对象身份与实际生成来源，不将旧对象伪装成新对象；musl单独标记ABI和新recipe。每题仍完整加载核验，正式Trial不创建缺失缓存。
 
 已在多镜像通过的共用代码，若某一镜像的软件准备失败，先标该题preparation_failed并记录具体原件，不取消其他已准入模型；全批结束后修复并继续该题。认证、模型协议、候选不一致、观测／账本不可信仍全局阻断。避免把Alpine单镜像问题变成无关TB／SWE中断。此变更取代旧“任何软件预检错误即联动取消所有题”的实现，不放宽准入；失败题不得进入模型。
 
 TB正常结束的原始Trial状态scored可继承，和Pro completed_patch分别判断；公共故障取消的双方整对重跑，原正常单侧成绩作为历史保留。真实预算耗尽和未完成评分分开报告，不将无评分或基础设施异常写为能力0分。
+
+最终无模型验收：`analysis/long49/s09-musl-final-recipe-acceptance-20261029/acceptance.json`通过；原生4个工具、插件16个工具及384维本地embedding，双方Node24.22／Pi1.4及timeout+pipefail CLI壳通过，模型端点401、普通外网阻断，模型请求0。118项实验自动检查、Ruff及编译通过。AST核对相比02776f5仅ExperimentPi.install变化，run／exec_as_agent等模型执行方法完全相同；生产源码与冻结f3931ce不变。

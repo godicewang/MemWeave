@@ -13,6 +13,8 @@ from harbor.agents.installed.pi import Pi, PiOptions
 from harbor.agents.options import Cli
 
 from .network_probe import check_network
+from .private_runtime import activate as activate_private_runtime
+from .private_runtime import prepare as prepare_private_runtime
 from .public_archive import public_archive
 from .runtime_cache import materialize, node_download
 from .storage import file_digest
@@ -145,6 +147,9 @@ class ExperimentPi(Pi):
                 f"tar -xzf {shlex.quote(remote)} --strip-components=1 "
                 f"-C {shlex.quote(self._asset_root + '/node')} && rm {shlex.quote(remote)}",
             )
+            compatibility = None
+            if entry.get("libc") == "musl":
+                compatibility = await prepare_private_runtime(self, environment, cache)
             await self.exec_as_agent(
                 environment,
                 f"npm install -g --prefix {shlex.quote(self._asset_root + '/node')} "
@@ -153,9 +158,11 @@ class ExperimentPi(Pi):
             )
             await self.pack_asset(environment, self._asset_root, "node", target)
             (self.logs_dir / "node-download.json").write_text(json.dumps(receipt) + "\n")
-            return {"node_download": receipt}
+            return {"node_download": receipt, "private_gnu_runtime": compatibility}
 
         await resource("base", "node", build_base, self._asset_root)
+        if entry.get("libc") == "musl":
+            await activate_private_runtime(self, environment)
         versions = await self.exec_as_agent(environment, "node --version && pi --version")
         if versions.stdout.strip().splitlines() != [
             "v" + self.options.node_version,

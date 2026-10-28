@@ -175,6 +175,13 @@ MW-001至MW-003的首批来源：[多场景评估报告](PLUGIN_EFFECT_EVALUATIO
 
 **49题S03 Open Library补充（2026-10-28，中断尝试）：** run `20261028T141814Z-e1cf21ad6a` 插件在 `save` 分支仍将 `rec.data` 当作单文档、读取顶层 `old_doc`，而用户可见指令明确要求 `save` 和 `save_many` 均读取 `data.changeset.docs/old_docs`。插件自己新增的 `test_parse_log_save` 同样使用旧的单文档输入，因而没有覆盖这项要求。相同原补丁在全新官方沙箱中原生3/3、插件2/3，失败为 `TestParseLog::test_action_save`；两边评分无异常。反例是save记录仅在data.changeset.docs内含key，此插件分支不产出该key。该逻辑在取消前的补丁中已存在；同时保留插件被公共故障联动取消的事实，不把其补丁分数当作正常完整解题成绩。没有Window移动，不能归为历史遗忘或产品持久化错误。原件与无模型官方重评分：`analysis/long49/s03-interrupted-patch-grading/audit.json`（相对仓库外实验根）。这是需求数据结构漏验与自写测试沿袭同一假设的实例，本轮不修改插件或重跑模型。
 
+
+**49题S03正常恢复确认（2026-10-29）：** 按用户继续完成整批的授权，run `20261028T162155Z-9b88cd6f75` 对S03进行完整新题对，双方正常结束、补丁独立交接并在全新官方沙箱评分，仍为原生1／插件0（3/3对2/3，失败仍为`test_action_save`）。新插件再次沿用旧单文档`save`分支和同形自写测试，确认这是正常交付中的契约漏验；旧中断及费用单列保留，没有按分数择优。新Session仅16次模型返回，无压缩；Window没有移动。不能由重复的业务错误推断为记忆存储故障，也不能把同题两次尝试算成两个独立样本。
+
+**场景F（49题S05 Qutebrowser，2026-10-29）：** 同一正常run中原生1／插件0；官方必需49项中插件48项通过，唯一缺失为`test_version_attribute[SIP_VERSION_STR-expected_modules1]`，评分无异常。插件实现格式集中化、缓存重置和完成信号去重，同时启用`_initialized=True`，并改自有测试fixture在每次结束清缓存；正式评分按官方测试覆盖，不能依赖这个fixture改动。原生还修正了`('SIP_VERSION_STR')`为单元素tuple，并在生成版本行前清缓存；插件两处均未做。字符串会逐字符遍历属性名，这是可直接核验的缺陷，不需要假设SIP模块必须实际安装。
+
+**失败识别与原因边界：** 插件真实末条答复把仍剩的sip/adblock失败称为“environment-only”，这是未验证的归因；官方必需失败是注入属性的SIP用例，不应以本机未安装模块为由忽略。启用缓存及依赖修改测试夹具也引入了覆盖差异；两项代码差异各自的因果贡献仍需独立消融，不把它们一概判为唯一根因。此题46次模型返回、未压缩、没有Window移动，未观察到State维护调用；缺口在诊断／回归验收，尚无证据证明长程遗忘。原件：该run `groups/g05/harbor/solve`两侧`agent/model.patch`、插件Session末条答复及`harbor/regrade`对应`verifier/output.json`／`test-stdout.txt`。保留0分，本轮不改生产插件，不用修复业务代码后的补测替换基线。
+
 ## MW-012：短任务的Token、模型费用与冷启动耗时出现相反方向
 
 **状态：已观察到的效能取舍和评测口径case；不是功能报错，也没有证明某种固定协议优化有效。**

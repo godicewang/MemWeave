@@ -137,7 +137,7 @@ def test_bootstrap_import_keeps_cost_deadline_and_rejects_unknown_cost(tmp_path,
                 "experiments/src/memweave_eval/" + n: file_digest(
                     REPOSITORY / "experiments/src/memweave_eval" / n
                 )
-                for n in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py", "network_probe.py", "public_archive.py")
+                for n in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py", "network_probe.py", "public_archive.py", "private_runtime.py")
             },
         },
     )
@@ -279,7 +279,7 @@ def test_completed_parent_keeps_all_started_pairs_and_first_zero_scores(tmp_path
         "implementation_files": {
             "experiments/src/memweave_eval/" + n: file_digest(
                 REPOSITORY / "experiments/src/memweave_eval" / n
-            ) for n in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py", "network_probe.py", "public_archive.py")
+            ) for n in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py", "network_probe.py", "public_archive.py", "private_runtime.py")
         },
     })
     state = {
@@ -404,14 +404,52 @@ def test_only_approved_probe_adapter_change_can_cross_lineage(tmp_path):
 
     files = {"experiments/src/memweave_eval/" + n: file_digest(
         REPOSITORY / "experiments/src/memweave_eval" / n
-    ) for n in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py", "network_probe.py", "public_archive.py")}
+    ) for n in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py", "network_probe.py", "public_archive.py", "private_runtime.py")}
     assert verify_adapters({"implementation_files": files}) is None
+    files.pop("experiments/src/memweave_eval/private_runtime.py")
+    files["experiments/src/memweave_eval/runtime_cache.py"] = "7cc13d6026e87cc44f5a2ac37d5d235cb63d547381025bca2b71eb6ae93910d2"
+    files["experiments/src/memweave_eval/runner.py"] = "8d73afc35a334d3b4a3bcd9b2943b13b4d79cc3dd0d37d1ebc2b8cd51324dfe5"
     files.pop("experiments/src/memweave_eval/network_probe.py")
     files.pop("experiments/src/memweave_eval/public_archive.py")
     files["experiments/src/memweave_eval/pi_agent.py"] = (
         "67b9481b7e7b9cc08e00b91dfd1855e10ca6825df3ed60c131f85996d79f0192"
     )
-    assert verify_adapters({"implementation_files": files})["reason"] == "approved preparation and Node probe"
+    assert verify_adapters({"implementation_files": files})["reason"] == "approved preparation, Node probe and private musl runtime"
     files["experiments/src/memweave_eval/pi_agent.py"] = "0" * 64
     with pytest.raises(ValueError, match="adapter changed"):
         verify_adapters({"implementation_files": files})
+
+
+def test_preparation_error_is_local_but_observer_failure_is_global(tmp_path, monkeypatch):
+    import memweave_eval.paired as module
+
+    monkeypatch.setattr(module, 'software_cached', lambda *_: True)
+    monkeypatch.setattr(module, 'prepare_runtimes', lambda *_: (_ for _ in ()).throw(ValueError('image ABI')))
+    with pytest.raises(module.PairPreparationError, match='image ABI'):
+        module.prepare_pair_runtimes(None, tmp_path, [], {}, threading.Lock(), lambda: None, None, 1)
+    checks = iter([None, ValueError('observation unavailable')])
+
+    def check():
+        error = next(checks)
+        if error:
+            raise error
+
+    with pytest.raises(ValueError, match='observation unavailable'):
+        module.prepare_pair_runtimes(None, tmp_path, [], {}, threading.Lock(), check, None, 1)
+
+
+def test_tb_interrupted_recovery_keeps_real_result_without_inventing_patch(tmp_path):
+    from memweave_eval.paired import validate_started_row
+    from memweave_eval.storage import atomic_json
+
+    path = tmp_path / 'trial/result.json'
+    atomic_json(path, {'exception_info': {'exception_type': 'CancelledError'}})
+    row = {'suite_id': 'terminal-bench-4', 'solve_status': 'cancelled',
+           'solve_source': str(path), 'success': None,
+           'session_diagnostics': {'model_responses_with_usage': 2}}
+    validate_started_row(tmp_path, row, interrupted=True)
+    row.update(solve_status='scored', success=True)
+    validate_started_row(tmp_path, row, interrupted=False)
+    row['suite_id'] = 'swe-bench-pro-v2'
+    with pytest.raises(ValueError, match='incomplete'):
+        validate_started_row(tmp_path, row, interrupted=False)

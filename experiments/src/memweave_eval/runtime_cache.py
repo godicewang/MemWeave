@@ -150,10 +150,11 @@ def node_download(cache: Path, version: str, platform: str) -> tuple[Path, dict]
 
 
 def create_plan(spec, images: dict) -> dict:
+    from .private_runtime import BUNDLE_SHA, GNU_RECIPE
     recipe = hashlib.sha256(
         b"".join(
             (Path(__file__).parent / name).read_bytes()
-            for name in ("runtime_cache.py", "pi_agent.py")
+            for name in ("runtime_cache.py", "pi_agent.py", "private_runtime.py")
         )
     ).hexdigest()
     with tarfile.open(spec.subject.package) as package:
@@ -170,10 +171,13 @@ def create_plan(spec, images: dict) -> dict:
             "platform": image["platform"],
             "node": spec.runtime.node_version,
             "pi": spec.runtime.pi_version,
-            "recipe": recipe,
+            "recipe": GNU_RECIPE if image.get("libc", "gnu") == "gnu" else recipe,
         }
+        if image.get("libc") == "musl":
+            common["private_gnu_runtime"] = BUNDLE_SHA
         entries[image["reference"]] = {
             "image": image,
+            "libc": image.get("libc", "gnu"),
             "base": descriptor(kind="base", **common),
             "addon": descriptor(kind="addon", **common, package=spec.subject.sha256),
             "models": models,

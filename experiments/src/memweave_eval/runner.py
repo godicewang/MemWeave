@@ -44,6 +44,7 @@ def image_snapshot(paths: list[Path]) -> dict:
     from harbor.models.task.verifier_mode import resolve_verifier_environment_definition
 
     from .images import inspect_image
+    from .private_runtime import image_libc
 
     result = {}
     for path in paths:
@@ -58,6 +59,8 @@ def image_snapshot(paths: list[Path]) -> dict:
                     "Dockerfile task must be prepared before image freezing"
                 )
             result[key] = inspect_image(environment.docker_image)
+            if not key.endswith(":verifier"):
+                result[key]["libc"] = image_libc(result[key]["id"], result[key]["platform"])
     return result
 
 
