@@ -1,0 +1,509 @@
+{
+  "schema_version": 1,
+  "catalog_id": "memweave-long-horizon-49-v1",
+  "date": "2026-10-28",
+  "catalog_sha256": "b32b5593058c21b74888fde3fe4d6a2447cd45242ce86ee12936cf2ad018ebad",
+  "upstreams": {
+    "swe-bench-pro-v2": {
+      "revision": "66f92766bba642462d4bbe5479e83f91f9211862",
+      "git_clean": true
+    },
+    "terminal-bench-4": {
+      "revision": "452bf305c6daa62fc59061d22133a7cbc7c1572e",
+      "git_clean": true
+    }
+  },
+  "selected_count": 49,
+  "reserve_count": 5,
+  "quotas_by_suite": {
+    "swe-bench-pro-v2": {
+      "simple": 5,
+      "medium": 5,
+      "hard": 10,
+      "extreme": 15
+    },
+    "terminal-bench-4": {
+      "simple": 2,
+      "medium": 2,
+      "hard": 4,
+      "extreme": 6
+    }
+  },
+  "overall_quotas": {
+    "simple": 7,
+    "medium": 7,
+    "hard": 14,
+    "extreme": 21
+  },
+  "repositories": {
+    "flipt-io/flipt": 3,
+    "future-architect/vuls": 3,
+    "internetarchive/openlibrary": 3,
+    "navidrome/navidrome": 3,
+    "qutebrowser/qutebrowser": 3,
+    "NodeBB/NodeBB": 3,
+    "ansible/ansible": 4,
+    "element-hq/element-web": 3,
+    "gravitational/teleport": 5,
+    "protonmail/webclients": 3,
+    "tutao/tutanota": 2
+  },
+  "legacy_count": 3,
+  "new_swe_count": 32,
+  "new_tb_count": 14,
+  "all_54_ids_unique": true,
+  "all_54_source_hashes_match": true,
+  "all_54_static_filters_pass": true,
+  "all_54_harbor_configs_parse": true,
+  "all_54_agent_and_verifier_resource_envelopes_pass": true,
+  "human_table_matches_catalog": true,
+  "tb_inventory_by_final_exclusion_label": {
+    "multi-container permissions require review": 11,
+    "official cpus exceeds subset resource envelope": 5,
+    "static_eligible": 45,
+    "requires an accelerator": 3,
+    "official memory_mb exceeds subset resource envelope": 2
+  },
+  "not_accepted_as_legacy_cli_subset": true,
+  "agent_timeout_protocols_match": true,
+  "excluded_example_hashes_match": true,
+  "new_model_calls": 0,
+  "images_built_or_pulled": 0,
+  "controls_run": 0,
+  "environment_admission": "pending",
+  "semantic_review_sources": "public instructions and explicitly referenced visible design only; full-tree hashing is integrity-only",
+  "verified_tasks": [
+    {
+      "display_id": "S01",
+      "task_id": "instance_flipt-io__flipt-c1fd7a81ef9f23e742501bfb26d914eb683262aa",
+      "task_sha256": "10e273a9d5cec1e05c7fba0a5418ccbe61f8ddaf878ae0ec5a080b1cebaa96e3",
+      "instruction_sha256": "be5f98736ef5e8c21999b94d95b79769b68838f0074787d7ea0dfb26ecefcfc2",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S02",
+      "task_id": "instance_future-architect__vuls-7e91f5ef7e5712b1a3d7d5066ad6607e9debc21c",
+      "task_sha256": "095536d44b99754eef621cb55fe64c4327080924736055bcd5d257195c758289",
+      "instruction_sha256": "41437427f12b00fc78bda3421d5527eb6857ba360667be9de0eb6f3c9bdc44e8",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S03",
+      "task_id": "instance_internetarchive__openlibrary-03095f2680f7516fca35a58e665bf2a41f006273-v8717e18970bcdc4e0d2cea3b1527752b21e74866",
+      "task_sha256": "9bf3dab3805d3aad032a1739f91aa46027372c48084daba67a3ce25d176664e8",
+      "instruction_sha256": "931d2d78a666ec101946de674182dca2b5da10b722f2ef88979ab6a62b7499b0",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S04",
+      "task_id": "instance_navidrome__navidrome-23bebe4e06124becf1000e88472ae71a6ca7de4c",
+      "task_sha256": "3baa5ed18abdc5f4dcdcdfc8d56a8907f5d2a3f5a19b81460cbf2023f4833a9c",
+      "instruction_sha256": "dc6d12b94ea91ad28b19516bf76e003d79364a34fc04cd2140aa8db8885a7953",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S05",
+      "task_id": "instance_qutebrowser__qutebrowser-01d1d1494411380d97cac14614a829d3a69cecaf-v2ef375ac784985212b1805e1d0431dc8f1b3c171",
+      "task_sha256": "a83228a2652c824b9b88d7bb97fe92b1d4ac44d09bafba128caf479a282fde24",
+      "instruction_sha256": "08893d0583dcc54f25e0ed568e77fb2f65cae5fee98a1b3ca917ba30e26ee279",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S06",
+      "task_id": "instance_NodeBB__NodeBB-f2082d7de85eb62a70819f4f3396dd85626a0c0a-vd59a5728dfc977f44533186ace531248c2917516",
+      "task_sha256": "8065a4b55e6a67841e94d7a8c4083516d56d424a723e487e1af7a8047d1233c4",
+      "instruction_sha256": "2acd37667bf19678056b31911cd0d80ae6f9d454499bca6293d78c057c4bae40",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S07",
+      "task_id": "instance_ansible__ansible-e22e103cdf8edc56ff7d9b848a58f94f1471a263-v1055803c3a812189a1133297f7f5468579283f86",
+      "task_sha256": "5830bab745fb9b48b608ae5a7c1cc278d3a5761fe892e24d29939462597d62af",
+      "instruction_sha256": "c5e9a90e789bcf5cd1243b073e58e29875c4f130ec89fd91ca3c399aa88b6278",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S08",
+      "task_id": "instance_element-hq__element-web-459df4583e01e4744a52d45446e34183385442d6-vnan",
+      "task_sha256": "3d10f9dacbfeeb4b6893e9fbd9a9badcef6002ec1e7ff63492881e146e606f35",
+      "instruction_sha256": "9a63aa68957390aa53af1e80503fd553ff86c06dfa5b2d8c05ade20e4ae05172",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S09",
+      "task_id": "instance_gravitational__teleport-32bcd71591c234f0d8b091ec01f1f5cbfdc0f13c-vee9b09fb20c43af7e520f57e9239bbcf46b7113d",
+      "task_sha256": "4fb53c8688365976b3c2fa59d90d730a3f7a6b5dda4c888d912690b26b34ebb4",
+      "instruction_sha256": "0062361adadaef974e1c91951f0bc14b3ce9a1282046b670747d65dad67dcec9",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S10",
+      "task_id": "instance_protonmail__webclients-d8ff92b414775565f496b830c9eb6cc5fa9620e6",
+      "task_sha256": "97df20aeada14604e882d760040b56c1ece0ce7d3e93ddf365536cefd8e80e25",
+      "instruction_sha256": "b8ca8cb4b1c9e8388ec5cd9aa2513fb8cb8f03b67768d24bc02203266fc02def",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S11",
+      "task_id": "instance_NodeBB__NodeBB-8168c6c40707478f71b8af60300830fe554c778c-vf2cf3cbd463b7ad942381f1c6d077626485a1e9e",
+      "task_sha256": "2f7eaff3fa5a71e38d159928e7e809be6180bdc4d92fa2a4b8da71d15a1ce768",
+      "instruction_sha256": "52de1203b5077923e832ebc37bd73e5a51bff564f027fd89bb4a6558540a5971",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S12",
+      "task_id": "instance_ansible__ansible-d2f80991180337e2be23d6883064a67dcbaeb662-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5",
+      "task_sha256": "15b812988ee78fab01bd4ecadc3f4f62e4f9765f8e236b68e17657ce23918603",
+      "instruction_sha256": "eab8bd923d5c2e4e8a62304568a2587654112adeb23447baf7aac59ed54a00e0",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S13",
+      "task_id": "instance_element-hq__element-web-4c6b0d35add7ae8d58f71ea1711587e31081444b-vnan",
+      "task_sha256": "741fdd77c080623ea510b4ebd505783dda93bf0478b6c9060f21c9535e646efa",
+      "instruction_sha256": "09e170a28db2f972b17cd92ded1b1ff7eb15781b7ef6680bbffb68328830e70a",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S14",
+      "task_id": "instance_future-architect__vuls-e1fab805afcfc92a2a615371d0ec1e667503c254-v264a82e2f4818e30f5a25e4da53b27ba119f62b5",
+      "task_sha256": "f921e373683312b59d0a4aee8cb955499cf553926badb5069c3885206c51e41b",
+      "instruction_sha256": "3474a617e50efa037af5457ac534b647834c8c94cce87b34e4e7f5f1ff36ac3f",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S15",
+      "task_id": "instance_gravitational__teleport-c1b1c6a1541c478d7777a48fca993cc8206c73b9",
+      "task_sha256": "a7d4292fcf7e12fd07ce04a58f8bf83059816316ae8aa20d30987dc6a5a9d78b",
+      "instruction_sha256": "dae928c4d821c451f076ba776967882326b8b7b1564e789a3b6bc97e04f267df",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S16",
+      "task_id": "instance_gravitational__teleport-e6681abe6a7113cfd2da507f05581b7bdf398540-v626ec2a48416b10a88641359a169d99e935ff037",
+      "task_sha256": "fd9c78c5c726ae26756ee5ee8efebe034ca52328c31b33de7d8b6e47a9e8fc1c",
+      "instruction_sha256": "f4ad22851aa6040d0b1c80ebe2481d7c8e2f4d97cf8f18758075609dbb5ebec1",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S17",
+      "task_id": "instance_internetarchive__openlibrary-7f6b722a10f822171501d027cad60afe53337732-ve8c8d62a2b60610a3c4631f5f23ed866bada9818",
+      "task_sha256": "2918e8206b94f7eceaa4562202839e4654ba92ee35e71fac416f84fdd24bb063",
+      "instruction_sha256": "70876fab5e11449d429a2c940dfadff40502a57d61a439b5c33fe05e71a7f2d7",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S18",
+      "task_id": "instance_navidrome__navidrome-d21932bd1b2379b0ebca2d19e5d8bae91040268a",
+      "task_sha256": "7a522ae272e4249a0448df652de07df22fa2ef6c71f9bfe69128d9de471a85d7",
+      "instruction_sha256": "516ceeed1812299604152a4163b886c64fe36d3a78c85fd0e99dcab1ee4637e3",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S19",
+      "task_id": "instance_protonmail__webclients-dfe5604193d63bfcb91ce60d62db2f805c43bf11",
+      "task_sha256": "260064060339ed769c386529664c41306fe597f4a7aa3ba12704e878abe99acd",
+      "instruction_sha256": "757a524baff8864e45f4514076ea8e83aee414c2cc9c44bca05a5b0f257e400c",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S20",
+      "task_id": "instance_qutebrowser__qutebrowser-394bfaed6544c952c6b3463751abab3176ad4997-vafb3e8e01b31319c66c4e666b8a3b1d8ba55db24",
+      "task_sha256": "56780cc62eacf3c2d877765dfcff0928aab80a50d352e86b75ae47fa088a1faa",
+      "instruction_sha256": "84fdf3ab71eca1d39249d25940127d6763251ac68282dc037e5ddd6f4771d9d8",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S21",
+      "task_id": "instance_NodeBB__NodeBB-f1a80d48cc45877fcbadf34c2345dd9709722c7f-v4fbcfae8b15e4ce5d132c408bca69ebb9cf146ed",
+      "task_sha256": "5718dd19c1291e18e5ae3dd4f0bca1847243a252501b2c7e05993f0c5d9a0acf",
+      "instruction_sha256": "32f7e6b3cc764edd1bf9580e70ab33bf27e155738f7d78bb5c8a27d528fa2ff2",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S22",
+      "task_id": "instance_ansible__ansible-42355d181a11b51ebfc56f6f4b3d9c74e01cb13b-v1055803c3a812189a1133297f7f5468579283f86",
+      "task_sha256": "ebd361498693b0bc7ccf29d4ef3e8ddbe8b0f0e51aead361bc618f278caa00ee",
+      "instruction_sha256": "1aca256f141a81af33b9cec728445b719f7fdce3497e6390e8084c1b93f6738a",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S23",
+      "task_id": "instance_ansible__ansible-d6d2251929c84c3aa883bad7db0f19cc9ff0339e-v30a923fb5c164d6cd18280c02422f75e611e8fb2",
+      "task_sha256": "e8153fdd3efa680025a8b70b82d7ca8bf753809189fb6ccfad5bb4a4a4b1991a",
+      "instruction_sha256": "91c82753328427856c5e4ed05bc24f3a9f48880005cae00be2820fec32f29ee8",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S24",
+      "task_id": "instance_element-hq__element-web-fe14847bb9bb07cab1b9c6c54335ff22ca5e516a-vnan",
+      "task_sha256": "3234bcddb81c2ad60dc82444aec64c31109f91c16542b4bd909cdc1256bb8cf9",
+      "instruction_sha256": "dd706c74ee60b9b143bdb02fb76b75e796997e2ff9f10a52a32cb288e31899f4",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S25",
+      "task_id": "instance_flipt-io__flipt-e50808c03e4b9d25a6a78af9c61a3b1616ea356b",
+      "task_sha256": "3123fd1e1809179bd5c64d6bb3f3d98b8a400dc13c0033e67c07493e3455e63c",
+      "instruction_sha256": "bdce37478c4a8e3b250f345f27f340f1c7a0926dea8b990177bcc5e257d144f4",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S26",
+      "task_id": "instance_flipt-io__flipt-f1bc91a1b999656dbdb2495ccb57bf2105b84920",
+      "task_sha256": "41a1087ea03065fd222caf2079928622390eef272efd8c579a11154f5b0999a9",
+      "instruction_sha256": "3d4b002a26df5f126bd61449e7be9a09badb03657a6820a043573ff172284600",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S27",
+      "task_id": "instance_future-architect__vuls-ef2be3d6ea4c0a13674aaab08b182eca4e2b9a17-v264a82e2f4818e30f5a25e4da53b27ba119f62b5",
+      "task_sha256": "0562f2c1a3141b2d58bd79ae0a6d8f3a08119c397145cf1c45476e4c99e939a5",
+      "instruction_sha256": "5fbfbd559759cfec906a12effd0ac06f9c249bffeeaffd8aa4fb4ce58296b27e",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S28",
+      "task_id": "instance_gravitational__teleport-005dcb16bacc6a5d5890c4cd302ccfd4298e275d-vee9b09fb20c43af7e520f57e9239bbcf46b7113d",
+      "task_sha256": "0786ce569b3a53524e1602baa50ed7982136fd2750c526650430832b565cdebd",
+      "instruction_sha256": "9a94f881e56e95c077b3bfec9a301f40f6185afa6f8fbfc9c8fc877757ecc236",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S29",
+      "task_id": "instance_gravitational__teleport-bb562408da4adeae16e025be65e170959d1ec492-vee9b09fb20c43af7e520f57e9239bbcf46b7113d",
+      "task_sha256": "b492efe874c57bcd669d90ff70860526fa18fa62873832bc759f20f978eefc19",
+      "instruction_sha256": "e57424d67864cf9e1662bfd165e651875812f7f9ddf79b65df63981c0163f10f",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S30",
+      "task_id": "instance_internetarchive__openlibrary-322d7a46cdc965bfabbf9500e98fde098c9d95b2-v13642507b4fc1f8d234172bf8129942da2c2ca26",
+      "task_sha256": "be87026420db0fe1f31146762d477ee2fcb0d0ac3d2db9edcf439d1cdb868f16",
+      "instruction_sha256": "3402f67717d1903b935bc0f07ca16bb9e066cb42af0bc0c6e273168985334df3",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S31",
+      "task_id": "instance_navidrome__navidrome-812dc2090f20ac4f8ac271b6ed95be5889d1a3ca",
+      "task_sha256": "61a057360256eadb775d35ce0e12368bd47af86540efa1a3a8540d1679905af4",
+      "instruction_sha256": "b16f0dd3923b8cd4cd3d1cb19b1ee9c567d3bca35c3101941d9dd38893ef41ca",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S32",
+      "task_id": "instance_protonmail__webclients-6e1873b06df6529a469599aa1d69d3b18f7d9d37",
+      "task_sha256": "80355688c53e47d695d46b70d44b00cf1025a629df8a7bff715cff05ce3fcba5",
+      "instruction_sha256": "e3abec6066ea049d56ef2a2859fc1a4ef877cfb6b74d8c1e629029ed635b773c",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S33",
+      "task_id": "instance_qutebrowser__qutebrowser-de4a1c1a2839b5b49c3d4ce21d39de48d24e2091-v2ef375ac784985212b1805e1d0431dc8f1b3c171",
+      "task_sha256": "ade665dd3c881ee034eba9de2c9b46be6bf7627db850371f53ef64161f3e876c",
+      "instruction_sha256": "6709df0857f7917c5cae607beadf4971772886fda46dd746f0c82a822d9af6aa",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S34",
+      "task_id": "instance_tutao__tutanota-51818218c6ae33de00cbea3a4d30daac8c34142e-vc4e41fd0029957297843cb9dec4a25c7c756f029",
+      "task_sha256": "b1963a312ff870e9f702bfba40aa9b5398991e6510235021f3dfe2b7e9b807af",
+      "instruction_sha256": "d6768968d0f7c1bda1141e12a740b0c60ba0ae276e9321ef112ff72d11767633",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "S35",
+      "task_id": "instance_tutao__tutanota-f3ffe17af6e8ab007e8d461355057ad237846d9d-vbc0d9ba8f0071fbe982809910959a6ff8884dbbf",
+      "task_sha256": "2488fdb3b48d139f525fd13945b63672d805fc88d641edef138e23ab4f98f7bb",
+      "instruction_sha256": "e8bf735d7c2526f6507788642ec0f3c9bfe417ce65bce9b947ebe025a351c5f8",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "RS01",
+      "task_id": "instance_NodeBB__NodeBB-4327a09d76f10a79109da9d91c22120428d3bdb9-vnan",
+      "task_sha256": "eb0a1284971cc65a4e3b626863c2ad8f91372ab852c72e93026ebf0d7550eed1",
+      "instruction_sha256": "a37c3d256856d664446a7324c5965a96fa7c27dc94dc16ab1a48d17052b34ae2",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "RS02",
+      "task_id": "instance_navidrome__navidrome-b65e76293a917ee2dfc5d4b373b1c62e054d0dca",
+      "task_sha256": "3a0decaf0154184d04d887fecb978a43a2a4f350864e6f80e6357d4d53fbcc5b",
+      "instruction_sha256": "c0f8fbf359ccd9c9dcc6cdf7c6afc60338ee58c044d39c63cb7db47f30a63223",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "RS03",
+      "task_id": "instance_ansible__ansible-8127abbc298cabf04aaa89a478fc5e5e3432a6fc-v30a923fb5c164d6cd18280c02422f75e611e8fb2",
+      "task_sha256": "0f04bbb7b173bbc66dfce9ae4bee10c1e6c2bb7b187ce31631eb5c11042b3c0f",
+      "instruction_sha256": "732a10a111c591e96e1d378d951d74ea2bc5932e92c5cfe86cab84959d0f3edb",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "RS04",
+      "task_id": "instance_flipt-io__flipt-c188284ff0c094a4ee281afebebd849555ebee59",
+      "task_sha256": "ce475409ad4ba81151e05c91b5cd5635fcea06dfddf90adb1ae61c0dac512b67",
+      "instruction_sha256": "2118c192eb59efef24b7b009d85e34a0b5dc3ce7cc11222446901d0325dbe556",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "T01",
+      "task_id": "embedding-drift-monitor",
+      "task_sha256": "98eafa0164a0c7eff549c84c51de3783ed9b37689a27046c5bde52ecb6e49b7a",
+      "instruction_sha256": "948fec73b3457300d42d258c2c17ece57052bde4d343063604dff3cb5bf5c5a9",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "T02",
+      "task_id": "session-window-debug",
+      "task_sha256": "6006bd1386fe06bc106a54924ac868771f77fb47cbdf837260d16d5f557b809f",
+      "instruction_sha256": "65b05c866323a7b7195a5ab72ac9c4844d1d4e5f179ff24c15baf86a5a50e193",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "T03",
+      "task_id": "cargo-flight-dispatch",
+      "task_sha256": "ad3980bb04639a5a480bfceeb48c98bd15819bbbb5a0b06746b69932bc9b40a7",
+      "instruction_sha256": "a7b0333a36ba08895d4858a6f216de7802b4e584566149acbb2ccb4420be165d",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "T04",
+      "task_id": "bun-sourcemap-leak",
+      "task_sha256": "72848d4074b37e3ee96fe9b5c68865637b794183e4606e0f345384a8333e5f4b",
+      "instruction_sha256": "665d8100ad29dd7fbf42e3ec5f00fbde8c04141183319deb30bd6722caf0f7a2",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "T05",
+      "task_id": "data-anonymization",
+      "task_sha256": "a604c6b319f6f306660c7d92580d5087c3f3f1c4a457dea69cb24dc82267f141",
+      "instruction_sha256": "2b1c2f0be6beb3ac6aea1a3c59325fc3e5d5c20ffcdb1ea4347afb8f004709c1",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "T06",
+      "task_id": "ontology-kg-querying",
+      "task_sha256": "cce99810822d905311f1f37c7453a70f725af715e200423f3c3e172e6cd043b6",
+      "instruction_sha256": "e20d406a83fdfb97a829e71ec1674d2bf2c662257b86c2f3be8755c77a142fab",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "T07",
+      "task_id": "pretrain-shard-corruption",
+      "task_sha256": "4d6081f1d3601629a165d3329f8dfeb6a72d8b978a8ebcd9bc3e30a9e2dc7080",
+      "instruction_sha256": "a9c0f8112fcad8afbaf5106062f390c528c61d536618e71e57fbad2651524fd5",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "T08",
+      "task_id": "vllm-deepseek-streaming",
+      "task_sha256": "7a044fca3d9ca71d7de59db778542281abd87837fd156754b81464b65bcbafab",
+      "instruction_sha256": "90d13b042394c28a4e543d1257659a7218749089779112663d4638c90f9215ce",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "T09",
+      "task_id": "batched-eval-parity",
+      "task_sha256": "f3912ee63b2550c193251c6b91c7d090c406e4696b883fb706845f94a20959bc",
+      "instruction_sha256": "5da93cdf030a3d4a10bcb463fe313c8b317d99568dae74c52ebb493ab63308dc",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "T10",
+      "task_id": "mvcc-lsm-compaction",
+      "task_sha256": "0e98ca97d2d7e5b53b62871a887b3fc02bbd3287db15cd149a9d6600d36dea0d",
+      "instruction_sha256": "76c595ed358032ab3c5af64292564e0f58346e629318c7d791b9b91f5ae1ca08",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "T11",
+      "task_id": "react-lead-form",
+      "task_sha256": "5d4006d80b4ab0a6308c8b0bb10ec1e8920df987fa8cff8444db0e7a39c0f010",
+      "instruction_sha256": "e1cc9571c8c9e69a2c12ace760ecad6ff2330bbc246b8ad025edd03a7eea9f9d",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "T12",
+      "task_id": "risk-scorer-replay",
+      "task_sha256": "0ded459b9ee41fca393ee5e19cf33fd641c4ae82285cadf18dfd1e5d4c1d4d84",
+      "instruction_sha256": "78cfe68f132a464ccfbec5097314e607487f5d90a418580b8066b18868bf3c6e",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "T13",
+      "task_id": "vba-userform-port",
+      "task_sha256": "e3da6c5f21f63308c6893dc0e878695cfd84e33faf5c2d923277eb1688a076c8",
+      "instruction_sha256": "33d576e87bef222748bbf86da9ad1eb9ceb7913b104deb517d15176e28bce01d",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "T14",
+      "task_id": "wal-recovery-ordering",
+      "task_sha256": "7c3fd442768edbada48e7b658d5d6376df46e11005ad725595ee88c81679a61d",
+      "instruction_sha256": "f8e44418b9cb1329b1ac226d88a03c8c9654c496e1a32950ce31d768139a4ad3",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    },
+    {
+      "display_id": "RT01",
+      "task_id": "sglang-qwen-burst",
+      "task_sha256": "f612cfd1ff9081dc99a9faf9c05785f59752a3478eb0bf3fa930945c597bd4b6",
+      "instruction_sha256": "36108a78dee57649577a348d8637a7d25b09b2bd2f023581707e6463aa00d2cc",
+      "harbor_task_config_valid": true,
+      "static_filter_pass": true
+    }
+  ]
+}

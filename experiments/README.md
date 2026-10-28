@@ -31,6 +31,8 @@ docker buildx version
 
 ## 准备冻结输入
 
+2026-10-28 用户确认的长程专项另有 [49题逐项选择](../docs/experiments/LONG_HORIZON_49_SELECTION.md) 和 [冻结审查清单](subsets/catalogs/long-horizon-49-v1.yaml)：SWE 35、TB 14，四档7/7/14/21。它与下述旧随机smoke/baseline并列保存，尚不是CLI可执行的Subset格式；本次只选题，未构建、控制验收或付费运行。不能把旧模板count改成35/14就声称执行了这49题。
+
 `configs/smoke.yaml` 和 `configs/baseline.yaml` 是有意不能直接运行的模板。填写完整源码提交、仓库外 npm 归档路径与 SHA256；不能使用 `latest`、短提交或占位哈希。沿用项目构建检查，使用干净提交的临时 checkout 执行 `npm pack`，不改变版本或发布 tag。执行时还逐文件比对归档与指定提交；不能把当前未提交源码冒充冻结包。
 
 把填好的配置保存在仓库外时，将 `suite`、`subset` 改为可解析的绝对路径。运行根目录默认 `~/.local/share/memweave-experiments/`，必须在所有 Git 工作区外。它保存缓存及 `runs/<run_id>/` 原件；不要提交个人配置、归档、Session、State 或密钥。
