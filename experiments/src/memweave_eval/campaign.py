@@ -482,7 +482,9 @@ class ObservationService:
                 self.status = self.observer.tick()
                 if time.monotonic() - last_docker >= 15:
                     out = subprocess.check_output(
-                        ["docker", "ps", "--format", "{{json .}}"], text=True, timeout=10
+                        ["docker", "ps", "--size=false", "--format", "{{json .}}"],
+                        text=True,
+                        timeout=10,
                     )
                     atomic_json(
                         self.root / "containers.json",
