@@ -440,3 +440,49 @@
 - 二进制标记补丁剩余RS01双方／S05原生的业务文本保真已完成：官方回退与干净文本应用逐文件SHA一致；所有首分与原始二进制缺失限制保留。
 
 - 2026-10-29 05:31:44 CST 人工复核：S18:preparing→software_preflight；S23:未开始→preparing；模型返回0，在途{}，峰值0，累计估算$4.318621，停止原因ValueError: partial continuation changed the original task image。
+
+- 2026-10-29 05:37:27 CST 人工复核：模型返回0，在途{}，峰值0，累计估算$4.318621，停止原因None。
+
+- 2026-10-29 05:37:50 CST 人工复核：S24:未开始→preparing；S23:未开始→preparing；S25:未开始→preparing；S14:未开始→preparing；模型返回0，在途{}，峰值0，累计估算$4.318621，停止原因None。
+
+- 2026-10-29T05:43:55.102561+08:00 审计：be3cc95ea7阶段S24原题官方oracle首次0，缺Spotlight people-filter用例，nop0；模型前按冻结同档候补RS04准备，原题控制原件不覆盖。S23 git checkout一次段错误后官方逐文件恢复脚本仍继续，尚未拿到reward，不先判控制失败。完成题镜像回收批次4／5／6回执保留：4删4引用、5删8引用、6无可删；活动／未完成题及文件原件不动。
+
+- 2026-10-29 05:49:59 CST 人工复核：S23:preparing→software_preflight；S25:preparing→software_preflight；S14:preparing→solving；模型返回0，在途{'pi-native': 1}，峰值1，累计估算$4.318621，停止原因None。
+
+- 2026-10-29 05:51:23 CST 人工复核：S23:software_preflight→regrading；S25:software_preflight→solving；模型返回31，在途{'pi-native': 2, 'pi-memweave': 1}，峰值3，累计估算$4.343564，停止原因None。
+
+- 2026-10-29 05:52:11 CST 人工复核：模型返回47，在途{'pi-native': 2, 'pi-memweave': 1}，峰值3，累计估算$4.364402，停止原因None。
+
+- 2026-10-29 05:53:23 CST 人工复核：模型返回54，在途{'pi-native': 2, 'pi-memweave': 1}，峰值3，累计估算$4.369515，停止原因None。
+
+- 2026-10-29 05:55:10 CST 人工复核：模型返回55，在途{'pi-native': 2, 'pi-memweave': 1}，峰值3，累计估算$4.370387，停止原因None。
+
+- 2026-10-29 05:58:40 CST 人工复核：S23:regrading→finished；S18:未开始→preparing；模型返回60，在途{'pi-native': 2, 'pi-memweave': 1}，峰值3，累计估算$4.375093，停止原因None。
+
+- 2026-10-29 06:01:53 CST 人工复核：模型返回71，在途{'pi-native': 2, 'pi-memweave': 1}，峰值3，累计估算$4.383016，停止原因None。
+
+- 2026-10-29 06:03:19 CST 人工复核：S18:preparing→software_preflight；模型返回85，在途{'pi-native': 2, 'pi-memweave': 1}，峰值3，累计估算$4.392854，停止原因None。
+
+- 2026-10-29 06:04:15 CST 人工复核：S18:software_preflight→solving；模型返回99，在途{'pi-native': 2, 'pi-memweave': 2}，峰值4，累计估算$4.408355，停止原因None。
+
+- 2026-10-29 06:05:57 CST 人工复核：模型返回105，在途{'pi-native': 2, 'pi-memweave': 2}，峰值4，累计估算$4.411464，停止原因None。
+
+- 2026-10-29 06:07:37 CST 人工复核：模型返回117，在途{'pi-native': 2, 'pi-memweave': 2}，峰值4，累计估算$4.420553，停止原因None。
+
+- 2026-10-29 06:09:05 CST 人工复核：模型返回120，在途{'pi-native': 2, 'pi-memweave': 1}，峰值4，累计估算$4.422513，停止原因None。
+
+- 2026-10-29 06:10:35 CST 人工复核：S18:solving→regrading；模型返回121，在途{'pi-native': 1, 'pi-memweave': 1}，峰值4，累计估算$4.423021，停止原因None。
+
+- 2026-10-29 06:12:13 CST 人工复核：S24:preparing→software_preflight；S18:regrading→finished；模型返回121，在途{'pi-native': 1, 'pi-memweave': 1}，峰值4，累计估算$4.423021，停止原因None。
+
+- 2026-10-29 06:13:39 CST 人工复核：S24:software_preflight→solving；模型返回121，在途{'pi-native': 1, 'pi-memweave': 1}，峰值4，累计估算$4.423021，停止原因None。
+
+- 2026-10-29 06:16:48 CST 人工复核：模型返回207，在途{'pi-native': 2, 'pi-memweave': 2}，峰值4，累计估算$4.493500，停止原因None。
+
+- 2026-10-29 06:17:41 CST 人工复核：模型返回211，在途{'pi-native': 2, 'pi-memweave': 2}，峰值4，累计估算$4.497661，停止原因None。
+
+- 2026-10-29 06:18:51 CST 人工复核：S25:solving→regrading；模型返回222，在途{'pi-native': 2, 'pi-memweave': 1}，峰值4，累计估算$4.506665，停止原因None。
+
+- 2026-10-29 06:20:21 CST 人工复核：模型返回233，在途{'pi-native': 2, 'pi-memweave': 1}，峰值4，累计估算$4.517446，停止原因None。
+
+- 2026-10-29 06:21:50 CST 人工复核：模型返回237，在途{'pi-native': 2, 'pi-memweave': 1}，峰值4，累计估算$4.520821，停止原因None。
