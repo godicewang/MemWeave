@@ -186,6 +186,15 @@ MW-001至MW-003的首批来源：[多场景评估报告](PLUGIN_EFFECT_EVALUATIO
 
 **失败识别与原因边界：** 插件真实末条答复把仍剩的sip/adblock失败称为“environment-only”，这是未验证的归因；官方必需失败是注入属性的SIP用例，不应以本机未安装模块为由忽略。启用缓存及依赖修改测试夹具也引入了覆盖差异；两项代码差异各自的因果贡献仍需独立消融，不把它们一概判为唯一根因。此题46次模型返回、未压缩、没有Window移动，未观察到State维护调用；缺口在诊断／回归验收，尚无证据证明长程遗忘。原件：该run `groups/g05/harbor/solve`两侧`agent/model.patch`、插件Session末条答复及`harbor/regrade`对应`verifier/output.json`／`test-stdout.txt`。保留0分，本轮不改生产插件，不用修复业务代码后的补测替换基线。
 
+
+**场景G（49题S11 NodeBB，2026-10-29）：** run `20261028T171721Z-1962af9075` 双方正常解题并评分0／0，各通过310／311项必需测试，但失败不同。原生在`Groups groups cover should remove cover`仍有文件存在；插件通过群组封面项，却在`User socket methods should clean profile images after account deletion`残留4张图片（期望0）。因此本题包含插件的局部较好表现和局部较差表现，不能把两边0分解释为同一原因，也不把局部通过当作整题插件获胜。
+
+**插件缺口及独立程序核对：** 插件`deleteImages`只枚举`{uid}-profilecover.{ext}`、`{uid}-profileavatar.{ext}`及一个`profilecover-${ext}`形式，没有枚举真实上传会产生的带时间戳文件；原生在精确名称清理后还扫描`^uid-profile(cover|avatar)(-\d+)?\.(...)$`。从两份原补丁提取未经修改的私有清理函数，以明确fs／配置／file.delete依赖桩在同一官方起始镜像默认Node18.20.8下实际执行：四种扩展×两种图片的普通名称，两边每次均清0；加入时间戳后原生每次清0，插件每次残留8。每种条件重复3次，共12次，来源／补丁SHA及结果为仓库外`analysis/long49/s11-cleanup-diagnostic/result.json`。此为原样函数探针，不是完整NodeBB数据库回放，不增加真实Pi样本，不更改官方0分。
+
+**验证受阻的处理差异：** 插件Session entry `15c1420c`只执行`redis-cli ping`，随后归档Fact明确写“Tests not run: redis down ...”，末条答复也如实声明Mocha未运行；这是受阻认知有记录的正面行为，不能写成伪造测试通过。但末条答复又声称已覆盖timestamped profilecover，代码与原样探针不支持。原生entry `e0b9e764`查到redis-server，`fb390669`启动本地Redis并继续Mocha；插件没有相应启动尝试。已确认验证链路存在差异，尚不能证明仅启动Redis就必然修正所有遗漏；原生自己的封面失败也说明自测／自写探针不能替代官方完整断言。
+
+**归因和后续边界：** 文件名覆盖不完整足以造成账号删除后残留，且与官方失败断言一致；没有证据把它归于Window移出或State持久化。原生封面失败的唯一原因尚未独立定位，保留为不同的失败链路。后续验收应让“删除后0文件”覆盖普通／带时间戳的cover和avatar、全部扩展及缺失文件；当前只记录问题，不改插件或业务补丁，不择优重跑模型。
+
 ## MW-012：短任务的Token、模型费用与冷启动耗时出现相反方向
 
 **状态：已观察到的效能取舍和评测口径case；不是功能报错，也没有证明某种固定协议优化有效。**

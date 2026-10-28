@@ -116,3 +116,43 @@
 - 2026-10-29 01:42:57 CST 人工复核：S11:software_preflight→solving；模型返回122，在途{'pi-native': 1, 'pi-memweave': 1}，峰值3，累计估算$0.545173，停止原因None。
 
 - 2026-10-29 01:43:41 CST 人工复核：模型返回158，在途{'pi-native': 1, 'pi-memweave': 1}，峰值3，累计估算$0.579547，停止原因None。
+
+- 2026-10-29 01:44:49 CST 人工复核：模型返回190，在途{'pi-native': 1, 'pi-memweave': 1}，峰值3，累计估算$0.605885，停止原因None。
+
+- 2026-10-29 01:45:00 CST 人工复核：模型返回197，在途{'pi-native': 1, 'pi-memweave': 1}，峰值3，累计估算$0.611929，停止原因None。
+
+- 2026-10-29 01:46:05 CST 人工复核：S08:preparing→software_preflight；模型返回208，在途{'pi-native': 1}，峰值3，累计估算$0.621636，停止原因None。
+
+- 2026-10-29 01:46:50 CST 人工复核：模型返回209，在途{'pi-native': 1}，峰值3，累计估算$0.622158，停止原因None。
+
+- 2026-10-29 01:47:41 CST 人工复核：S10:preparing→blocked；T02:未开始→preparing；模型返回212，在途{'pi-native': 1}，峰值3，累计估算$0.623540，停止原因None。
+
+- 2026-10-29 01:49:17 CST 人工复核：S11:solving→regrading；S12:preparing→software_preflight；T02:preparing→software_preflight；模型返回216，在途{}，峰值3，累计估算$0.627228，停止原因None。
+
+- 2026-10-29 01:50:59 CST 人工复核：S08:software_preflight→preparation_failed；S11:regrading→finished；S15:未开始→preparing；S16:未开始→preparing；模型返回216，在途{}，峰值3，累计估算$0.627228，停止原因None。
+
+- 2026-10-29 01:55:03 CST 人工复核：S12:software_preflight→solving；模型返回228，在途{'pi-native': 1, 'pi-memweave': 1}，峰值3，累计估算$0.636950，停止原因None。
+
+- S11原样清理函数探针已完成：官方起始镜像默认Node18.20.8，12次重复结果稳定；普通8文件两边清0，带时间戳8文件原生清0／插件残留8。仅明确依赖桩，不冒充全NodeBB／Pi重跑；对应官方插件账号删除4文件残留。已写MW-011场景G；原生群组封面失败另因待核，两个官方0分保留。S08候补软件阶段rm清理命令退出139，未开始模型；继续其他题、后续修复恢复。
+
+- 2026-10-29 01:56:04 CST 人工复核：模型返回273，在途{}，峰值3，累计估算$0.666708，停止原因None。
+
+- 2026-10-29 01:57:15 CST 人工复核：S12:solving→regrading；模型返回273，在途{}，峰值3，累计估算$0.666708，停止原因None。
+
+- 2026-10-29 01:59:49 CST 人工复核：S12:regrading→finished；T02:software_preflight→solving；模型返回273，在途{}，峰值3，累计估算$0.666708，停止原因None。
+
+- 2026-10-29 02:01:39 CST 人工复核：模型返回323，在途{'pi-native': 1, 'pi-memweave': 1}，峰值3，累计估算$0.713794，停止原因None。
+
+- 2026-10-29 02:03:22 CST 人工复核：模型返回360，在途{'pi-memweave': 1}，峰值3，累计估算$0.750353，停止原因None。
+
+- 2026-10-29 02:05:02 CST 人工复核：模型返回397，在途{'pi-memweave': 1}，峰值3，累计估算$0.787446，停止原因None。
+
+- 2026-10-29 02:07:08 CST 人工复核：T02:solving→finished；T03:未开始→preparing；S17:未开始→preparing；模型返回423，在途{}，峰值3，累计估算$0.821563，停止原因None。
+
+- 2026-10-29 02:12:28 CST 人工复核：S14:preparing→blocked；S15:preparing→blocked；S16:preparing→blocked；T03:preparing→software_preflight；S18:未开始→blocked；T04:未开始→blocked；S19:未开始→blocked；S20:未开始→blocked；T05:未开始→blocked；S21:未开始→blocked；S22:未开始→blocked；T06:未开始→blocked；S23:未开始→blocked；S24:未开始→blocked；模型返回423，在途{}，峰值3，累计估算$0.821563，停止原因None。
+
+- 2026-10-29 02:14:53 CST 人工复核：T03:software_preflight→solving；模型返回442，在途{'pi-native': 1, 'pi-memweave': 1}，峰值3，累计估算$0.840354，停止原因None。
+
+- 2026-10-29 02:18:23 CST 人工复核：T03:solving→finished；T07:未开始→preparing；S25:未开始→preparing；模型返回470，在途{}，峰值3，累计估算$0.901430，停止原因None。
+
+- Phase171721 closed after all paid solves/grades ended:14 normal pairs, no invalid_evidence, total estimated USD0.90142992. Remaining35 require continuation; no normal0 is rerun for a higher score. The phase closed to repair common daemon registry EOFs. Range utility has6 new boundary tests; all124 experiment tests pass and Ruff passes. A real Docker OCI import fixture preserved its exact manifest digest, RepoDigest, linux/amd64 platform and filesystem digest; no Agent/model ran. The fixture was removed. Real public S10 preload is next.

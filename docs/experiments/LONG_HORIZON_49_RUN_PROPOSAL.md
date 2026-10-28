@@ -143,3 +143,21 @@ TB正常结束的原始Trial状态scored可继承，和Pro completed_patch分别
 ### 13 美元上限取消
 
 2026-10-29用户明确答复“取消20美元上限，持续运行至49题完成”。后续阶段unlimited_cost=true，继承所有历史费用、正常结果及中断记录，不再以20美元停止。已启动且冻结的171721阶段继续现有试验；其费用保护尚未触及，若触及则保留收尾证据并以无限费用授权恢复，不结束整批目标、不为修改活跃锁而破坏证据。整批时间及token限制已取消；官方单题资源与时限、凭据隔离和评分可靠性要求不变。
+
+### 14 环境恢复候选：独立准备QEMU，不在活跃试验切换
+
+S14控制长期停在Go1.22.12驱动等待多个vet僵尸，S08另外两次基础命令git／rm退出139。尚未证明Rosetta是唯一根因；按用户环境自主修复授权，先准备可回退的QEMU amd64用户态工具作为后续诊断／恢复候选，不切换当前活跃阶段。仅作用专用Colima虚拟机的binfmt，不修改macOS的Rosetta安装、官方镜像／测试／单题预算或生产插件。QEMU通常慢于Rosetta，可能增加验证时间，故须分别记录运行阶段与同题两侧一致的仿真器，比较时间时不混淆。
+
+后续只有在当前模型／评分阶段关闭并索引证据后，才可记录现有binfmt、固定工具镜像digest／版本，暂时禁用该VM的Rosetta注册并注册QEMU amd64；先验S14官方oracle/nop、完整双侧SDK／embedding与网络隔离，成功后恢复剩余题。失败则保留无模型证据并恢复原注册，继续诊断；绝不在同一题对中途混用仿真器或按成绩切换。当前步骤只拉取工具并封存摘要，不执行privileged注册。依据：[Lima多架构文档](https://lima-vm.io/docs/config/multi-arch/)、[binfmt上游](https://github.com/tonistiigi/binfmt)。
+
+### 15 Public OCI blob preloading (approved under environment autonomy)
+
+The S10 manifest contains 5654 MiB of compressed layers; its largest layer is 2516 MiB. Host and VM probes of the same 4 MiB range measured 0.148 and 0.123 MiB/s. Add a preparation-only utility in experiments/tools/: fetch exact public GHCR blobs with bounded range concurrency, verify complete SHA256 and size, import the unchanged manifest/config/compressed layers as an OCI archive, then retain normal official admission. No task, Dockerfile, score, model call, or task resource changes.
+
+Use up to 32 workers and 4 MiB ranges, disk-backed partial files, a per-blob lock and atomic verified publication. Require HTTP 206, exact Content-Range and body length; reject unsupported ranges, damaged caches and any final digest mismatch. Public anonymous tokens and signed redirect URLs stay in memory and never enter logs/CLI/manifests. Persist only canonical public references and digests. Generated OCI archives contain verified blobs and layout/index metadata only. Test range boundaries, corruption, ignored ranges and cache reuse against a local HTTP fixture before a real S10 import. Tool source is separate from the frozen inference adapter; active trials continue unchanged. References: https://github.com/opencontainers/image-spec/blob/main/image-layout.md and https://github.com/opencontainers/distribution-spec/blob/main/spec.md .
+
+### 16 Docker registry transport repair
+
+After all paid solves and grades of phase171721 finished, the phase closed with14 normal pairs and complete evidence. Multiple public registry HEAD requests returned EOF. Read-only probes confirmed the host system proxy and VM shell use the existing credential-free proxy, while DockerInfo reports no daemon HTTP/HTTPS proxy. Configure only this dedicated VM daemon to use the same VM proxy and restart Docker after owned preparation clients stop; preserve the previous daemon config and rollback path. No host proxy settings, task container proxy environment, allowlist, Dockerfile or score is changed. Verify DockerInfo, public manifest/pull access and original-image controls before the unlimited continuation. Continue all historical fees and primary scores.
+
+Docker daemon proxy settings follow https://docs.docker.com/engine/daemon/proxy/ . OCI layout was checked against the upstream image-layout specification; a real canonical ghcr.io local fixture import preserved RepoDigest exactly. Unqualified OCI fixture names do not resolve normally in this engine and are not supported by the preparation CLI. All CLI image references are fully qualified GHCR names.
