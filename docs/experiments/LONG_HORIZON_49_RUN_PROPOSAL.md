@@ -156,6 +156,8 @@ The S10 manifest contains 5654 MiB of compressed layers; its largest layer is 25
 
 Use up to 32 workers and 4 MiB ranges, disk-backed partial files, a per-blob lock and atomic verified publication. Require HTTP 206, exact Content-Range and body length; reject unsupported ranges, damaged caches and any final digest mismatch. Public anonymous tokens and signed redirect URLs stay in memory and never enter logs/CLI/manifests. Persist only canonical public references and digests. Generated OCI archives contain verified blobs and layout/index metadata only. Test range boundaries, corruption, ignored ranges and cache reuse against a local HTTP fixture before a real S10 import. Tool source is separate from the frozen inference adapter; active trials continue unchanged. References: https://github.com/opencontainers/image-spec/blob/main/image-layout.md and https://github.com/opencontainers/distribution-spec/blob/main/spec.md .
 
+S19的4MiB可选预加载触发片段大小／120秒的组合保护而失败，原日志未区分两者，不能确定唯一原因；未准入，最终由标准Docker pull取得。准备助手可调用既有fetch_blob的chunk_size=1MiB，保持相同120秒保护、精确206/Content-Range、最终SHA和32路上限，并记录调用脚本SHA／实际片长。先用一个真实公开多片blob验证完整digest。S21–S35可按固定顺序只预取到主机内容缓存、不立即load，避免挤占VM中五个SWE题对的磁盘预留；后续按需导入必须使用已验证的原manifest/config/layers，继续原正式准入。此为有限准备进程，不产生模型调用，不创建定时任务。
+
 ### 16 Docker registry transport repair
 
 After all paid solves and grades of phase171721 finished, the phase closed with14 normal pairs and complete evidence. Multiple public registry HEAD requests returned EOF. Read-only probes confirmed the host system proxy and VM shell use the existing credential-free proxy, while DockerInfo reports no daemon HTTP/HTTPS proxy. Configure only this dedicated VM daemon to use the same VM proxy and restart Docker after owned preparation clients stop; preserve the previous daemon config and rollback path. No host proxy settings, task container proxy environment, allowlist, Dockerfile or score is changed. Verify DockerInfo, public manifest/pull access and original-image controls before the unlimited continuation. Continue all historical fees and primary scores.
@@ -172,8 +174,16 @@ The classifier previously returned cold rank3 for every Dockerfile task, even wh
 
 先从实时对照的原件路径和group lock生成明确镜像ID清单，记录标签／digest／大小；排除任何活动或尚存容器引用的ID，以及未完成任务组的ID。只对清单内本实验标签或明确官方任务来源标签逐项删除，不执行全局image/system prune，不删卷或容器，不触碰活动构建。删除前再次核对容器引用；保存操作回执和磁盘前后状态。此操作不改变已冻结证据或任务资源，也不放宽调度配额。
 
+本地Dockerfile生成、无法按公开registry digest重新拉取的镜像，在后续回收前先保存仓库外的完整镜像归档、归档SHA及原ID／标签，并核对归档含原manifest。已完成题与未完成题共用同一镜像ID时仍保留该镜像。回收不删除软件对象或构建缓存；恢复时必须核对原ID，不接受近似重建替换冻结环境。
+
+某槽位已按冻结候补完成正常题对时，该槽位原题无模型准入失败所留下的镜像也可回收，前提是记录原失败、实际候补绑定和公开不可变RepoDigest，并确认不被任何未完成题或容器引用。原题不重新进入抽题，也不把候补成绩当作原题成绩。
+
 ### 19 有限的无模型软件预热
 
 冷SDK安装串行时间可能长于解题，使目标10个真实解题实例难以重叠。按已批准“其余准备可继续”和环境自主处理的范围，允许仓库外有限辅助进程对下一批已拉取的SWE官方镜像预热既有软件对象，首批只S16–S20、逐题串行、最多一个准备容器；缺镜像或正式组已开始则跳过。只调用现有prepare_only与完整SDK／embedding／网络探针，无认证、模型或官方评分，不代替该题正式oracle/nop及双侧准入。
 
 为控制背景负载，辅助准备Compose单独限0.25 CPU／1 GiB，0模型软件预热不计解题并发；记录与付费试验重叠、资源及耗时。正式解题／评分的原资源、单题预算和不可变软件核验保持不变，不能拿辅助准备时间当官方解题耗时。缓存仍按原镜像ID／版本／配方分键、原子发布并受既有对象锁保护；不跨镜像挪用安装树，不修改当前冻结适配器。失败只留诊断并让正式准入自行验证；这不是正常0分重跑，也不增加后台定时任务。
+
+### 20 已退出的历史无模型控制容器
+
+发现141814阶段S08 nop与171721阶段T07 oracle留下两个exited容器，均已停止、所属阶段已结束，没有Pi模型Session。它们仍占用镜像引用，阻止有界回收。按环境自主处理授权，逐个核对Compose工作目录／绑定日志路径、原Trial的oracle或nop身份、阶段结束及无Session证据；保存脱敏元数据和仓库外rootfs归档及SHA，绑定日志／原评分留在原位置，再以不带force的docker rm删除这两个明确ID。运行中容器、模型试验、其他容器和卷均不动；重新检查状态发生变化即跳过。此为一次性清理，不增加常驻清理器或定时任务；§18的镜像回收程序仍不自行删除容器。
