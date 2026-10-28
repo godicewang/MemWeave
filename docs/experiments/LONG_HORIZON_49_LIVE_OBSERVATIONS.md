@@ -62,3 +62,6 @@
 - 22:27 CST：已向用户集中对齐探针修复（固定Node内置HTTPS，相同网络边界）、跨这一处接线等价变更的来源链、已计费中断题保留不重跑与已证实Pi前失败的首次真实解题边界；未改核心插件／Rule或开始新付费运行。提案INTERRUPTED_PHASE_RECOVERY_PROPOSAL.md；其余原官方镜像预拉取仍继续。
 
 - 22:30 CST更正：精确原件时间表明，S03插件CancelledError发生14:21:42.365 UTC，State成功14:21:43.429、最终assistant stop为14:21:47.051，均在取消之后。此前“最后答复后仍被取消”顺序判断错误。finally快照中的state.json只有Goal，与快照先于后台继续写State相符，不能称为插件持久化丢写。捕获补丁官方新沙箱分数原生1／插件0、两侧评分无异常；保留中断标记，不替换原件或作为正常完成比较。独立评分原件analysis/long49/s03-interrupted-patch-grading/audit.json。
+
+- 22:43 CST：Node探针在原S05官方镜像的两个真实Harbor隔离环境验收通过：模型端点401，example.com在原Agent网络策略下ECONNRESET；两侧完整SDK加载成功，原生4工具／插件16工具，插件embedding384维，模型请求0、无凭据。此输运诊断显式部署先前密封的同版本软件，不发布或伪造新缓存身份；正式下一阶段仍按变化后的新配方键重新完整准备。原件analysis/long49/node-probe-real-acceptance/acceptance.json。109项实验自动检查、Ruff及编译通过。
+- 源码等价性仅放行已批准旧pi_agent SHA 67b9481b…→2599b4fb…及固定network_probe SHA 57a62831…，Pi调用／捕获代码不变；其他适配差异仍拒绝。真实父记录验证继承6行原尝试、累计0.093063336美元，S03明确中断／不参与正常配对比较；S05两侧按精确旧异常、无Pi输出／Session／usage及空补丁证明0模型，可首次真实解题。公共模型故障仍全局停止新模型，可靠观测和原时限有余额时允许无模型官方评分完成原补丁。

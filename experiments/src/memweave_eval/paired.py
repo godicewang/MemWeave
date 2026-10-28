@@ -190,26 +190,39 @@ def completed_info(spec, catalog):
     for field in ("catalog_sha256", "subject", "runtime", "model", "variants", "execution"):
         if lock["config"][field] != config[field]:
             raise ValueError("completed parent identity mismatch: " + field)
-    for name in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py"):
-        relative = "experiments/src/memweave_eval/" + name
-        if lock["implementation_files"].get(relative) != file_digest(REPOSITORY / relative):
-            raise ValueError("Pi/protocol adapter changed since completed phase: " + name)
+    equivalence = verify_adapters(lock)
     summary = generate_campaign_report(parent)
     if summary.get("invalid_evidence"):
         raise ValueError("completed parent has damaged evidence")
-    rows = [r for r in summary["rows"] if r.get("solve_source")]
+    candidates = [r for r in summary["rows"] if r.get("solve_source")]
+    zero = set()
+    for task in {r["task_id"] for r in candidates}:
+        pair = [r for r in candidates if r["task_id"] == task]
+        if len(pair) == 2 and all(pre_pi_failure(
+            parent, r, lock["implementation_files"]["experiments/src/memweave_eval/pi_agent.py"]
+        ) for r in pair):
+            zero.add(task)
+    rows = [r for r in candidates if r["task_id"] not in zero]
     selected = {r["task_id"] for r in catalog["selected"]}
     keys = {(r["task_id"], r["variant_id"]) for r in rows}
     tasks = {r["task_id"] for r in rows}
     if not rows or len(keys) != len(rows) or keys != {(t, v) for t in tasks for v in VARIANTS}:
         raise ValueError("completed parent must contain whole unique pairs")
     if not tasks <= selected or any(
-        r.get("solve_status") != "completed_patch"
-        or r.get("success") is None
+        r.get("solve_status") not in ("completed_patch", "cancelled")
         or not r.get("session_diagnostics", {}).get("model_responses_with_usage")
         for r in rows
     ):
         raise ValueError("completed pair has incomplete solve/primary score/model evidence")
+    interrupted = sorted({r["task_id"] for r in rows if r.get("success") is None
+                          or r.get("solve_status") == "cancelled"
+                          or r.get("retained_interrupted")})
+    for row in rows:
+        if row["task_id"] in interrupted:
+            path = Path(row["solve_source"])
+            path = path if path.is_absolute() else parent / path
+            if not (path.parent / "agent/model.patch").is_file():
+                raise ValueError("interrupted model pair has no captured patch")
     groups = set()
     for job in state["jobs"].values():
         if job["purpose"] != "solve":
@@ -220,7 +233,7 @@ def completed_info(spec, catalog):
         group = path.parts[1]
         groups.add(group)
         bound = {t for t, a in state["tasks"].items() if a.get("group") == group}
-        if len(bound) != 1 or not bound <= tasks:
+        if len(bound) != 1 or not bound <= tasks | zero:
             raise ValueError("started model pair missing complete primary evidence")
     for session in parent.glob("groups/*/harbor/solve/*/agent/pi/sessions/*.jsonl"):
         if session.relative_to(parent).parts[1] not in groups:
@@ -245,7 +258,10 @@ def completed_info(spec, catalog):
     }
     return {
         "kind": "completed_pairs", "parent": str(parent), "known_cost_usd": cost,
+        "adapter_equivalence": equivalence,
         "included_keys": [list(k) for k in sorted(keys)], "blocked_admissions": blocks,
+        "retained_interrupted_tasks": interrupted,
+        "pre_pi_failures": [r for r in candidates if r["task_id"] in zero],
         "window_started_at": state["window_started_at"],
         "window_deadline_at": state["window_deadline_at"],
         "hashes": {
@@ -253,6 +269,50 @@ def completed_info(spec, catalog):
             for name in ("experiment.lock.json", "run.json", "live.json", "evidence-index.json")
         },
     }, rows
+
+
+def pre_pi_failure(parent, row, adapter_sha):
+    """Only the audited legacy probe exception proves Pi never launched."""
+    if adapter_sha != "67b9481b7e7b9cc08e00b91dfd1855e10ca6825df3ed60c131f85996d79f0192":
+        return False
+    path = Path(row["solve_source"])
+    path = path if path.is_absolute() else parent / path
+    if not path.is_file():
+        return False
+    raw = json.loads(path.read_text())
+    error = raw.get("exception_info") or {}
+    patch = path.parent / "agent/model.patch"
+    return bool(
+        error.get("exception_type") == "RuntimeError"
+        and error.get("exception_message") == "Pro offline/model-endpoint network probes failed"
+        and not (row.get("session_diagnostics") or {}).get("model_responses_with_usage")
+        and row.get("peak_estimated_cost_usd") is None
+        and not list((path.parent / "agent").rglob("*.jsonl"))
+        and not (path.parent / "agent/pi.txt").exists()
+        and patch.is_file() and patch.stat().st_size == 0
+        and all(v is None for v in (raw.get("agent_result") or {}).values())
+    )
+
+
+def verify_adapters(lock):
+    old = lock["implementation_files"]
+    base = "experiments/src/memweave_eval/"
+    legacy = "67b9481b7e7b9cc08e00b91dfd1855e10ca6825df3ed60c131f85996d79f0192"
+    replacement = "2599b4fb16c93592eab936942c0ddd7e177ed13eb047d69fe40e745dd0954eed"
+    helper = "57a62831b10be9fc29ac7683a225b82f8c92e3585513355769fddc66a2b8aa4b"
+    migration = (
+        old.get(base + "pi_agent.py") == legacy
+        and file_digest(REPOSITORY / (base + "pi_agent.py")) == replacement
+        and old.get(base + "network_probe.py") is None
+        and file_digest(REPOSITORY / (base + "network_probe.py")) == helper
+    )
+    for name in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py", "network_probe.py"):
+        if migration and name in ("pi_agent.py", "network_probe.py"):
+            continue
+        if old.get(base + name) != file_digest(REPOSITORY / (base + name)):
+            raise ValueError("Pi/protocol adapter changed since completed phase: " + name)
+    return {"reason": "approved Node probe only", "old_pi_sha256": legacy,
+            "new_pi_sha256": replacement, "probe_sha256": helper} if migration else None
 
 
 def software_cached(spec, images):
@@ -327,6 +387,9 @@ class PairService(ObservationService):
     def check(self):
         if self.fatal.is_set():
             raise TimeoutError("campaign globally cancelled")
+        return super().check()
+
+    def check_grading(self):
         return super().check()
 
 

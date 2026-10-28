@@ -12,6 +12,7 @@ from typing import Annotated, Literal
 from harbor.agents.installed.pi import Pi, PiOptions
 from harbor.agents.options import Cli
 
+from .network_probe import check_network
 from .runtime_cache import materialize, node_download
 from .storage import file_digest
 
@@ -324,25 +325,7 @@ class ExperimentPi(Pi):
         self._agent_started = time.monotonic()
         try:
             if self.options.protocol == "swe-pro-v2":
-                model = await environment.exec(
-                    command="curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 10 "
-                    "https://api.deepseek.com/models",
-                    timeout_sec=15,
-                )
-                outside = await environment.exec(
-                    command="curl -sS -o /dev/null --connect-timeout 3 --max-time 5 https://example.com",
-                    timeout_sec=10,
-                )
-                if (
-                    model.return_code
-                    or model.stdout.strip() not in {"200", "401"}
-                    or outside.return_code == 0
-                ):
-                    raise RuntimeError("Pro offline/model-endpoint network probes failed")
-                (self.logs_dir / "network-probe.json").write_text(
-                    json.dumps({"model_endpoint": "reachable", "general_internet": "blocked"})
-                    + "\n"
-                )
+                await check_network(environment, self._asset_root + "/node/bin/node", self.logs_dir)
             await super().run(instruction, environment, context)
         finally:
             if self.options.protocol == "swe-pro-v2":

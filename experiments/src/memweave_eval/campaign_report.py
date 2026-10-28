@@ -193,13 +193,16 @@ def generate_campaign_report(root: Path):
         if subset and (
             not included
             or {(r["task_id"], r["variant_id"]) for r in originals} != included
-            or any(r["success"] is None for r in originals)
+            or any(r["success"] is None and r["task_id"] not in
+                   lineage.get("retained_interrupted_tasks", []) for r in originals)
         ):
             invalid.append("completed_parent/incomplete_included_pairs")
         for old in originals:
             row = dict(old, inherited=True)
             row.setdefault("origin_run_id", previous["run_id"])
             row.setdefault("source_run_dir", str(parent))
+            if row["task_id"] in lineage.get("retained_interrupted_tasks", []):
+                row.update(retained_interrupted=True, comparison_eligible=False)
             for field in ("solve_source", "score_source"):
                 if row.get(field):
                     row[field] = str(parent / row[field])
@@ -236,6 +239,7 @@ def generate_campaign_report(root: Path):
         stop_reason=state.get("stop_reason"),
         rows=rows,
         blocked_attempt_rows=blocked_attempt_rows,
+        pre_pi_failures=(lineage or {}).get("pre_pi_failures", []),
         invalid_evidence=invalid,
         overall_wall_seconds=duration(
             dict(state, started_at=state.get("window_started_at", state.get("started_at")))

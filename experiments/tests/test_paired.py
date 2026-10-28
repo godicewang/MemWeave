@@ -137,7 +137,7 @@ def test_bootstrap_import_keeps_cost_deadline_and_rejects_unknown_cost(tmp_path,
                 "experiments/src/memweave_eval/" + n: file_digest(
                     REPOSITORY / "experiments/src/memweave_eval" / n
                 )
-                for n in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py")
+                for n in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py", "network_probe.py")
             },
         },
     )
@@ -279,7 +279,7 @@ def test_completed_parent_keeps_all_started_pairs_and_first_zero_scores(tmp_path
         "implementation_files": {
             "experiments/src/memweave_eval/" + n: file_digest(
                 REPOSITORY / "experiments/src/memweave_eval" / n
-            ) for n in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py")
+            ) for n in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py", "network_probe.py")
         },
     })
     state = {
@@ -325,3 +325,70 @@ def test_completed_parent_keeps_all_started_pairs_and_first_zero_scores(tmp_path
     summary["estimated_known_cost_usd"] = 0.5
     with pytest.raises(ValueError, match="cost"):
         completed_info(s, catalog)
+    summary["estimated_known_cost_usd"] = 0.4
+    for row in rows[2:]:
+        row["success"] = None
+        row["solve_source"] = "groups/g02/harbor/solve/" + row["variant_id"] + "/result.json"
+        p = parent / row["solve_source"]
+        atomic_json(p, {})
+        (p.parent / "agent").mkdir()
+        (p.parent / "agent/model.patch").write_text("captured patch")
+    rows[3].update(solve_status="cancelled", error_type="CancelledError")
+    info, imported = completed_info(s, catalog)
+    assert info["retained_interrupted_tasks"] == ["second"]
+    assert len(imported) == 4
+
+
+def test_zero_model_proof_requires_exact_pre_pi_failure(tmp_path):
+    from memweave_eval.paired import pre_pi_failure
+    from memweave_eval.storage import atomic_json
+
+    path = tmp_path / "groups/g05/harbor/solve/trial/result.json"
+    atomic_json(path, {"exception_info": {
+        "exception_type": "RuntimeError",
+        "exception_message": "Pro offline/model-endpoint network probes failed",
+    }, "agent_result": None})
+    (path.parent / "agent").mkdir()
+    (path.parent / "agent/model.patch").write_text("")
+    row = {"solve_source": str(path), "session_diagnostics": None,
+           "peak_estimated_cost_usd": None}
+    digest = "67b9481b7e7b9cc08e00b91dfd1855e10ca6825df3ed60c131f85996d79f0192"
+    assert pre_pi_failure(tmp_path, row, digest)
+    assert not pre_pi_failure(tmp_path, row, "f" * 64)
+    (path.parent / "agent/pi.txt").write_text("some Pi output")
+    assert not pre_pi_failure(tmp_path, row, digest)
+
+
+def test_shared_model_stop_allows_observed_grading_but_not_observer_failure(tmp_path):
+    from types import SimpleNamespace
+
+    from memweave_eval.paired import PairService
+
+    service = PairService(tmp_path)
+    service.thread = SimpleNamespace(is_alive=lambda: True)
+    service.fatal.set()
+    with pytest.raises(TimeoutError):
+        service.check()
+    assert service.check_grading() == 0
+    service.error = "observation unavailable"
+    with pytest.raises(ValueError, match="observation"):
+        service.check_grading()
+
+
+def test_only_approved_probe_adapter_change_can_cross_lineage(tmp_path):
+    from memweave_eval.paired import verify_adapters
+    from memweave_eval.spec import REPOSITORY
+    from memweave_eval.storage import file_digest
+
+    files = {"experiments/src/memweave_eval/" + n: file_digest(
+        REPOSITORY / "experiments/src/memweave_eval" / n
+    ) for n in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py", "network_probe.py")}
+    assert verify_adapters({"implementation_files": files}) is None
+    files.pop("experiments/src/memweave_eval/network_probe.py")
+    files["experiments/src/memweave_eval/pi_agent.py"] = (
+        "67b9481b7e7b9cc08e00b91dfd1855e10ca6825df3ed60c131f85996d79f0192"
+    )
+    assert verify_adapters({"implementation_files": files})["reason"] == "approved Node probe only"
+    files["experiments/src/memweave_eval/pi_agent.py"] = "0" * 64
+    with pytest.raises(ValueError, match="adapter changed"):
+        verify_adapters({"implementation_files": files})

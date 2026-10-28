@@ -509,9 +509,10 @@ def execute_job(config, group_root, env, deadline, budget, service, *, purpose, 
     from harbor.models.job.config import JobConfig
 
     JobConfig.model_validate(config)
-    if time.monotonic() >= deadline or (inference and service.check() >= budget):
+    check = service.check_grading if purpose == "regrade" and hasattr(service, "check_grading") else service.check
+    if time.monotonic() >= deadline or (inference and check() >= budget):
         raise TimeoutError("campaign shared time/cost stop before Job")
-    service.check()
+    check()
     path = group_root / "configs" / (config["job_name"] + ".json")
     atomic_json(path, config, immutable=True)
     console = group_root / "harbor-console" / (config["job_name"] + ".log")
@@ -527,7 +528,7 @@ def execute_job(config, group_root, env, deadline, budget, service, *, purpose, 
         )
         try:
             while process.poll() is None:
-                cost = service.check()
+                cost = check()
                 if time.monotonic() >= deadline:
                     raise TimeoutError("campaign elapsed-time stop")
                 if inference and cost >= budget:
