@@ -172,6 +172,28 @@ def bootstrap_info(spec, catalog):
     return info, summary["rows"]
 
 
+def software_cached(spec, images):
+    plan = create_plan(spec, images)
+    return all(
+        (Path(plan["cache"]) / entry[k]["key"] / "manifest.json").is_file()
+        for entry in plan["entries"].values()
+        for k in ("base", "addon", "models")
+    )
+
+
+def prepare_pair_runtimes(spec, group, paths, images, cold_lock, check, execute, deadline):
+    check()
+    if software_cached(spec, images):
+        return prepare_runtimes(spec, group, paths, images, {"jobs": {}}, execute, deadline)
+    while not cold_lock.acquire(timeout=0.5):
+        check()
+    try:
+        check()
+        return prepare_runtimes(spec, group, paths, images, {"jobs": {}}, execute, deadline)
+    finally:
+        cold_lock.release()
+
+
 def readiness(spec, row, source):
     """Advisory rank only; actual admission always verifies the complete inputs."""
     env = tomllib.loads((source / "task.toml").read_text()).get("environment", {})
@@ -189,12 +211,7 @@ def readiness(spec, row, source):
         "id": data["Id"],
         "platform": data["Os"] + "/" + data["Architecture"],
     }
-    plan = create_plan(spec, {row["task_id"]: image})
-    entry = plan["entries"][ref]
-    ready = all(
-        (Path(plan["cache"]) / entry[k]["key"] / "manifest.json").is_file()
-        for k in ("base", "addon", "models")
-    )
+    ready = software_cached(spec, {row["task_id"]: image})
     return 0 if ready else 1
 
 
@@ -302,6 +319,7 @@ def run_pairs(spec):
         service.thread.start()
         lock = threading.RLock()
         build_lock = threading.Lock()
+        cold_lock = threading.Lock()
         used_reserves = {
             r["actual_task_id"] for r in old_rows if r["actual_task_id"] != r["task_id"]
         }
@@ -402,6 +420,7 @@ def run_pairs(spec):
                         state,
                         lock,
                         build_lock,
+                        cold_lock,
                         service,
                         deadline,
                         budget,
@@ -474,6 +493,7 @@ def _pair(
     state,
     state_lock,
     build_lock,
+    cold_lock,
     service,
     deadline,
     budget,
@@ -577,7 +597,14 @@ def _pair(
     docker = docker_preflight(pair_spec, [infos[actual["task_id"]]], preparations)
     images = image_snapshot(paths)
     mark("software_preflight")
-    runtime = prepare_runtimes(pair_spec, group, paths, images, {"jobs": {}}, execute, deadline)
+
+    def check_preparation():
+        if time.monotonic() >= deadline or service.check() >= budget:
+            raise TimeoutError("shared time/cost stop during software preparation")
+
+    runtime = prepare_pair_runtimes(
+        pair_spec, group, paths, images, cold_lock, check_preparation, execute, deadline
+    )
     frozen = {
         "tasks": admitted,
         "preparations": preparations,

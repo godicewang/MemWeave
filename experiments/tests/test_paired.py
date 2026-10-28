@@ -60,6 +60,47 @@ def test_task_order_keeps_both_suites_and_every_slot_once():
     assert rows[5] == tb[0]
 
 
+def test_warm_preflight_bypasses_cold_installer_lock(tmp_path, monkeypatch):
+    import memweave_eval.paired as module
+
+    monkeypatch.setattr(module, "software_cached", lambda *_: True)
+    monkeypatch.setattr(module, "prepare_runtimes", lambda *args: "checked")
+    lock = threading.Lock()
+    lock.acquire()
+    assert module.prepare_pair_runtimes(
+        None, tmp_path, [], {}, lock, lambda: None, lambda: True, 1
+    ) == "checked"
+    lock.release()
+
+
+def test_cold_preflight_serializes_and_checks_stop(tmp_path, monkeypatch):
+    import memweave_eval.paired as module
+
+    monkeypatch.setattr(module, "software_cached", lambda *_: False)
+    lock = threading.Lock()
+    calls = []
+
+    def prepare(*args):
+        assert lock.locked()
+        calls.append(True)
+        raise ValueError("failed installation")
+
+    monkeypatch.setattr(module, "prepare_runtimes", prepare)
+    with pytest.raises(ValueError, match="failed installation"):
+        module.prepare_pair_runtimes(None, tmp_path, [], {}, lock, lambda: None, lambda: True, 1)
+    assert not lock.locked()
+    assert calls == [True]
+    lock.acquire()
+
+    def stop():
+        raise TimeoutError("stop before another installation")
+
+    with pytest.raises(TimeoutError, match="stop before"):
+        module.prepare_pair_runtimes(None, tmp_path, [], {}, lock, stop, lambda: True, 1)
+    lock.release()
+    assert calls == [True]
+
+
 def test_bootstrap_import_keeps_cost_deadline_and_rejects_unknown_cost(tmp_path, monkeypatch):
 
     from test_campaign import spec
