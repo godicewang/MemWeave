@@ -165,3 +165,9 @@ Docker daemon proxy settings follow https://docs.docker.com/engine/daemon/proxy/
 ### 17 Cache-ready ordering correction
 
 The classifier previously returned cold rank3 for every Dockerfile task, even when the exact official main/verifier contexts were already prebuilt; initial interleaving then placed5 missing SWE images ahead of those ready TB tasks. This conflicts with the confirmed ready-pair priority. Under the environment autonomy authorization, recognize deterministic local formal/prewarm tags for both official contexts as advisory readiness, then interleave suites within each readiness rank rather than putting cold SWE ahead of warm TB. Derive tags from the frozen slot ordinal, role, platform and unchanged context SHA. Every task still passes original build/admission/controls and complete dual software checks before inference; readiness never substitutes for provenance or changes tasks, reserve order, budgets, scores or model settings. The zero-inference182559 preparation phase is retained; continue its14 inherited normal pairs and fees after this small scheduling correction.
+
+### 18 已完成题镜像的有界回收
+
+240 GiB专用虚拟盘需要容纳后续官方大镜像，镜像常驻会压低按官方资源计算的并发容量。按用户环境自主修复授权，只回收双方正常解题并完成首次官方评分、绑定核验通过的题对所用可重建任务镜像；保留全部补丁、Session、评分、哈希、来源、软件缓存和费用。镜像以后需要诊断时按原来源／Dockerfile及冻结摘要恢复，绝不从解过题的实例制作模板。
+
+先从实时对照的原件路径和group lock生成明确镜像ID清单，记录标签／digest／大小；排除任何活动或尚存容器引用的ID，以及未完成任务组的ID。只对清单内本实验标签或明确官方任务来源标签逐项删除，不执行全局image/system prune，不删卷或容器，不触碰活动构建。删除前再次核对容器引用；保存操作回执和磁盘前后状态。此操作不改变已冻结证据或任务资源，也不放宽调度配额。
