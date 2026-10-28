@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shlex
+import time
 from pathlib import Path
 from typing import Annotated
 
@@ -47,6 +48,28 @@ class Checks(StrictModel):
 
 
 async def check_network(environment, node: str, logs: Path):
+    attempts = []
+    for _ in range(3):
+        began = time.monotonic()
+        record = await _check_once(environment, node)
+        record["elapsed_seconds"] = time.monotonic() - began
+        attempts.append(record)
+        checks = record.get("checks", {})
+        model, outside = checks.get("model", {}), checks.get("outside", {})
+        if (record["passed"] or model.get("ok") is not False
+                or model.get("error") not in {
+                    "ECONNRESET", "ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN",
+                    "ETIMEDOUT", "ENETUNREACH", "EHOSTUNREACH",
+                    "CONNECT_TIMEOUT", "TOTAL_TIMEOUT",
+                } or outside.get("ok") is not False):
+            break
+    final = dict(attempts[-1], attempts=attempts)
+    atomic_json(logs / "network-probe.json", final)
+    if not final["passed"]:
+        raise RuntimeError("Pro offline/model-endpoint network probes failed; see network-probe.json")
+
+
+async def _check_once(environment, node: str):
     record = {"passed": False, "credential_free": True}
     try:
         result = await environment.exec(
@@ -65,6 +88,4 @@ async def check_network(environment, node: str, logs: Path):
         record["general_internet"] = "blocked" if not checks.outside.ok else "reachable"
     except Exception as exc:  # noqa: BLE001 -- record only a safe error category.
         record["probe_error_type"] = type(exc).__name__
-    atomic_json(logs / "network-probe.json", record)
-    if not record["passed"]:
-        raise RuntimeError("Pro offline/model-endpoint network probes failed; see network-probe.json")
+    return record

@@ -372,3 +372,18 @@
 - 2026-10-29 04:24:30 CST 人工复核：模型返回1990，在途{'pi-native': 2}，峰值5，累计估算$3.667152，停止原因None。
 
 - 2026-10-29 04:25:03 CST 人工复核：模型返回1995，在途{'pi-native': 2}，峰值5，累计估算$3.677788，停止原因None。
+
+- 2026-10-29 04:25:33 CST 人工复核：S18:preparing→software_preflight；模型返回1999，在途{'pi-native': 2}，峰值5，累计估算$3.683334，停止原因None。
+
+- 2026-10-29 04:26:20 CST 人工复核：S18:software_preflight→solving；模型返回2007，在途{'pi-native': 2}，峰值5，累计估算$3.698926，停止原因None。
+
+- 2026-10-29 04:27:16 CST 人工复核：模型返回2029，在途{'pi-native': 3, 'pi-memweave': 1}，峰值5，累计估算$3.722266，停止原因None。
+
+- S16模型前探针model TOTAL_TIMEOUT／outside ECONNRESET，不是官方测试或插件能力0；原生仍真实运行。已在执行方案§22细化单侧保留、仅补缺失侧／首次评分的边界；原生／插件生产候选不变。先增写测试，实际观察当前实现5项新增传输／资源队列边界失败、3项续跑接口测试尚无实现；这是开发红灯阶段，未声称通过，冻结源码仍未改。
+- S21／S22／S23原registry root身份、全部rootfs与Config核对通过后导入；S21–22有限SDK准备继续，最多一个0.25CPU／1GiB容器、0模型。S17双方正常1分后，只删除其2个可按公开RepoDigest重拉的任务镜像标签，删除前重复确认无任何容器引用、无未完成组共用；补丁／首次评分／Session／软件对象保留，回执completed-image-eviction-3-20261029/receipt.json。
+
+- 2026-10-29 04:28:24 CST 人工复核：模型返回2034，在途{}，峰值5，累计估算$3.724934，停止原因None。
+
+- 2026-10-29 04:28:42 CST 人工复核：T07:solving→finished；S18:solving→regrading；模型返回2036，在途{}，峰值5，累计估算$3.727987，停止原因ValueError: Pi produced no model evidence; check shared setup/authentication。
+
+- 2026-10-29 04:30:39 CST 人工复核：S18:regrading→finished；模型返回2036，在途{}，峰值5，累计估算$3.727987，停止原因ValueError: Pi produced no model evidence; check shared setup/authentication。

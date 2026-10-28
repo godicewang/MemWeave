@@ -62,17 +62,18 @@ class ResourcePool:
     def acquire(self, weight, stopped):
         if any(w > cap for w, cap in zip(weight, self.limits, strict=True)):
             raise ValueError("official pair envelope exceeds available host resources")
-        ticket = object()
+        ticket = (object(), tuple(weight))
         with self.condition:
             self.waiting.append(ticket)
             try:
                 while True:
                     if stopped():
                         raise TimeoutError("campaign stopped while waiting for pair resources")
-                    if self.waiting[0] is ticket and all(
+                    fitting = next((t for t in self.waiting if all(
                         u + w <= cap
-                        for u, w, cap in zip(self.used, weight, self.limits, strict=True)
-                    ):
+                        for u, w, cap in zip(self.used, t[1], self.limits, strict=True)
+                    )), None)
+                    if fitting is ticket:
                         self.used = [u + w for u, w in zip(self.used, weight, strict=True)]
                         return
                     self.condition.wait(0.5)
@@ -177,7 +178,7 @@ def bootstrap_info(spec, catalog):
 
 
 def completed_info(spec, catalog):
-    """Continue only when every started model pair has complete primary evidence."""
+    """Import indexed originals; all_tasks may complete only a missing side or grade."""
     from .campaign_report import generate_campaign_report
 
     supplied = spec.completed_parent
@@ -204,11 +205,17 @@ def completed_info(spec, catalog):
             parent, r, lock["implementation_files"]["experiments/src/memweave_eval/pi_agent.py"]
         ) for r in pair):
             zero.add(task)
-    rows = [r for r in candidates if r["task_id"] not in zero]
+    zero_keys = {(r["task_id"], r["variant_id"]) for r in candidates
+                 if spec.completion_mode == "all_tasks" and pre_pi_failure(
+                     parent, r, lock["implementation_files"]["experiments/src/memweave_eval/pi_agent.py"])}
+    rows = [r for r in candidates if r["task_id"] not in zero
+            and (r["task_id"], r["variant_id"]) not in zero_keys]
     selected = {r["task_id"] for r in catalog["selected"]}
     keys = {(r["task_id"], r["variant_id"]) for r in rows}
     tasks = {r["task_id"] for r in rows}
-    if not rows or len(keys) != len(rows) or keys != {(t, v) for t in tasks for v in VARIANTS}:
+    if (not rows or len(keys) != len(rows) or
+            (spec.completion_mode != "all_tasks" and
+             keys != {(t, v) for t in tasks for v in VARIANTS})):
         raise ValueError("completed parent must contain whole unique pairs")
     if not tasks <= selected:
         raise ValueError("completed parent task is outside frozen selection")
@@ -232,6 +239,9 @@ def completed_info(spec, catalog):
         bound = {t for t, a in state["tasks"].items() if a.get("group") == group}
         if len(bound) != 1 or not bound <= tasks | zero:
             raise ValueError("started model pair missing complete primary evidence")
+        if spec.completion_mode == "all_tasks":
+            admission = state["tasks"][next(iter(bound))]
+            validate_registered_solve(parent, group, admission.get("actual_task_id", next(iter(bound))))
     for session in parent.glob("groups/*/harbor/solve/*/agent/pi/sessions/*.jsonl"):
         if session.relative_to(parent).parts[1] not in groups:
             raise ValueError("unregistered started model Session")
@@ -258,17 +268,10 @@ def completed_info(spec, catalog):
         for f in state.get("admission_failures", [])
         if f["phase"] in ("official_image", "official_controls")
     }
+    pending = []
     if spec.completion_mode == "all_tasks":
-        for row in rows:
-            if row["task_id"] in interrupted:
-                record = dict(row, source_run_dir=row.get("source_run_dir", str(parent)),
-                              origin_run_id=row.get("origin_run_id", lock.get("run_id")),
-                              retained_interrupted=True, comparison_eligible=False)
-                for field in ("solve_source", "score_source"):
-                    if record.get(field):
-                        record[field] = str(parent / record[field])
-                history.append(record)
-        rows = [r for r in rows if r["task_id"] not in interrupted]
+        rows, pending, past = partition_primary_rows(parent, rows)
+        history.extend(past)
         keys = {(r["task_id"], r["variant_id"]) for r in rows}
         interrupted = []
         # Keep an already chosen reserve binding; re-admit other image/control failures.
@@ -281,7 +284,10 @@ def completed_info(spec, catalog):
         "included_keys": [list(k) for k in sorted(keys)], "blocked_admissions": blocks,
         "retained_interrupted_tasks": interrupted,
         "historical_attempts": list({r["solve_source"]: r for r in history}.values()),
-        "pre_pi_failures": [r for r in candidates if r["task_id"] in zero],
+        "retained_primary_attempts": pending,
+        "pre_pi_failures": list(summary.get("pre_pi_failures", [])) + [
+            r for r in candidates if r["task_id"] in zero
+            or (r["task_id"], r["variant_id"]) in zero_keys],
         "window_started_at": state["window_started_at"],
         "window_deadline_at": state["window_deadline_at"],
         "hashes": {
@@ -308,9 +314,74 @@ def validate_started_row(parent, row, *, interrupted):
         elif not (path.parent / "agent/model.patch").is_file():
             raise ValueError("interrupted model pair has no captured patch")
 
+
+def continuation_plan(plan, scored, pending):
+    done = {(r["task_id"], r["variant_id"]) for r in scored}
+    score_only = {(r["task_id"], r["variant_id"]) for r in pending}
+    return [dict(p, operation="score_only" if (p["task_id"], p["variant_id"]) in score_only
+                 else "solve") for p in plan if (p["task_id"], p["variant_id"]) not in done]
+
+
+def primary_evidence(row):
+    path = Path(row["solve_source"])
+    group_lock = path.parents[3] / "group.lock.json"
+    patch = path.parent / "agent/model.patch"
+    if not path.is_absolute() or not group_lock.is_file():
+        raise ValueError("retained primary needs its original frozen group")
+    return dict(row, result_sha256=file_digest(path),
+                patch_sha256=file_digest(patch) if patch.is_file() else None,
+                group_lock_sha256=file_digest(group_lock),
+                images=json.loads(group_lock.read_text())["images"])
+
+
+def validate_registered_solve(parent, group, actual_task):
+    config = parent / "groups" / group / "configs/solve.json"
+    if not config.is_file():
+        raise ValueError("registered dispatched solve has no frozen config")
+    agents = json.loads(config.read_text())["agents"]
+    expected = [(actual_task, a["kwargs"]["variant"]) for a in agents]
+    actual = variant_results(parent / "groups" / group / "harbor/solve")
+    if (len(expected) != len(set(expected)) or not expected
+            or any(v not in VARIANTS for _, v in expected) or set(actual) != set(expected)):
+        raise ValueError("registered dispatched solve has missing or unexpected variant results")
+
+
+def partition_primary_rows(parent, rows):
+    """Preserve individual first scores; completed Pro inference only needs grading."""
+    kept, pending, history = [], [], []
+    for row in rows:
+        validate_started_row(parent, row, interrupted=False)
+        path = Path(row["solve_source"])
+        path = path if path.is_absolute() else parent / path
+        record = dict(row, solve_source=str(path),
+                      source_run_dir=row.get("source_run_dir", str(parent)))
+        if record.get("score_source"):
+            record["score_source"] = str(parent / record["score_source"])
+        interrupted = (row.get("solve_status") == "cancelled"
+                       or row.get("retained_interrupted") or row.get("comparison_eligible") is False)
+        if not interrupted and row.get("success") is not None:
+            kept.append(record)
+        elif not interrupted and row.get("suite_id") == "swe-bench-pro-v2" and row.get("solve_status") == "completed_patch":
+            patch = path.parent / "agent/model.patch"
+            if not patch.is_file() or not path.is_file():
+                raise ValueError("completed primary has no captured patch/result")
+            if json.loads(path.read_text()).get("exception_info"):
+                raise ValueError("failed inference cannot be resumed as score-only")
+            group_lock = path.parents[3] / "group.lock.json"
+            record.update(result_sha256=file_digest(path), patch_sha256=file_digest(patch),
+                          images=json.loads(group_lock.read_text())["images"] if group_lock.is_file() else None,
+                          group_lock_sha256=file_digest(group_lock) if group_lock.is_file() else None)
+            pending.append(record)
+        else:
+            validate_started_row(parent, row, interrupted=True)
+            record.update(retained_interrupted=True, comparison_eligible=False)
+            history.append(record)
+    return kept, pending, history
+
 def pre_pi_failure(parent, row, adapter_sha):
-    """Only the audited legacy probe exception proves Pi never launched."""
-    if adapter_sha != "67b9481b7e7b9cc08e00b91dfd1855e10ca6825df3ed60c131f85996d79f0192":
+    """Only audited adapters and exact pre-Pi evidence can prove zero inference."""
+    legacy = adapter_sha == "67b9481b7e7b9cc08e00b91dfd1855e10ca6825df3ed60c131f85996d79f0192"
+    if not legacy and adapter_sha != "0680e465b92628bc7478be41b7cf04b8d5ff3024c6cf0fb2083cbf8bc82c8abf":
         return False
     path = Path(row["solve_source"])
     path = path if path.is_absolute() else parent / path
@@ -319,9 +390,18 @@ def pre_pi_failure(parent, row, adapter_sha):
     raw = json.loads(path.read_text())
     error = raw.get("exception_info") or {}
     patch = path.parent / "agent/model.patch"
+    probe_path = path.parent / "agent/network-probe.json"
+    probe = json.loads(probe_path.read_text()) if probe_path.is_file() else {}
+    network_failure = (error.get("exception_message") ==
+                       "Pro offline/model-endpoint network probes failed" if legacy else
+                       error.get("exception_message") ==
+                       "Pro offline/model-endpoint network probes failed; see network-probe.json"
+                       and probe.get("passed") is False and probe.get("credential_free") is True
+                       and probe.get("checks", {}).get("model", {}).get("ok") is False
+                       and probe.get("checks", {}).get("outside", {}).get("ok") is False)
     return bool(
         error.get("exception_type") == "RuntimeError"
-        and error.get("exception_message") == "Pro offline/model-endpoint network probes failed"
+        and network_failure
         and not (row.get("session_diagnostics") or {}).get("model_responses_with_usage")
         and row.get("peak_estimated_cost_usd") is None
         and not list((path.parent / "agent").rglob("*.jsonl"))
@@ -339,13 +419,19 @@ def verify_adapters(lock):
         "runtime_cache.py": "836c83bec3c6babf70e9082027b0a9c8a1101b5cdc83c62a803f2f267450552a",
         "runner.py": "5a753285ba1bbcd5a71002a68d6bbdbad12f6aa49c80d1931c25fa2f8ea2c58c",
         "images.py": "cd7e5ceecde76b5bd2b4df91f423ff72ff41d5b14117b54b520d9cf0bf90b3f5",
-        "network_probe.py": "57a62831b10be9fc29ac7683a225b82f8c92e3585513355769fddc66a2b8aa4b",
+        "network_probe.py": "951263a2a9a7b424f1f833e20f097b286a35f0f033852cc9bf3a9b0fa707fe19",
         "public_archive.py": "c9f479fb64c2aaf821c794113181cee395b2b5844f609d138d3e6a4521bf59be",
         "private_runtime.py": "fc68bb73a39aac027a7263958325e043e480c8222524c19a51f89abd833f1b39",
     }
     current = {base+n: file_digest(REPOSITORY/(base+n)) for n in pinned}
     if all(old.get(path) == digest for path, digest in current.items()):
         return None
+    if (all(old.get(base+n) == current[base+n] for n in pinned if n != "network_probe.py")
+            and old.get(base+"network_probe.py") == "57a62831b10be9fc29ac7683a225b82f8c92e3585513355769fddc66a2b8aa4b"
+            and current[base+"network_probe.py"] == pinned["network_probe.py"]):
+        return {"reason": "approved bounded credential-free transport retries",
+                "approval": "user 2026-10-29 environment autonomy; run proposal section 22",
+                "old": old.get(base+"network_probe.py"), "current": current[base+"network_probe.py"]}
     previous = {
         "pi_agent.py": {"67b9481b7e7b9cc08e00b91dfd1855e10ca6825df3ed60c131f85996d79f0192",
                         "2599b4fb16c93592eab936942c0ddd7e177ed13eb047d69fe40e745dd0954eed",
@@ -353,7 +439,7 @@ def verify_adapters(lock):
         "runtime_cache.py": {"7cc13d6026e87cc44f5a2ac37d5d235cb63d547381025bca2b71eb6ae93910d2"},
         "runner.py": {"8d73afc35a334d3b4a3bcd9b2943b13b4d79cc3dd0d37d1ebc2b8cd51324dfe5"},
         "images.py": {"7ffc3eacce8481e584f2fa20b49b00e5fcf1bfca5ac8cc0fc901b0daeaf3a1a1", pinned["images.py"]},
-        "network_probe.py": {None, pinned["network_probe.py"]},
+        "network_probe.py": {None, "57a62831b10be9fc29ac7683a225b82f8c92e3585513355769fddc66a2b8aa4b", pinned["network_probe.py"]},
         "public_archive.py": {None, pinned["public_archive.py"]},
         "private_runtime.py": {None},
     }
@@ -500,7 +586,9 @@ def run_pairs(spec):
         p.relative_to(REPOSITORY).as_posix(): file_digest(p)
         for p in sorted((REPOSITORY / "experiments/src").rglob("*.py"))
     }
-    completed = {r["task_id"] for r in old_rows}
+    pending_primary = (inherited or {}).get("retained_primary_attempts", [])
+    completed = {r["task_id"] for r in old_rows
+                 if {x["variant_id"] for x in old_rows if x["task_id"] == r["task_id"]} == set(VARIANTS)}
     slots = [r for r in catalog["selected"] if r["task_id"] not in completed]
     inherited_cost = (inherited or {}).get("known_cost_usd", 0)
     budget = math.inf if spec.unlimited_cost else spec.limits.max_cost_usd - inherited_cost
@@ -546,7 +634,7 @@ def run_pairs(spec):
                 "preflight_lineage": preflight,
                 "bootstrap_lineage": inherited,
                 "full_plan": campaign_plan(catalog),
-                "plan": campaign_plan(dict(catalog, selected=slots)),
+                "plan": continuation_plan(campaign_plan(dict(catalog, selected=slots)), old_rows, pending_primary),
                 "pricing": {
                     "currency": "USD",
                     "input_miss": 0.3,
@@ -569,8 +657,12 @@ def run_pairs(spec):
             r["actual_task_id"] for r in old_rows if r["actual_task_id"] != r["task_id"]
         }
         bindings = {}
+        for row in old_rows + pending_primary:
+            if row["task_id"] not in completed and row["actual_task_id"] != row["task_id"]:
+                bindings[row["task_id"]] = next(r for r in catalog["reserves"]
+                                                if r["task_id"] == row["actual_task_id"])
         for slot in slots:
-            if slot["task_id"] in blocks:
+            if slot["task_id"] in blocks and slot["task_id"] not in bindings:
                 reserve = next_reserve(catalog, slot, used_reserves)
                 if reserve:
                     bindings[slot["task_id"]] = reserve
@@ -670,6 +762,7 @@ def run_pairs(spec):
                         bindings,
                         capacity,
                         code,
+                        old_rows + pending_primary,
                     )
                 finally:
                     pool.release(weight)
@@ -770,6 +863,7 @@ def _pair(
     bindings,
     capacity,
     code,
+    inherited_rows=(),
 ):
     suite_id = slot["suite"]
     upstream = sources[suite_id]
@@ -864,6 +958,20 @@ def _pair(
     paths = [group / preparations[actual["task_id"]]["runtime_path"]]
     docker = docker_preflight(pair_spec, [infos[actual["task_id"]]], preparations)
     images = image_snapshot(paths)
+    from .campaign_report import retained_original
+
+    inherited_primary = [primary_evidence(r) for r in inherited_rows if r["task_id"] == slot["task_id"]]
+    old_originals = {}
+    for record in inherited_primary:
+        if record["actual_task_id"] != actual["task_id"]:
+            raise ValueError("partial continuation changed the actual task/reserve")
+        path, raw = retained_original(root, record)
+        if {k: (v["id"], v["platform"]) for k, v in record["images"].items()} != {
+                k: (v["id"], v["platform"]) for k, v in images.items()}:
+            raise ValueError("partial continuation changed the original task image")
+        old_originals[(actual["task_id"], record["variant_id"])] = (path, raw)
+    scored_variants = {r["variant_id"] for r in inherited_primary if r.get("success") is not None}
+    new_variants = [v for v in VARIANTS if (actual["task_id"], v) not in old_originals]
     mark("software_preflight")
 
     def check_preparation():
@@ -878,6 +986,7 @@ def _pair(
         "preparations": preparations,
         "images": images,
         "runtime_assets": runtime,
+        "inherited_primary": inherited_primary,
         "docker": docker,
         "actual_plan": {
             "revision": gid,
@@ -889,7 +998,7 @@ def _pair(
                     "variant_id": v,
                     "repetition": 1,
                 }
-                for v in VARIANTS
+                for v in new_variants
             ],
         },
         "tooling_sha256": {
@@ -900,6 +1009,8 @@ def _pair(
     atomic_json(group / "group.lock.json", frozen, immutable=True)
 
     def verify():
+        for record in inherited_primary:
+            retained_original(root, record)
         if any(file_digest(REPOSITORY / p) != digest for p, digest in code.items()):
             raise ValueError("implementation changed during frozen run")
         verify_package(spec.subject.package, spec.subject.sha256)
@@ -916,30 +1027,37 @@ def _pair(
 
     verify()
     env = tool_environment(spec, upstream, inference=True)
-    mark("solving")
+    mark("solving" if new_variants else "regrading")
     stopped = None
     try:
-        execute(
-            mixed_job(
+        if new_variants:
+            cfg = mixed_job(
                 pair_spec,
                 group,
                 paths,
                 protocol=protocol,
                 runtime_plan=group / "runtime-assets.json",
-            ),
-            required=False,
-        )
+            )
+            cfg["agents"] = [a for a in cfg["agents"] if a["kwargs"]["variant"] in new_variants]
+            execute(cfg, required=False)
     except TimeoutError as exc:
         stopped = exc
+    originals = variant_results(group / "harbor/solve") | old_originals
+    pre_pi_failed = []
     if stopped is None:
-        originals = variant_results(group / "harbor/solve")
-        for variant in VARIANTS:
+        for variant in new_variants:
             original = originals.get((actual["task_id"], variant))
             if original is None:
                 raise ValueError("missing original Pi attempt; no implicit empty answer")
             sessions = list((original[0].parent / "agent/pi/sessions").glob("*.jsonl"))
             diagnostics = session_diagnostics(sessions)
             if not diagnostics or not diagnostics["model_responses_with_usage"]:
+                if spec.completion_mode == "all_tasks" and pre_pi_failure(root, {
+                    "solve_source": str(original[0]), "session_diagnostics": diagnostics,
+                    "peak_estimated_cost_usd": None,
+                }, file_digest(REPOSITORY / "experiments/src/memweave_eval/pi_agent.py")):
+                    pre_pi_failed.append(variant)
+                    continue
                 raise ValueError("Pi produced no model evidence; check shared setup/authentication")
             if (
                 protocol == "swe-pro-v2"
@@ -950,8 +1068,13 @@ def _pair(
         mark("regrading")
         replays = []
         for variant in VARIANTS:
+            if variant in scored_variants or variant in pre_pi_failed:
+                continue
+            original = originals.get((actual["task_id"], variant))
+            if original is None:
+                continue
             source, manifest = replay_handoff(
-                group / "harbor/solve", group / "replay-sources" / variant, variant
+                original[0].parents[1], group / "replay-sources" / variant, variant
             )
             if manifest["patches"]:
                 replays.append(
@@ -972,6 +1095,6 @@ def _pair(
         elif replays:
             execute(replays[0], required=False)
     verify()
-    mark("finished")
+    mark("incomplete" if pre_pi_failed else "finished")
     if stopped:
         raise stopped

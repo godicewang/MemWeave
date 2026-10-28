@@ -330,7 +330,8 @@ def test_completed_parent_keeps_all_started_pairs_and_first_zero_scores(tmp_path
         row["success"] = None
         row["solve_source"] = "groups/g02/harbor/solve/" + row["variant_id"] + "/result.json"
         p = parent / row["solve_source"]
-        atomic_json(p, {})
+        atomic_json(p, {"task_name": "suite/second", "config": {
+            "agent": {"kwargs": {"variant": row["variant_id"]}}}})
         (p.parent / "agent").mkdir()
         (p.parent / "agent/model.patch").write_text("captured patch")
     rows[3].update(solve_status="cancelled", error_type="CancelledError")
@@ -338,6 +339,8 @@ def test_completed_parent_keeps_all_started_pairs_and_first_zero_scores(tmp_path
     assert info["retained_interrupted_tasks"] == ["second"]
     assert len(imported) == 4
     s.completion_mode = "all_tasks"
+    atomic_json(parent / "groups/g02/configs/solve.json", {"agents": [
+        {"kwargs": {"variant": v}} for v in ("pi-native", "pi-memweave")]})
     info, imported = completed_info(s, catalog)
     assert len(imported) == 2
     assert len(info["historical_attempts"]) == 2

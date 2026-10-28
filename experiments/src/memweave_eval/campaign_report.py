@@ -4,10 +4,45 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 from pathlib import Path
 
 from .report import duration, normalize_trial, session_diagnostics, summarize
 from .storage import atomic_json, contained, file_digest
+
+
+def retained_original(root, record):
+    """Only a hashed original from this campaign's indexed run storage is reusable."""
+    path = Path(record["solve_source"])
+    if not path.is_absolute() or path.resolve() != path or len(path.parents) < 6:
+        raise ValueError("invalid retained primary path")
+    source = path.parents[5]
+    parts = path.relative_to(source).parts
+    if (source.parent != root.parent or len(parts) != 6 or parts[0] != "groups"
+            or not re.fullmatch(r"g[0-9]{2}", parts[1])
+            or parts[2:4] != ("harbor", "solve") or parts[-1] != "result.json"):
+        raise ValueError("retained primary is outside campaign run storage")
+    index = {e["path"]: e["sha256"] for e in json.loads((source / "evidence-index.json").read_text())["files"]}
+    group_lock = path.parents[3] / "group.lock.json"
+    required = [(path, record["result_sha256"]), (group_lock, record["group_lock_sha256"])]
+    if record.get("suite_id") == "swe-bench-pro-v2":
+        required.append((path.parent / "agent/model.patch", record["patch_sha256"]))
+    sessions = list((path.parent / "agent/pi/sessions").glob("*.jsonl"))
+    if not sessions or not session_diagnostics(sessions)["model_responses_with_usage"]:
+        raise ValueError("retained primary lacks real Pi model evidence")
+    required.extend((p, index.get(p.relative_to(source).as_posix())) for p in sessions)
+    for file, digest in required:
+        if (file.resolve() != file or not file.is_file() or file_digest(file) != digest
+                or index.get(file.relative_to(source).as_posix()) != digest):
+            raise ValueError("retained primary evidence changed or is unindexed")
+    if json.loads(group_lock.read_text())["images"] != record["images"]:
+        raise ValueError("retained primary image binding changed")
+    raw = json.loads(path.read_text())
+    if (raw.get("exception_info") or raw.get("task_name", "").split("/")[-1]
+            != record.get("actual_task_id", record["task_id"])
+            or raw.get("config", {}).get("agent", {}).get("kwargs", {}).get("variant") != record["variant_id"]):
+        raise ValueError("retained primary has a failed or different task/variant")
+    return path, raw
 
 
 def valid_replay_binding(root, group, variant, actual_task, original_path, score, lock, indexed):
@@ -18,9 +53,14 @@ def valid_replay_binding(root, group, variant, actual_task, original_path, score
     patch = original_path.parent / "agent/model.patch"
     if not manifest_path.is_file() or not patch.is_file():
         return False
-    if any(
-        p.relative_to(root).as_posix() not in indexed for p in (manifest_path, patch, original_path)
-    ):
+    external = not original_path.is_relative_to(root)
+    if external:
+        records = [r for r in (lock.get("bootstrap_lineage") or {}).get("retained_primary_attempts", [])
+                   if r["variant_id"] == variant and Path(r["solve_source"]) == original_path]
+        if len(records) != 1 or retained_original(root, records[0])[0] != original_path:
+            return False
+    required = (manifest_path,) if external else (manifest_path, patch, original_path)
+    if any(p.relative_to(root).as_posix() not in indexed for p in required):
         return False
     manifest = json.loads(manifest_path.read_text())
     entries = [e for e in manifest["patches"] if e["task_id"] == actual_task]
@@ -36,7 +76,7 @@ def valid_replay_binding(root, group, variant, actual_task, original_path, score
         return False
     return (
         source_job == str(expected_handoff)
-        and entry["source"] == str(frozen_root / patch.relative_to(root))
+        and entry["source"] == str(patch if external else frozen_root / patch.relative_to(root))
         and file_digest(patch) == entry["sha256"]
         and file_digest(original_path) == entry["result_sha256"]
         and target.is_file()
@@ -106,6 +146,14 @@ def generate_campaign_report(root: Path):
         if len(originals) > 1:
             raise ValueError("ambiguous campaign solve result")
         original_path, original = originals[0] if originals else (None, None)
+        retained = [r for r in (lock.get("bootstrap_lineage") or {}).get("retained_primary_attempts", [])
+                    if (r["task_id"], r["variant_id"]) == (task, variant)]
+        if len(retained) > 1 or (original and retained):
+            raise ValueError("duplicate retained primary; never rerun completed inference")
+        if retained:
+            original_path, original = retained_original(root, retained[0])
+            if not admission:
+                actual_task = retained[0].get("actual_task_id", task)
         row = normalize_trial(original, plan)
         row["actual_task_id"] = actual_task
         row["actual_title"] = admission.get("actual_title", plan.get("title"))
@@ -113,16 +161,21 @@ def generate_campaign_report(root: Path):
         row["solve_status"] = row["execution_status"]
         row["admission"] = admission
         if original_path:
-            row["solve_source"] = original_path.relative_to(root).as_posix()
+            external = not original_path.is_relative_to(root)
+            row["solve_source"] = str(original_path) if external else original_path.relative_to(root).as_posix()
             sessions = list((original_path.parent / "agent/pi/sessions").glob("*.jsonl"))
             row["session_diagnostics"] = session_diagnostics(sessions)
-            row["session_sources"] = [p.relative_to(root).as_posix() for p in sessions]
-            usage = [live.get("sessions", {}).get(p.relative_to(root).as_posix()) for p in sessions]
+            row["session_sources"] = [str(p) if external else p.relative_to(root).as_posix() for p in sessions]
+            usage = [live.get("sessions", {}).get(p.relative_to(root).as_posix()) for p in sessions] if not external else []
             row["peak_estimated_cost_usd"] = (
                 sum(u["estimated_cost_usd"] for u in usage)
                 if usage and all(u is not None for u in usage)
                 else None
             )
+            if external:
+                row["peak_estimated_cost_usd"] = retained[0]["peak_estimated_cost_usd"]
+                row["origin_run_id"] = retained[0].get("origin_run_id", original_path.parents[5].name)
+                row["source_run_dir"] = str(original_path.parents[5])
         if plan["suite_id"] == "swe-bench-pro-v2":
             if original and not original.get("exception_info"):
                 row["solve_status"] = (
@@ -231,7 +284,7 @@ def generate_campaign_report(root: Path):
         schema_version=2,
         phase=lock.get("phase", "full"),
         overall_planned_model_trials=len(lock.get("full_plan", lock["plan"])),
-        phase_planned_model_trials=len(lock["plan"]),
+        phase_planned_model_trials=sum(p.get("operation") != "score_only" for p in lock["plan"]),
         run_id=lock["run_id"],
         complete=bool(
             state["complete"] and not invalid and all(r["success"] is not None for r in rows)
