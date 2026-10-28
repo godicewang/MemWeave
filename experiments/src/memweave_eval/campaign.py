@@ -76,6 +76,8 @@ class Campaign(StrictModel):
     limits: Limits
     root: Path
     preflight_parent: Path | None = None
+    control_parent: Path | None = None
+    phase: Literal["bootstrap", "full"] = "full"
 
     @model_validator(mode="after")
     def consistent(self):
@@ -94,6 +96,10 @@ def load_campaign(path: Path) -> Campaign:
     spec.subject.package = (path.parent / spec.subject.package.expanduser()).resolve()
     if spec.preflight_parent:
         spec.preflight_parent = (path.parent / spec.preflight_parent).resolve()
+    if spec.control_parent:
+        spec.control_parent = (path.parent / spec.control_parent).resolve()
+        if spec.control_parent.parent != (spec.root / "runs").resolve():
+            raise ValueError("control parent must belong to this run root")
     load_catalog(spec)
     if spec.preflight_parent:
         preflight_lineage(spec)
@@ -233,6 +239,7 @@ def admit_group(
     prior_blocks,
     used_reserves,
     service,
+    docker=None,
 ):
     """Task-specific admission, retaining failures and choosing only frozen same-tier reserves."""
     root = group.parent.parent
@@ -293,6 +300,16 @@ def admit_group(
 
     def controls(candidates):
         nonlocal batch
+        from .controls import reuse_controls
+
+        known = {}
+        if spec.control_parent:
+            for row in candidates:
+                if reuse_controls(spec, catalog, row, preparations[row["task_id"]], group, docker):
+                    known[row["task_id"]] = True
+            candidates = [row for row in candidates if row["task_id"] not in known]
+            if not candidates:
+                return known
         batch += 1
         paths = [group / preparations[r["task_id"]]["runtime_path"] for r in candidates]
         names = {}
@@ -308,7 +325,7 @@ def admit_group(
                 protocol="tb4" if candidates[0]["suite"] == "terminal-bench-4" else "swe-pro-v2",
             )
             execute(cfg, required=False)
-        return {
+        return known | {
             r["task_id"]: all(
                 control_ok(group / "harbor" / names[c], r["task_id"], score)
                 for c, score in [("oracle", 1), ("nop", 0)]
@@ -591,7 +608,11 @@ def run_campaign(spec: Campaign) -> Path:
                 "implementation_files": code,
                 "package": package,
                 "preflight_lineage": lineage,
-                "plan": campaign_plan(catalog),
+                "phase": spec.phase,
+                "full_plan": campaign_plan(catalog),
+                "plan": campaign_plan(dict(catalog, selected=catalog["selected"][:1]))
+                if spec.phase == "bootstrap"
+                else campaign_plan(catalog),
                 "pricing": {
                     "currency": "USD",
                     "source": "https://api-docs.deepseek.com/quick_start/pricing/",
@@ -631,11 +652,12 @@ def run_campaign(spec: Campaign) -> Path:
                     raise ValueError("instruction changed")
                 infos[row["task_id"]] = info
             atomic_json(root / "selection.json", infos, immutable=True)
+            scope = catalog["selected"][:1] if spec.phase == "bootstrap" else catalog["selected"]
             used_reserves = set()
             for suite_id in catalog["sources"]:
                 upstream = sources[suite_id]
                 protocol = "tb4" if suite_id == "terminal-bench-4" else "swe-pro-v2"
-                queue = [r for r in catalog["selected"] if r["suite"] == suite_id]
+                queue = [r for r in scope if r["suite"] == suite_id]
                 env = tool_environment(spec, upstream)
                 while queue:
                     if time.monotonic() >= deadline or service.check() >= spec.limits.max_cost_usd:
@@ -711,6 +733,7 @@ def run_campaign(spec: Campaign) -> Path:
                         prior_blocks=prior_blocks,
                         used_reserves=used_reserves,
                         service=service,
+                        docker=capacity,
                     )
                     if not admitted:
                         meta["status"] = "blocked"

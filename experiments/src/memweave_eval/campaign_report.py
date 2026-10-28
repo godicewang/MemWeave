@@ -182,6 +182,9 @@ def generate_campaign_report(root: Path):
     ]
     summary.update(
         schema_version=2,
+        phase=lock.get("phase", "full"),
+        overall_planned_model_trials=len(lock.get("full_plan", lock["plan"])),
+        phase_planned_model_trials=len(lock["plan"]),
         run_id=lock["run_id"],
         complete=bool(
             state["complete"] and not invalid and all(r["success"] is not None for r in rows)
@@ -230,7 +233,7 @@ def generate_campaign_report(root: Path):
         writer.writeheader()
         writer.writerows(rows)
     text = [
-        "# 49题双变体实验",
+        "# 单题双变体闭环" if lock.get("phase") == "bootstrap" else "# 49题双变体实验",
         "",
         f"完整完成：{summary['complete']}；停止：{summary['stop_reason']}",
         f"实测解题峰值：{summary['peak_solves']}；已知估算费用：{summary['estimated_known_cost_usd']}",

@@ -31,6 +31,8 @@ def spec(tmp_path):
 def test_strict_campaign_and_pair_capacity(tmp_path):
     s = spec(tmp_path)
     assert s.execution.concurrency == 10
+    assert s.phase == "full"
+    assert Campaign.model_validate(s.model_dump() | {"phase": "bootstrap"}).phase == "bootstrap"
     for patch in ({"concurrency": 11}, {"repetitions": 2}, {"platform": "linux/arm64"}):
         with pytest.raises(ValueError):
             Campaign.model_validate(
@@ -521,3 +523,50 @@ def test_group_replaces_failed_slot_without_invalidating_other_controls(
     assert len(state["admission_failures"]) == 1
     assert state["admission_failures"][0]["phase"] == failure_phase
     assert all(cfg[1].count("r") <= 1 for cfg in calls)
+
+
+def test_control_reuse_requires_matching_identity_and_hashes(tmp_path):
+    from memweave_eval.controls import reuse_controls
+
+    s = spec(tmp_path)
+    parent = tmp_path / "old"
+    s.control_parent = parent
+    row = {"task_id": "task", "suite": "swe-bench-pro-v2", "task_sha256": "a" * 64}
+    image = {"id": "sha256:image", "platform": "linux/amd64"}
+    docker = {"server_version": "29.5.2", "platform_probe": "x86_64"}
+    atomic_json(
+        parent / "experiment.lock.json",
+        {
+            "suite": {"id": row["suite"], "revision": "r"},
+            "config": {"runtime": {"harbor_version": "0.24.0"}},
+            "docker": docker,
+            "selection": [{"task_id": "task", "sha256": row["task_sha256"]}],
+            "images": {"task": image},
+        },
+    )
+    files = []
+    for control, reward in [("oracle", 1), ("nop", 0)]:
+        p = parent / "harbor" / ("control-" + control) / "trial/result.json"
+        atomic_json(
+            p,
+            {
+                "task_name": "task",
+                "config": {"agent": {"name": control}},
+                "verifier_result": {"rewards": {"reward": reward}},
+            },
+        )
+        files.append({"path": p.relative_to(parent).as_posix(), "sha256": file_digest(p)})
+    atomic_json(parent / "evidence-index.json", {"files": files})
+    catalog = {"sources": {row["suite"]: {"revision": "r"}}}
+    assert reuse_controls(s, catalog, row, {"images": {"main": image}}, tmp_path / "valid", docker)
+    assert not reuse_controls(
+        s,
+        catalog,
+        row | {"task_sha256": "b" * 64},
+        {"images": {"main": image}},
+        tmp_path / "mismatch",
+        docker,
+    )
+    (parent / files[0]["path"]).write_text((parent / files[0]["path"]).read_text() + "\n")
+    with pytest.raises(ValueError, match="checksum"):
+        reuse_controls(s, catalog, row, {"images": {"main": image}}, tmp_path / "tamper", docker)

@@ -34,8 +34,8 @@ def main(argv=None) -> int:
                     json.dumps(
                         {
                             "valid": True,
-                            "planned_tasks": 49,
-                            "model_trials": 98,
+                            "planned_tasks": 1 if spec.phase == "bootstrap" else 49,
+                            "model_trials": 2 if spec.phase == "bootstrap" else 98,
                             "package": archive,
                             "requires_preflight": True,
                         },
