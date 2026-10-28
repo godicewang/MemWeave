@@ -1,0 +1,455 @@
+{
+  "schema_version": 1,
+  "summary": {
+    "variants": {
+      "pi-native": {
+        "planned": 4,
+        "scored": 4,
+        "successes": 0,
+        "coverage_success_rate": 0.0,
+        "valid_success_rate": 0.0,
+        "cost_usd": 3.2950298399999998,
+        "known_cost_usd": 3.2950298399999998,
+        "missing_cost_count": 0,
+        "execution_statuses": {
+          "scored": 4
+        },
+        "agent_seconds": 45800.41414
+      },
+      "pi-memweave": {
+        "planned": 4,
+        "scored": 1,
+        "successes": 0,
+        "coverage_success_rate": 0.0,
+        "valid_success_rate": 0.0,
+        "cost_usd": null,
+        "known_cost_usd": 0.018029988,
+        "missing_cost_count": 3,
+        "execution_statuses": {
+          "infrastructure_error": 3,
+          "scored": 1
+        },
+        "agent_seconds": null
+      }
+    },
+    "pairs": {
+      "both": 0,
+      "native_only": 0,
+      "memweave_only": 0,
+      "neither": 1,
+      "missing": 3
+    },
+    "memweave_minus_native": {
+      "successful_attempts": 0,
+      "cost_usd": null
+    },
+    "complete": false,
+    "suite": "terminal-bench-4"
+  },
+  "trials": [
+    {
+      "task_id": "mp-checkpoint-consolidation",
+      "variant_id": "pi-native",
+      "repetition": 1,
+      "execution_status": "scored",
+      "native_reward": {
+        "reward": 0.0
+      },
+      "success": false,
+      "usage": {
+        "input_tokens": 315805668,
+        "cache_tokens": 315548416,
+        "output_tokens": 512258,
+        "cost_usd": 2.585175696
+      },
+      "error_type": null,
+      "harbor_trial": "mp-checkpoint-consolidation__2uECXy8",
+      "environment_setup": {
+        "started_at": "2026-10-27T05:10:36.216090Z",
+        "finished_at": "2026-10-27T05:10:37.110410Z"
+      },
+      "agent_setup": {
+        "started_at": "2026-10-27T05:10:37.110465Z",
+        "finished_at": "2026-10-27T05:12:37.006163Z"
+      },
+      "agent_execution": {
+        "started_at": "2026-10-27T05:12:37.006358Z",
+        "finished_at": "2026-10-27T11:48:00.343338Z"
+      },
+      "verifier": {
+        "started_at": "2026-10-27T11:48:12.315106Z",
+        "finished_at": "2026-10-27T11:48:27.095334Z"
+      },
+      "phase_seconds": {
+        "environment_setup": 0.89432,
+        "agent_setup": 119.895698,
+        "agent_execution": 23723.33698,
+        "verifier": 14.780228
+      },
+      "elapsed_seconds": 23870.940873,
+      "started_at": "2026-10-27T05:10:36.154481Z",
+      "finished_at": "2026-10-27T11:48:27.095354Z",
+      "score_source": "harbor/pi-native-r1/mp-checkpoint-consolidation__2uECXy8/result.json",
+      "session_sources": [
+        "harbor/pi-native-r1/mp-checkpoint-consolidation__2uECXy8/agent/pi/sessions/2026-10-27T05-12-38-578Z_01a17bc6-57b0-7211-8440-e7f253fa93a7.jsonl"
+      ],
+      "diagnostics": {
+        "model_responses_with_usage": 969,
+        "tool_calls": {
+          "bash": 970,
+          "read": 1
+        },
+        "compaction_events": 0,
+        "invalid_lines": 0
+      },
+      "memory_tool_calls": null
+    },
+    {
+      "task_id": "music-harmony",
+      "variant_id": "pi-native",
+      "repetition": 1,
+      "execution_status": "scored",
+      "native_reward": {
+        "reward": 0.0
+      },
+      "success": false,
+      "usage": {
+        "input_tokens": 36863112,
+        "cache_tokens": 36688768,
+        "output_tokens": 93077,
+        "cost_usd": 0.38412820799999997
+      },
+      "error_type": null,
+      "harbor_trial": "music-harmony__rS7unxH",
+      "environment_setup": {
+        "started_at": "2026-10-27T05:10:36.248826Z",
+        "finished_at": "2026-10-27T05:10:37.112980Z"
+      },
+      "agent_setup": {
+        "started_at": "2026-10-27T05:10:37.112999Z",
+        "finished_at": "2026-10-27T05:13:43.584668Z"
+      },
+      "agent_execution": {
+        "started_at": "2026-10-27T05:13:43.584780Z",
+        "finished_at": "2026-10-27T05:33:26.618615Z"
+      },
+      "verifier": {
+        "started_at": "2026-10-27T05:33:38.206161Z",
+        "finished_at": "2026-10-27T05:33:50.793718Z"
+      },
+      "phase_seconds": {
+        "environment_setup": 0.864154,
+        "agent_setup": 186.471669,
+        "agent_execution": 1183.033835,
+        "verifier": 12.587557
+      },
+      "elapsed_seconds": 1394.57815,
+      "started_at": "2026-10-27T05:10:36.215587Z",
+      "finished_at": "2026-10-27T05:33:50.793737Z",
+      "score_source": "harbor/pi-native-r1/music-harmony__rS7unxH/result.json",
+      "session_sources": [
+        "harbor/pi-native-r1/music-harmony__rS7unxH/agent/pi/sessions/2026-10-27T05-13-45-112Z_01a17bc7-5b96-77f6-98d7-696e9e556f0f.jsonl"
+      ],
+      "diagnostics": {
+        "model_responses_with_usage": 314,
+        "tool_calls": {
+          "bash": 278,
+          "read": 35
+        },
+        "compaction_events": 0,
+        "invalid_lines": 0
+      },
+      "memory_tool_calls": null
+    },
+    {
+      "task_id": "production-planning",
+      "variant_id": "pi-native",
+      "repetition": 1,
+      "execution_status": "scored",
+      "native_reward": {
+        "reward": 0.0
+      },
+      "success": false,
+      "usage": {
+        "input_tokens": 10694635,
+        "cache_tokens": 10590720,
+        "output_tokens": 77586,
+        "cost_usd": 0.18782202
+      },
+      "error_type": null,
+      "harbor_trial": "production-planning__oj7Yr4e",
+      "environment_setup": {
+        "started_at": "2026-10-27T05:33:50.802867Z",
+        "finished_at": "2026-10-27T05:33:51.701160Z"
+      },
+      "agent_setup": {
+        "started_at": "2026-10-27T05:33:51.701191Z",
+        "finished_at": "2026-10-27T05:36:26.103305Z"
+      },
+      "agent_execution": {
+        "started_at": "2026-10-27T05:36:26.103434Z",
+        "finished_at": "2026-10-27T11:17:25.821601Z"
+      },
+      "verifier": {
+        "started_at": "2026-10-27T11:17:37.615716Z",
+        "finished_at": "2026-10-27T11:17:53.018375Z"
+      },
+      "phase_seconds": {
+        "environment_setup": 0.898293,
+        "agent_setup": 154.402114,
+        "agent_execution": 20459.718167,
+        "verifier": 15.402659
+      },
+      "elapsed_seconds": 20642.217001,
+      "started_at": "2026-10-27T05:33:50.801400Z",
+      "finished_at": "2026-10-27T11:17:53.018401Z",
+      "score_source": "harbor/pi-native-r1/production-planning__oj7Yr4e/result.json",
+      "session_sources": [
+        "harbor/pi-native-r1/production-planning__oj7Yr4e/agent/pi/sessions/2026-10-27T05-36-27-738Z_01a17bdc-2659-7422-b7a8-dd9b67397d2c.jsonl"
+      ],
+      "diagnostics": {
+        "model_responses_with_usage": 106,
+        "tool_calls": {
+          "bash": 105
+        },
+        "compaction_events": 0,
+        "invalid_lines": 0
+      },
+      "memory_tool_calls": null
+    },
+    {
+      "task_id": "roy-polymorph-cn",
+      "variant_id": "pi-native",
+      "repetition": 1,
+      "execution_status": "scored",
+      "native_reward": {
+        "reward": 0.0
+      },
+      "success": false,
+      "usage": {
+        "input_tokens": 8965705,
+        "cache_tokens": 8897536,
+        "output_tokens": 53390,
+        "cost_usd": 0.137903916
+      },
+      "error_type": null,
+      "harbor_trial": "roy-polymorph-cn__yVrC9sT",
+      "environment_setup": {
+        "started_at": "2026-10-27T11:17:53.028446Z",
+        "finished_at": "2026-10-27T11:17:53.936936Z"
+      },
+      "agent_setup": {
+        "started_at": "2026-10-27T11:17:53.936975Z",
+        "finished_at": "2026-10-27T11:20:41.722169Z"
+      },
+      "agent_execution": {
+        "started_at": "2026-10-27T11:20:41.722307Z",
+        "finished_at": "2026-10-27T11:27:56.047465Z"
+      },
+      "verifier": {
+        "started_at": "2026-10-27T11:28:07.290156Z",
+        "finished_at": "2026-10-27T11:28:21.487909Z"
+      },
+      "phase_seconds": {
+        "environment_setup": 0.90849,
+        "agent_setup": 167.785194,
+        "agent_execution": 434.325158,
+        "verifier": 14.197753
+      },
+      "elapsed_seconds": 628.460628,
+      "started_at": "2026-10-27T11:17:53.027304Z",
+      "finished_at": "2026-10-27T11:28:21.487932Z",
+      "score_source": "harbor/pi-native-r1/roy-polymorph-cn__yVrC9sT/result.json",
+      "session_sources": [
+        "harbor/pi-native-r1/roy-polymorph-cn__yVrC9sT/agent/pi/sessions/2026-10-27T11-20-43-493Z_01a17d17-54e3-71c9-af74-6dad39cff21a.jsonl"
+      ],
+      "diagnostics": {
+        "model_responses_with_usage": 148,
+        "tool_calls": {
+          "bash": 147
+        },
+        "compaction_events": 0,
+        "invalid_lines": 0
+      },
+      "memory_tool_calls": null
+    },
+    {
+      "task_id": "mp-checkpoint-consolidation",
+      "variant_id": "pi-memweave",
+      "repetition": 1,
+      "execution_status": "infrastructure_error",
+      "native_reward": null,
+      "success": null,
+      "usage": {
+        "input_tokens": null,
+        "cache_tokens": null,
+        "output_tokens": null,
+        "cost_usd": null
+      },
+      "error_type": "NonZeroAgentExitCodeError",
+      "harbor_trial": "mp-checkpoint-consolidation__7ETsHTa",
+      "environment_setup": {
+        "started_at": "2026-10-27T11:48:28.475579Z",
+        "finished_at": "2026-10-27T11:48:29.375240Z"
+      },
+      "agent_setup": {
+        "started_at": "2026-10-27T11:48:29.375288Z",
+        "finished_at": "2026-10-27T11:48:48.736479Z"
+      },
+      "agent_execution": null,
+      "verifier": null,
+      "phase_seconds": {
+        "environment_setup": 0.899661,
+        "agent_setup": 19.361191,
+        "agent_execution": null,
+        "verifier": null
+      },
+      "elapsed_seconds": 31.330705,
+      "started_at": "2026-10-27T11:48:28.397466Z",
+      "finished_at": "2026-10-27T11:48:59.728171Z",
+      "score_source": "harbor/pi-memweave-r1/mp-checkpoint-consolidation__7ETsHTa/result.json",
+      "session_sources": [],
+      "diagnostics": null,
+      "memory_tool_calls": null
+    },
+    {
+      "task_id": "music-harmony",
+      "variant_id": "pi-memweave",
+      "repetition": 1,
+      "execution_status": "infrastructure_error",
+      "native_reward": null,
+      "success": null,
+      "usage": {
+        "input_tokens": null,
+        "cache_tokens": null,
+        "output_tokens": null,
+        "cost_usd": null
+      },
+      "error_type": "AgentSetupTimeoutError",
+      "harbor_trial": "music-harmony__vuPpAZY",
+      "environment_setup": {
+        "started_at": "2026-10-27T11:48:28.509113Z",
+        "finished_at": "2026-10-27T11:48:29.377789Z"
+      },
+      "agent_setup": {
+        "started_at": "2026-10-27T11:48:29.377818Z",
+        "finished_at": "2026-10-27T11:54:29.379931Z"
+      },
+      "agent_execution": null,
+      "verifier": null,
+      "phase_seconds": {
+        "environment_setup": 0.868676,
+        "agent_setup": 360.002113,
+        "agent_execution": null,
+        "verifier": null
+      },
+      "elapsed_seconds": 372.15608,
+      "started_at": "2026-10-27T11:48:28.475043Z",
+      "finished_at": "2026-10-27T11:54:40.631123Z",
+      "score_source": "harbor/pi-memweave-r1/music-harmony__vuPpAZY/result.json",
+      "session_sources": [],
+      "diagnostics": null,
+      "memory_tool_calls": null
+    },
+    {
+      "task_id": "production-planning",
+      "variant_id": "pi-memweave",
+      "repetition": 1,
+      "execution_status": "infrastructure_error",
+      "native_reward": null,
+      "success": null,
+      "usage": {
+        "input_tokens": null,
+        "cache_tokens": null,
+        "output_tokens": null,
+        "cost_usd": null
+      },
+      "error_type": "AgentSetupTimeoutError",
+      "harbor_trial": "production-planning__Mo4NSAR",
+      "environment_setup": {
+        "started_at": "2026-10-27T11:48:59.735845Z",
+        "finished_at": "2026-10-27T11:49:00.596321Z"
+      },
+      "agent_setup": {
+        "started_at": "2026-10-27T11:49:00.596354Z",
+        "finished_at": "2026-10-27T11:55:00.597669Z"
+      },
+      "agent_execution": null,
+      "verifier": null,
+      "phase_seconds": {
+        "environment_setup": 0.860476,
+        "agent_setup": 360.001315,
+        "agent_execution": null,
+        "verifier": null
+      },
+      "elapsed_seconds": 372.346211,
+      "started_at": "2026-10-27T11:48:59.734771Z",
+      "finished_at": "2026-10-27T11:55:12.080982Z",
+      "score_source": "harbor/pi-memweave-r1/production-planning__Mo4NSAR/result.json",
+      "session_sources": [],
+      "diagnostics": null,
+      "memory_tool_calls": null
+    },
+    {
+      "task_id": "roy-polymorph-cn",
+      "variant_id": "pi-memweave",
+      "repetition": 1,
+      "execution_status": "scored",
+      "native_reward": {
+        "reward": 0.0
+      },
+      "success": false,
+      "usage": {
+        "input_tokens": 307599,
+        "cache_tokens": 280448,
+        "output_tokens": 6835,
+        "cost_usd": 0.018029988
+      },
+      "error_type": null,
+      "harbor_trial": "roy-polymorph-cn__NhL5T3B",
+      "environment_setup": {
+        "started_at": "2026-10-27T11:54:40.638338Z",
+        "finished_at": "2026-10-27T11:54:41.502315Z"
+      },
+      "agent_setup": {
+        "started_at": "2026-10-27T11:54:41.502344Z",
+        "finished_at": "2026-10-27T11:57:39.429321Z"
+      },
+      "agent_execution": {
+        "started_at": "2026-10-27T11:57:39.429445Z",
+        "finished_at": "2026-10-27T11:58:37.098956Z"
+      },
+      "verifier": {
+        "started_at": "2026-10-27T11:58:48.083443Z",
+        "finished_at": "2026-10-27T11:59:01.441594Z"
+      },
+      "phase_seconds": {
+        "environment_setup": 0.863977,
+        "agent_setup": 177.926977,
+        "agent_execution": 57.669511,
+        "verifier": 13.358151
+      },
+      "elapsed_seconds": 260.804289,
+      "started_at": "2026-10-27T11:54:40.637329Z",
+      "finished_at": "2026-10-27T11:59:01.441618Z",
+      "score_source": "harbor/pi-memweave-r1/roy-polymorph-cn__NhL5T3B/result.json",
+      "session_sources": [
+        "harbor/pi-memweave-r1/roy-polymorph-cn__NhL5T3B/agent/pi/sessions/2026-10-27T11-57-40-978Z_01a17d39-2af0-75fa-8caf-ae52cc14b283.jsonl"
+      ],
+      "diagnostics": {
+        "model_responses_with_usage": 18,
+        "tool_calls": {
+          "bash": 14,
+          "state_append": 3,
+          "task_create": 1
+        },
+        "compaction_events": 0,
+        "invalid_lines": 0
+      },
+      "memory_tool_calls": {
+        "state_append": 3,
+        "task_create": 1
+      }
+    }
+  ]
+}
