@@ -46,16 +46,20 @@ class LiveObserver:
                 yield key, offset, value
 
     def scan(self):
+        lifecycle = []
         for path in sorted(self.root.glob("groups/*/lifecycle/*.jsonl")):
-            for key, _offset, event in self.lines(path):
-                if event.get("purpose") != "solve":
-                    continue
-                identity = (key, event["trial"])
-                if event["event"] == "agent-start":
-                    self.active[identity] = event["variant"]
-                elif event["event"] in ("agent-end", "end", "cancel"):
-                    self.active.pop(identity, None)
-                self.peak_solves = max(self.peak_solves, len(self.active))
+            for key, offset, event in self.lines(path):
+                if event.get("purpose") == "solve":
+                    lifecycle.append((event.get("timestamp", ""), key, offset, event))
+        # Different Jobs append different files. File order can invent an overlap
+        # when one Job ended before another started between two observation scans.
+        for _timestamp, key, _offset, event in sorted(lifecycle):
+            identity = (key, event["trial"])
+            if event["event"] == "agent-start":
+                self.active[identity] = event["variant"]
+            elif event["event"] in ("agent-end", "end", "cancel"):
+                self.active.pop(identity, None)
+            self.peak_solves = max(self.peak_solves, len(self.active))
         for path in sorted(self.root.glob("groups/*/harbor/*/*/agent/pi/sessions/*.jsonl")):
             key = path.relative_to(self.root).as_posix()
             item = self.sessions.setdefault(

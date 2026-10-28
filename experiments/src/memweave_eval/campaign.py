@@ -77,6 +77,7 @@ class Campaign(StrictModel):
     root: Path
     preflight_parent: Path | None = None
     control_parent: Path | None = None
+    bootstrap_parent: Path | None = None
     phase: Literal["bootstrap", "full"] = "full"
 
     @model_validator(mode="after")
@@ -96,6 +97,10 @@ def load_campaign(path: Path) -> Campaign:
     spec.subject.package = (path.parent / spec.subject.package.expanduser()).resolve()
     if spec.preflight_parent:
         spec.preflight_parent = (path.parent / spec.preflight_parent).resolve()
+    if spec.bootstrap_parent:
+        spec.bootstrap_parent = (path.parent / spec.bootstrap_parent).resolve()
+        if spec.phase != "full":
+            raise ValueError("bootstrap result inheritance is only for full phase")
     if spec.control_parent:
         spec.control_parent = (path.parent / spec.control_parent).resolve()
         if spec.control_parent.parent != (spec.root / "runs").resolve():
@@ -240,6 +245,9 @@ def admit_group(
     used_reserves,
     service,
     docker=None,
+    state_lock=None,
+    reserve_bindings=None,
+    prepare=None,
 ):
     """Task-specific admission, retaining failures and choosing only frozen same-tier reserves."""
     root = group.parent.parent
@@ -247,6 +255,14 @@ def admit_group(
     failures = state.setdefault("admission_failures", [])
     ready = []
     batch = 0
+    state_lock = state_lock or threading.RLock()
+    prepare = prepare or prepare_task
+    reserve_bindings = reserve_bindings if reserve_bindings is not None else {}
+
+    def reserve(slot):
+        with state_lock:
+            bound = reserve_bindings.pop(slot["task_id"], None)
+            return bound or next_reserve(catalog, slot, used_reserves)
 
     def save():
         atomic_json(root / "run.json", state)
@@ -260,11 +276,12 @@ def admit_group(
             "group": group.name,
             **extra,
         }
-        failures.append(record)
-        state["tasks"][slot["task_id"]] = dict(record, status="blocked")
-        save()
+        with state_lock:
+            failures.append(record)
+            state["tasks"][slot["task_id"]] = dict(record, status="blocked")
+            save()
 
-    def prepare(slot, candidate):
+    def prepare_candidate(slot, candidate):
         while candidate is not None:
             service.check()
             tid = candidate["task_id"]
@@ -277,11 +294,11 @@ def admit_group(
                     inherited["reason"],
                     inherited_from=inherited["inherited_from"],
                 )
-                candidate = next_reserve(catalog, slot, used_reserves)
+                candidate = reserve(slot)
                 continue
             source = upstream / catalog["sources"][candidate["suite"]]["tasks_dir"] / tid
             try:
-                preparations[tid] = prepare_task(
+                preparations[tid] = prepare(
                     source,
                     group,
                     spec.execution.platform,
@@ -291,7 +308,7 @@ def admit_group(
                 )
             except TaskPreparationError as exc:
                 failed(slot, candidate, "official_image", str(exc))
-                candidate = next_reserve(catalog, slot, used_reserves)
+                candidate = reserve(slot)
                 continue
             actual = dict(candidate, slot_task_id=slot["task_id"])
             attempts[tid] = slot
@@ -334,7 +351,7 @@ def admit_group(
         }
 
     for slot in rows:
-        actual = prepare(slot, slot)
+        actual = prepare_candidate(slot, slot)
         if actual:
             ready.append(actual)
     admitted = []
@@ -345,17 +362,18 @@ def admit_group(
             tid = actual["task_id"]
             if results.get(tid):
                 admitted.append(actual)
-                state["tasks"][slot["task_id"]] = {
-                    "status": "admitted",
-                    "group": group.name,
-                    "actual_task_id": tid,
-                    "actual_title": actual["title"],
-                    "actual_display_id": actual["display_id"],
-                }
-                save()
+                with state_lock:
+                    state["tasks"][slot["task_id"]] = {
+                        "status": "admitted",
+                        "group": group.name,
+                        "actual_task_id": tid,
+                        "actual_title": actual["title"],
+                        "actual_display_id": actual["display_id"],
+                    }
+                    save()
                 break
             failed(slot, actual, "official_controls", "oracle/nop did not validate")
-            actual = prepare(slot, next_reserve(catalog, slot, used_reserves))
+            actual = prepare_candidate(slot, reserve(slot))
             if actual is None:
                 break
             results.update(controls([actual]))
@@ -543,6 +561,10 @@ def _index(root):
 
 
 def run_campaign(spec: Campaign) -> Path:
+    if spec.phase == "full":
+        from .paired import run_pairs
+
+        return run_pairs(spec)
     if importlib.metadata.version("harbor") != spec.runtime.harbor_version:
         raise ValueError("installed Harbor version mismatch")
     catalog = load_catalog(spec)

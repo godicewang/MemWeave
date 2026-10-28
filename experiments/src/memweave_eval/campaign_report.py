@@ -62,8 +62,9 @@ def generate_campaign_report(root: Path):
         for p in root.glob("groups/*/harbor/*/*/result.json")
         if p.relative_to(root).as_posix() not in indexed
     )
-    lineage = lock.get("preflight_lineage")
-    if lineage:
+    for lineage in (lock.get("preflight_lineage"), lock.get("bootstrap_lineage")):
+        if not lineage:
+            continue
         parent = Path(lineage["parent"])
         if parent.resolve().parent != root.resolve().parent or parent.is_symlink():
             invalid.append("preflight_parent/path")
@@ -130,12 +131,21 @@ def generate_campaign_report(root: Path):
                     else "missing_patch"
                 )
             scores = []
-            for p in (group / "harbor" / ("regrade-" + variant)).glob("*/result.json"):
-                if p.relative_to(root).as_posix() not in indexed:
-                    continue
-                raw = json.loads(p.read_text())
-                if raw.get("task_name", "").split("/")[-1] == actual_task:
-                    scores.append((p, raw))
+            for job_name in ("regrade-" + variant, "regrade"):
+                for p in (group / "harbor" / job_name).glob("*/result.json"):
+                    if p.relative_to(root).as_posix() not in indexed:
+                        continue
+                    raw = json.loads(p.read_text())
+                    source_job = (
+                        raw.get("config", {})
+                        .get("agent", {})
+                        .get("kwargs", {})
+                        .get("source_job", "")
+                    )
+                    if job_name == "regrade" and Path(source_job).name != variant:
+                        continue
+                    if raw.get("task_name", "").split("/")[-1] == actual_task:
+                        scores.append((p, raw))
             if len(scores) > 1:
                 raise ValueError("ambiguous campaign regrade result")
             score = normalize_trial(scores[0][1] if scores else None, plan)
@@ -168,6 +178,30 @@ def generate_campaign_report(root: Path):
         if invalid:
             row.update(execution_status="invalid_evidence", success=None)
         rows.append(row)
+    inherited_cost = 0
+    lineage = lock.get("bootstrap_lineage")
+    if lineage:
+        parent = Path(lineage["parent"])
+        previous = generate_campaign_report(parent)
+        if not previous["complete"]:
+            invalid.append("bootstrap_parent/incomplete")
+        inherited_cost = lineage["known_cost_usd"]
+        for old in previous["rows"]:
+            row = dict(
+                old, origin_run_id=previous["run_id"], source_run_dir=str(parent), inherited=True
+            )
+            for field in ("solve_source", "score_source"):
+                if row.get(field):
+                    row[field] = str(parent / row[field])
+            rows.append(row)
+        order = {(r["task_id"], r["variant_id"]): i for i, r in enumerate(lock["full_plan"])}
+        if len({(r["task_id"], r["variant_id"]) for r in rows}) != len(rows):
+            raise ValueError("duplicate inherited attempt; never silently rerun a bootstrap slot")
+        rows.sort(key=lambda r: order[(r["task_id"], r["variant_id"])])
+    for row in rows:
+        row.setdefault("origin_run_id", lock["run_id"])
+        if invalid:
+            row.update(execution_status="invalid_evidence", success=None)
     summary = summarize(rows)
     blocked_attempt_rows = [
         dict(
@@ -199,7 +233,7 @@ def generate_campaign_report(root: Path):
         current_run_wall_seconds=duration(state),
         window_deadline_at=state.get("window_deadline_at"),
         peak_solves=live.get("peak_solves"),
-        estimated_known_cost_usd=live.get("estimated_cost_usd"),
+        estimated_known_cost_usd=inherited_cost + live.get("estimated_cost_usd", 0),
         by_suite={
             suite: summarize([r for r in rows if r["suite_id"] == suite])
             for suite in sorted({r["suite_id"] for r in rows})
@@ -219,6 +253,7 @@ def generate_campaign_report(root: Path):
         "actual_display_id",
         "actual_title",
         "variant_id",
+        "origin_run_id",
         "execution_status",
         "score_status",
         "success",

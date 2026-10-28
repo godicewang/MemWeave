@@ -91,7 +91,7 @@ Agent 正常使用 Pi 默认提示和原生工具；MemWeave 使用生产入口�
 
 ## 49题混合并行Campaign（schema2）
 
-`memweave-eval validate/run configs/long-horizon-49.yaml`复用上述入口。配置包含本机已核验候选包的绝对路径，换机器须显式对齐同一归档和私有运行根。SWE每组最多5题×2变体，TB按官方资源缩小组；任务按目录固定顺序，准备、oracle/nop与双变体软件预检均通过后才运行该组模型。某题官方镜像/控制失败保留其两行blocked，其余准入题继续；公共软件/协议/凭据/观测失败全局停止。本批保持49槽位，用户已确认任务级准入失败按冻结顺序使用同集合/同档候补；表中另列实际题号，不冒充原题成绩。无可用候补才留blocked。
+`memweave-eval validate/run configs/long-horizon-49.yaml`复用上述入口。配置包含本机已核验候选包的绝对路径，换机器须显式对齐同一归档和私有运行根。SWE最多5个单题双变体流水线（最多10个真实解题实例），TB按官方资源限流；任务按目录固定顺序，准备、oracle/nop与双变体软件预检均通过后才运行该组模型。某题官方镜像/控制失败保留其两行blocked，其余准入题继续；公共软件/协议/凭据/观测失败全局停止。本批保持49槽位，用户已确认任务级准入失败按冻结顺序使用同集合/同档候补；表中另列实际题号，不冒充原题成绩。无可用候补才留blocked。
 
 `groups/gNN/`包含组级任务准备、软件锁与Harbor原件。混合解题Job有两个独立ExperimentPi配置；每个Trial仍有新容器、home/config/Session/memory。SWE重放输入按变体拆分并保存原补丁SHA，再用未改动的官方PatchReplayAgent分别在新沙箱评分；不能直接把含两变体的Job交给按题号查找的官方重放器。
 
@@ -100,3 +100,12 @@ Agent 正常使用 Pi 默认提示和原生工具；MemWeave 使用生产入口�
 `report`离线校验原件并重建Campaign根目录的summary.json、comparison.csv、report.md，覆盖全部98行；blocked/not_run/infra/unknown不冒充官方0。总墙钟来自Campaign首尾差，不加总并行Trial时间。完整契约见[执行方案](../docs/experiments/LONG_HORIZON_49_RUN_PROPOSAL.md)。
 
 `preflight_parent`可选且只接受同根、同清单/候选/runtime/model、已结束且从未开始模型Job的准备run；校验父证据并继承原始截止与任务阻断，不支持付费结果续跑，不重置额度。主表98槽位以actual_task_id标识替换，原题/失败候补的阻断另列。
+
+
+### 单题闭环与就绪题对流水线
+
+`phase: bootstrap`只执行冻结清单首个S01的两次真实解题及官方评分，保留98行full_plan；该闭环已真实通过，见[报告](../docs/experiments/BOOTSTRAP_S01_REPORT_2026-10-28.md)。full阶段可显式指定同运行根的`bootstrap_parent`，严格校验已完成的同清单/候选/模型/runtime与未变的Pi/协议适配代码；活动plan只含剩余96次，合并报告仍98行。原Session/Task/State不复制给新Agent，不重复S01。额度减去父阶段已知费用，原始截止保持。
+
+full阶段每题独立完成准入→完整加载→两变体解题→评分，不等5题都准备。最多5个题对Harbor Job流水线，CPU/内存/存储按两份官方峰值包络限流，含可能候补；就绪缓存优先，穿插两套任务集，不读模型成绩决定顺序。新Dockerfile构建串行，官方镜像缓存验证可并行。并行Job使用同一观察器和费用账本；生命周期按时间合并，最终还应核对原始Agent阶段区间，避免按文件顺序虚构峰值。
+
+两侧都有补丁时使用同一评分Job内的两个官方PatchReplayAgent，每个只接自己变体的交接目录、各自新沙箱；报告按source_job区分并验证绑定。`control_parent`只允许复用任务/镜像/平台/Harbor/Docker及官方配置等价、SHA匹配的oracle/nop，不复用模型成绩。完整规则见执行方案§7–8。

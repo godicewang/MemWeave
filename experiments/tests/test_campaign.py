@@ -218,6 +218,37 @@ def test_lifecycle_counts_real_solves_only(tmp_path):
     assert observer.peak_solves == 10
 
 
+def test_concurrent_job_file_order_cannot_invent_peak(tmp_path):
+    second = tmp_path / "groups/g02/lifecycle/solve.jsonl"
+    second.parent.mkdir(parents=True)
+    start = {
+        "event": "agent-start",
+        "trial": "a",
+        "variant": "pi-native",
+        "purpose": "solve",
+        "timestamp": "2026-10-28T00:00:00+00:00",
+    }
+    second.write_text(json.dumps(start) + "\n")
+    observer = LiveObserver(tmp_path)
+    assert observer.scan()["peak_solves"] == 1
+    with second.open("a") as out:
+        out.write(
+            json.dumps(start | {"event": "agent-end", "timestamp": "2026-10-28T00:00:01+00:00"})
+            + "\n"
+        )
+    first = tmp_path / "groups/g01/lifecycle/solve.jsonl"
+    first.parent.mkdir(parents=True)
+    first.write_text(
+        json.dumps(
+            start
+            | {"trial": "b", "variant": "pi-memweave", "timestamp": "2026-10-28T00:00:02+00:00"}
+        )
+        + "\n"
+    )
+    assert observer.scan()["active_solves"] == {"pi-memweave": 1}
+    assert observer.peak_solves == 1
+
+
 def test_offline_report_retains_blocked_and_unrun_rows(tmp_path):
     from memweave_eval.campaign_report import generate_campaign_report
 
@@ -307,7 +338,8 @@ def test_reserves_are_ordered_once_and_never_cross_suite_or_tier():
     assert used == {"a", "c"}
 
 
-def test_report_uses_replacement_identity_and_keeps_original_blocked(tmp_path):
+@pytest.mark.parametrize("mixed", [False, True])
+def test_report_uses_replacement_identity_and_keeps_original_blocked(tmp_path, mixed):
     from memweave_eval.campaign_report import generate_campaign_report
 
     tmp_path = tmp_path / "runs/test"
@@ -367,7 +399,11 @@ def test_report_uses_replacement_identity_and_keeps_original_blocked(tmp_path):
         source, _ = replay_handoff(
             tmp_path / "groups/g01/harbor/solve", tmp_path / "groups/g01/replay-sources" / v, v
         )
-        d = tmp_path / "groups/g01/harbor" / ("regrade-" + v) / "trial"
+        d = (
+            tmp_path / "groups/g01/harbor/regrade" / ("trial-" + v)
+            if mixed
+            else tmp_path / "groups/g01/harbor" / ("regrade-" + v) / "trial"
+        )
         atomic_json(
             d / "result.json",
             {
@@ -394,7 +430,11 @@ def test_report_uses_replacement_identity_and_keeps_original_blocked(tmp_path):
     assert report["variants"]["pi-native"]["planned"] == 1
     # A grader accidentally bound to the other variant must never contribute a score,
     # even when all changed files have otherwise valid hashes.
-    score = tmp_path / "groups/g01/harbor/regrade-pi-native/trial/result.json"
+    score = (
+        tmp_path / "groups/g01/harbor/regrade/trial-pi-native/result.json"
+        if mixed
+        else tmp_path / "groups/g01/harbor/regrade-pi-native/trial/result.json"
+    )
     raw = json.loads(score.read_text())
     raw["config"]["agent"]["kwargs"]["source_job"] = str(
         tmp_path / "groups/g01/replay-sources/pi-memweave"
@@ -405,10 +445,22 @@ def test_report_uses_replacement_identity_and_keeps_original_blocked(tmp_path):
         if entry["path"] == score.relative_to(tmp_path).as_posix():
             entry["sha256"] = file_digest(score)
     atomic_json(tmp_path / "evidence-index.json", index)
-    report = generate_campaign_report(tmp_path)
-    assert report["rows"][0]["success"] is None
-    assert report["rows"][0]["execution_status"] == "invalid_replay_binding"
-    assert report["rows"][1]["success"] is False
+    if mixed:
+        with pytest.raises(ValueError, match="ambiguous"):
+            generate_campaign_report(tmp_path)
+    else:
+        report = generate_campaign_report(tmp_path)
+        assert report["rows"][0]["success"] is None
+        assert report["rows"][0]["execution_status"] == "invalid_replay_binding"
+        assert report["rows"][1]["success"] is False
+    raw["config"]["agent"]["kwargs"]["source_job"] = str(
+        tmp_path / "groups/g01/replay-sources/pi-native"
+    )
+    atomic_json(score, raw)
+    for entry in index["files"]:
+        if entry["path"] == score.relative_to(tmp_path).as_posix():
+            entry["sha256"] = file_digest(score)
+    atomic_json(tmp_path / "evidence-index.json", index)
     extra = tmp_path / "groups/g01/harbor/regrade-pi-native/unindexed/result.json"
     atomic_json(extra, {"task_name": "reserve", "verifier_result": {"rewards": {"reward": 1}}})
     report = generate_campaign_report(tmp_path)
