@@ -57,7 +57,7 @@ badcase区分插件实现/接线错误、记忆使用/约束保持错误、两�
 
 新增严格`schema_version: 2` Campaign配置，复用subject/runtime/model/variants/limits/root；`catalog`路径与`catalog_sha256`指定冻结清单，execution固定一次重复、无重试、linux/amd64，concurrency为2–10。旧schema1及validate/run/report兼容。不能以随机seed近似定向ID。
 
-启动冻结49×2全部计划、目录与源码摘要；按目录顺序分组（SWE最多5题双变体，TB按官方资源取整为题对），每组依次完成官方镜像、oracle/nop、双变体软件预检、不可变组锁、混合解题Job和官方评分。任务镜像/控制失败记blocked；公共软件/凭据/协议/观测失败全局停止。49槽位保持原ID，首批不自动启用候补，不把替换题冒充原题；候补供后续补测。
+启动冻结49×2全部计划、目录与源码摘要；按目录顺序分组（SWE最多5题双变体，TB按官方资源取整为题对），每组依次完成官方镜像、oracle/nop、双变体软件预检、不可变组锁、混合解题Job和官方评分。任务镜像/控制失败记blocked；公共软件/凭据/协议/观测失败全局停止。2026-10-28用户明确确认：有已审查的同集合、同档候补时，模型前按冻结顺序使用；候补不足才保留该槽位阻断。保留原题及失败候补的全部准入记录，不跨档/跨集合、不因模型结果换题。49个槽位ID保持不变，另记实际task_id/标题；对外表格明确显示S04→RS01等替换，不把替补成绩写成原题成绩。每组在首次推理前冻结新的实际计划版本。
 
 原始Trial以(task_id,variant_id)唯一匹配。SWE按变体建立独立重放输入目录，只复制该Trial原始result.json与model.patch，记录源路径和SHA；缺补丁标明缺失，不伪造空补丁。每变体独立评分Job；解题完成即评分，减少止损时未评分结果。
 
@@ -66,3 +66,16 @@ badcase区分插件实现/接线错误、记忆使用/约束保持错误、两�
 组证据位于groups/<id>/，含runtime-assets和组锁；Campaign根保存experiment.lock.json、run.json、实时观察和总报告。离线报告保留全部98行，infra/blocked/not_run/unknown与官方0分分开。总墙钟取Campaign首尾差，不相加并发Trial时间。
 
 实现核验补充：Harbor 0.24.0公开`Job.create`与`Job.add_hook(TrialEvent, callback)`提供真实agent-start/agent-end生命周期，观察器据此计数；不从“容器存在”猜解题并发。每个Job在独立子进程调用此公开API；父进程统一观察和止损。
+
+
+### 6 已确认候补的实现与本轮窗口延续
+
+S04 Navidrome镜像拉取发生unexpected EOF，用户已确认按冻结顺序使用SWE简单档RS01。旧run `20261028T104839Z-2121023e21`在任何模型推理前安全停止，费用0，原件和98行未完成报告保留；这不是任何变体的失败成绩或付费重试。Qutebrowser并行缓存已结束、退出0。
+
+schema2增加可选`preflight_parent`，仅用于继承**未开始任何模型Job**的同清单、同候选、同runtime/model配置的已结束准备记录。它必须位于同运行根runs/，校验父证据索引、来源与模型调用为0；存在solve Job或Session usage即拒绝，不能作为付费续跑或重复尝试接口。新锁保存父run关键文件哈希、最初窗口起点/截止与0费用证明。费用仍20美元；新run时限取配置剩余额度与父窗口剩余时间的较小值，总截止不晚于2026-10-30 18:48:39 CST。
+
+只继承父run中任务级镜像/控制阻断，以便本轮直接选择已确认的候补、不偷偷重试原题；不继承Session/Task/State、模型补丁或能力成绩。新题/候补仍做官方镜像及oracle/nop和双变体完整预检。首批同档候补消耗顺序全局唯一；候补自身失败继续下一项，耗尽则两变体同槽位blocked，其他合格槽位继续。公共软件/认证/观察失败全局停止。
+
+每组group.lock保存实际任务与slot_task_id、候补来源及模型前actual_plan；主比较表仍49×2槽位，并列原题与actual_task_id/标题。另附每个被替换原题或失败候补的双变体阻断行，不把这些行混入模型通过率分母。模型启动后的成绩、耗时和记忆压力不能触发候补。
+
+评分证据验收：最终run.json/live.json一并入索引；报告只接受索引覆盖的成绩原件。SWE有效成绩还必须核对原尝试、同变体handoff、原补丁/结果SHA、重放Job的source_job及副本SHA一致。缺源或错配标为未知/接线错误，不能作为能力0或成功。

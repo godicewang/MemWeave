@@ -15,7 +15,7 @@ import sys
 import threading
 import time
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -51,7 +51,7 @@ from .spec import (
     load_yaml,
     outside_repository,
 )
-from .storage import atomic_json, check_private_evidence, file_digest
+from .storage import atomic_json, check_private_evidence, contained, file_digest
 from .suites import resolve_suite, task_digest, task_info
 
 VARIANTS = ("pi-native", "pi-memweave")
@@ -75,6 +75,7 @@ class Campaign(StrictModel):
     execution: CampaignExecution
     limits: Limits
     root: Path
+    preflight_parent: Path | None = None
 
     @model_validator(mode="after")
     def consistent(self):
@@ -91,7 +92,11 @@ def load_campaign(path: Path) -> Campaign:
     spec = Campaign.model_validate(load_yaml(path))
     spec.catalog = (path.parent / spec.catalog).resolve()
     spec.subject.package = (path.parent / spec.subject.package.expanduser()).resolve()
+    if spec.preflight_parent:
+        spec.preflight_parent = (path.parent / spec.preflight_parent).resolve()
     load_catalog(spec)
+    if spec.preflight_parent:
+        preflight_lineage(spec)
     return spec
 
 
@@ -142,6 +147,210 @@ def campaign_plan(catalog):
         for row in catalog["selected"]
         for variant in VARIANTS
     ]
+
+
+def next_reserve(catalog, slot, used):
+    for row in catalog["reserves"]:
+        if (row["suite"], row["tier"]) == (slot["suite"], slot["tier"]) and row[
+            "task_id"
+        ] not in used:
+            used.add(row["task_id"])
+            return row
+    return None
+
+
+def preflight_lineage(spec):
+    """Only a zero-inference preparation can contribute blocked admissions and time."""
+    if spec.preflight_parent is None:
+        return None, {}
+    parent = spec.preflight_parent.resolve()
+    if parent.parent != (spec.root / "runs").resolve():
+        raise ValueError("preflight parent must belong to this run root")
+    lock = json.loads((parent / "experiment.lock.json").read_text())
+    state = json.loads((parent / "run.json").read_text())
+    live = json.loads((parent / "live.json").read_text())
+    if (
+        not state.get("finished_at")
+        or live.get("model_responses") != 0
+        or live.get("estimated_cost_usd") != 0
+        or any(j["purpose"] == "solve" for j in state["jobs"].values())
+        or list(parent.glob("groups/*/harbor/*/*/agent/pi/sessions/*.jsonl"))
+    ):
+        raise ValueError("preflight parent must have no model Job or Session")
+    config = spec.model_dump(mode="json")
+    previous = lock["config"]
+    for field in ("catalog_sha256", "subject", "runtime", "model", "variants", "execution"):
+        if config[field] != previous[field]:
+            raise ValueError("preflight parent identity mismatch: " + field)
+    if previous.get("preflight_parent"):
+        raise ValueError("nested preflight inheritance is not supported")
+    if spec.limits.max_cost_usd > previous["limits"]["max_cost_usd"]:
+        raise ValueError("cannot enlarge inherited cost budget")
+    for item in json.loads((parent / "evidence-index.json").read_text())["files"]:
+        if file_digest(contained(parent, item["path"])) != item["sha256"]:
+            raise ValueError("preflight parent evidence changed")
+    for path in parent.glob("groups/*/configs/*.json"):
+        for agent in json.loads(path.read_text())["agents"]:
+            if agent.get("name") in ("oracle", "nop"):
+                continue
+            if (
+                agent.get("import_path") != "memweave_eval.pi_agent:ExperimentPi"
+                or agent.get("kwargs", {}).get("prepare_only") is not True
+            ):
+                raise ValueError("preflight parent contains a possible model Job")
+    start = datetime.fromisoformat(state["started_at"])
+    end = start + timedelta(seconds=previous["limits"]["max_elapsed_seconds"])
+    lineage = {
+        "parent": str(parent),
+        "window_started_at": start.isoformat(),
+        "window_deadline_at": end.isoformat(),
+        "parent_model_cost_usd": 0,
+        "hashes": {
+            name: file_digest(parent / name)
+            for name in ("experiment.lock.json", "run.json", "live.json", "evidence-index.json")
+        },
+    }
+    blocks = {
+        task: dict(record, inherited_from=str(parent))
+        for task, record in state["tasks"].items()
+        if record.get("status") == "blocked"
+        and record.get("phase") in ("official_image", "official_controls")
+    }
+    return lineage, blocks
+
+
+def admit_group(
+    rows,
+    *,
+    catalog,
+    spec,
+    upstream,
+    group,
+    state,
+    execute,
+    env,
+    deadline,
+    prior_blocks,
+    used_reserves,
+    service,
+):
+    """Task-specific admission, retaining failures and choosing only frozen same-tier reserves."""
+    root = group.parent.parent
+    preparations, attempts = {}, {}
+    failures = state.setdefault("admission_failures", [])
+    ready = []
+    batch = 0
+
+    def save():
+        atomic_json(root / "run.json", state)
+
+    def failed(slot, row, phase, reason, **extra):
+        record = {
+            "slot_task_id": slot["task_id"],
+            "task_id": row["task_id"],
+            "phase": phase,
+            "reason": reason,
+            "group": group.name,
+            **extra,
+        }
+        failures.append(record)
+        state["tasks"][slot["task_id"]] = dict(record, status="blocked")
+        save()
+
+    def prepare(slot, candidate):
+        while candidate is not None:
+            service.check()
+            tid = candidate["task_id"]
+            inherited = prior_blocks.get(tid)
+            if inherited:
+                failed(
+                    slot,
+                    candidate,
+                    inherited["phase"],
+                    inherited["reason"],
+                    inherited_from=inherited["inherited_from"],
+                )
+                candidate = next_reserve(catalog, slot, used_reserves)
+                continue
+            source = upstream / catalog["sources"][candidate["suite"]]["tasks_dir"] / tid
+            try:
+                preparations[tid] = prepare_task(
+                    source,
+                    group,
+                    spec.execution.platform,
+                    deadline,
+                    env,
+                    catalog["resource_filter"],
+                )
+            except TaskPreparationError as exc:
+                failed(slot, candidate, "official_image", str(exc))
+                candidate = next_reserve(catalog, slot, used_reserves)
+                continue
+            actual = dict(candidate, slot_task_id=slot["task_id"])
+            attempts[tid] = slot
+            return actual
+        return None
+
+    def controls(candidates):
+        nonlocal batch
+        batch += 1
+        paths = [group / preparations[r["task_id"]]["runtime_path"] for r in candidates]
+        names = {}
+        for control in ("oracle", "nop"):
+            name = "control-" + control + ("" if batch == 1 else f"-a{batch:02d}")
+            names[control] = name
+            cfg = build_job_config(
+                spec,
+                group,
+                name,
+                paths,
+                control=control,
+                protocol="tb4" if candidates[0]["suite"] == "terminal-bench-4" else "swe-pro-v2",
+            )
+            execute(cfg, required=False)
+        return {
+            r["task_id"]: all(
+                control_ok(group / "harbor" / names[c], r["task_id"], score)
+                for c, score in [("oracle", 1), ("nop", 0)]
+            )
+            for r in candidates
+        }
+
+    for slot in rows:
+        actual = prepare(slot, slot)
+        if actual:
+            ready.append(actual)
+    admitted = []
+    results = controls(ready) if ready else {}
+    for actual in ready:
+        slot = attempts[actual["task_id"]]
+        while True:
+            tid = actual["task_id"]
+            if results.get(tid):
+                admitted.append(actual)
+                state["tasks"][slot["task_id"]] = {
+                    "status": "admitted",
+                    "group": group.name,
+                    "actual_task_id": tid,
+                    "actual_title": actual["title"],
+                    "actual_display_id": actual["display_id"],
+                }
+                save()
+                break
+            failed(slot, actual, "official_controls", "oracle/nop did not validate")
+            actual = prepare(slot, next_reserve(catalog, slot, used_reserves))
+            if actual is None:
+                break
+            results.update(controls([actual]))
+    atomic_json(
+        group / "admission.json",
+        {
+            "tasks": {r["task_id"]: state["tasks"][r["task_id"]] for r in rows},
+            "failures": [f for f in failures if f["group"] == group.name],
+        },
+        immutable=True,
+    )
+    return admitted, preparations
 
 
 def paired_capacity(requested, tasks, *, cpus, memory_mb):
@@ -305,8 +514,6 @@ def _index(root):
         "summary.json",
         "comparison.csv",
         "report.md",
-        "run.json",
-        "live.json",
         "containers.json",
         "events.jsonl",
         "observations.md",
@@ -314,7 +521,7 @@ def _index(root):
     return [
         {"path": p.relative_to(root).as_posix(), "sha256": file_digest(p), "size": p.stat().st_size}
         for p in sorted(root.rglob("*"))
-        if p.is_file() and p.name not in excluded
+        if p.is_file() and not (p.parent == root and p.name in excluded)
     ]
 
 
@@ -322,6 +529,7 @@ def run_campaign(spec: Campaign) -> Path:
     if importlib.metadata.version("harbor") != spec.runtime.harbor_version:
         raise ValueError("installed Harbor version mismatch")
     catalog = load_catalog(spec)
+    lineage, prior_blocks = preflight_lineage(spec)
     package = verify_package(spec.subject.package, spec.subject.sha256, spec.subject.commit)
     dirty = subprocess.check_output(
         ["git", "-C", str(REPOSITORY), "status", "--porcelain", "--", "experiments"], text=True
@@ -342,6 +550,13 @@ def run_campaign(spec: Campaign) -> Path:
         except BlockingIOError as exc:
             raise ValueError("another experiment is active") from exc
         deadline = time.monotonic() + spec.limits.max_elapsed_seconds
+        if lineage:
+            remaining = (
+                datetime.fromisoformat(lineage["window_deadline_at"]) - datetime.now(UTC)
+            ).total_seconds()
+            if remaining <= 0:
+                raise TimeoutError("inherited campaign window has ended")
+            deadline = min(deadline, time.monotonic() + remaining)
         run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ-") + uuid.uuid4().hex[:10]
         root = spec.root / "runs" / run_id
         root.mkdir(parents=True, mode=0o700)
@@ -356,6 +571,14 @@ def run_campaign(spec: Campaign) -> Path:
             "stop_reason": None,
             "started_at": datetime.now(UTC).isoformat(),
         }
+        if lineage:
+            state.update({k: lineage[k] for k in ("window_started_at", "window_deadline_at")})
+        else:
+            state["window_started_at"] = state["started_at"]
+            state["window_deadline_at"] = (
+                datetime.fromisoformat(state["started_at"])
+                + timedelta(seconds=spec.limits.max_elapsed_seconds)
+            ).isoformat()
         atomic_json(root / "run.json", state)
         atomic_json(
             root / "experiment.lock.json",
@@ -367,6 +590,7 @@ def run_campaign(spec: Campaign) -> Path:
                 "experiment_commit": commit,
                 "implementation_files": code,
                 "package": package,
+                "preflight_lineage": lineage,
                 "plan": campaign_plan(catalog),
                 "pricing": {
                     "currency": "USD",
@@ -394,7 +618,7 @@ def run_campaign(spec: Campaign) -> Path:
                     **source,
                 )
                 sources[suite_id] = resolve_suite(suite, spec.root / "cache")
-            for row in catalog["selected"]:
+            for row in catalog["selected"] + catalog["reserves"]:
                 path = (
                     sources[row["suite"]]
                     / catalog["sources"][row["suite"]]["tasks_dir"]
@@ -407,6 +631,7 @@ def run_campaign(spec: Campaign) -> Path:
                     raise ValueError("instruction changed")
                 infos[row["task_id"]] = info
             atomic_json(root / "selection.json", infos, immutable=True)
+            used_reserves = set()
             for suite_id in catalog["sources"]:
                 upstream = sources[suite_id]
                 protocol = "tb4" if suite_id == "terminal-bench-4" else "swe-pro-v2"
@@ -473,87 +698,65 @@ def run_campaign(spec: Campaign) -> Path:
                             raise ValueError("Harbor Job failed: " + gid + "/" + cfg["job_name"])
                         return result
 
-                    preparations, admitted = {}, []
-                    for row in rows:
-                        service.check()
-                        task_id = row["task_id"]
-                        source = upstream / catalog["sources"][suite_id]["tasks_dir"] / task_id
-                        try:
-                            record = prepare_task(
-                                source,
-                                group,
-                                spec.execution.platform,
-                                deadline,
-                                env,
-                                catalog["resource_filter"],
-                            )
-                        except TaskPreparationError as exc:
-                            state["tasks"][task_id] = {
-                                "status": "blocked",
-                                "phase": "official_image",
-                                "reason": str(exc),
-                                "group": gid,
-                            }
-                            atomic_json(root / "run.json", state)
-                            continue
-                        preparations[task_id] = record
-                        admitted.append(row)
-                    paths = [group / preparations[r["task_id"]]["runtime_path"] for r in admitted]
-                    if paths:
-                        group_spec = spec.model_copy(
-                            update={
-                                "execution": spec.execution.model_copy(
-                                    update={
-                                        "concurrency": min(
-                                            spec.execution.concurrency, len(paths) * 2
-                                        )
-                                    }
-                                )
-                            }
-                        )
-                        for control in ("oracle", "nop"):
-                            cfg = build_job_config(
-                                group_spec,
-                                group,
-                                "control-" + control,
-                                paths,
-                                control=control,
-                                protocol=protocol,
-                            )
-                            execute(cfg, required=False)
-                        good = []
-                        for row in admitted:
-                            tid = row["task_id"]
-                            if all(
-                                control_ok(group / "harbor" / ("control-" + c), tid, score)
-                                for c, score in [("oracle", 1), ("nop", 0)]
-                            ):
-                                good.append(row)
-                                state["tasks"][tid] = {"status": "admitted", "group": gid}
-                            else:
-                                state["tasks"][tid] = {
-                                    "status": "blocked",
-                                    "group": gid,
-                                    "phase": "official_controls",
-                                    "reason": "oracle/nop did not validate",
-                                }
-                        admitted = good
-                    atomic_json(
-                        group / "admission.json",
-                        {"tasks": {r["task_id"]: state["tasks"][r["task_id"]] for r in rows}},
-                        immutable=True,
+                    admitted, preparations = admit_group(
+                        rows,
+                        catalog=catalog,
+                        spec=spec,
+                        upstream=upstream,
+                        group=group,
+                        state=state,
+                        execute=execute,
+                        env=env,
+                        deadline=deadline,
+                        prior_blocks=prior_blocks,
+                        used_reserves=used_reserves,
+                        service=service,
                     )
-                    atomic_json(root / "run.json", state)
                     if not admitted:
                         meta["status"] = "blocked"
                         continue
                     paths = [group / preparations[r["task_id"]]["runtime_path"] for r in admitted]
+                    capacity = docker_preflight(
+                        spec, [infos[r["task_id"]] for r in admitted], preparations
+                    )
+                    group_spec = spec.model_copy(
+                        update={
+                            "execution": spec.execution.model_copy(
+                                update={
+                                    "concurrency": min(
+                                        len(paths) * 2,
+                                        2
+                                        * paired_capacity(
+                                            spec.execution.concurrency,
+                                            [infos[r["task_id"]] for r in admitted],
+                                            cpus=capacity["cpus"],
+                                            memory_mb=capacity["memory_mb"],
+                                        ),
+                                    )
+                                }
+                            )
+                        }
+                    )
                     images = image_snapshot(paths)
                     runtimes = prepare_runtimes(
                         group_spec, group, paths, images, group_state, execute, deadline
                     )
                     frozen = {
                         "tasks": admitted,
+                        "actual_plan": {
+                            "revision": gid,
+                            "scope": "group_before_inference",
+                            "plan": [
+                                {
+                                    "slot_task_id": r["slot_task_id"],
+                                    "task_id": r["task_id"],
+                                    "variant_id": v,
+                                    "repetition": 1,
+                                }
+                                for r in admitted
+                                for v in VARIANTS
+                            ],
+                        },
                         "preparations": preparations,
                         "images": images,
                         "docker": capacity,

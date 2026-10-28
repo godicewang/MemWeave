@@ -91,10 +91,12 @@ Agent 正常使用 Pi 默认提示和原生工具；MemWeave 使用生产入口�
 
 ## 49题混合并行Campaign（schema2）
 
-`memweave-eval validate/run configs/long-horizon-49.yaml`复用上述入口。配置包含本机已核验候选包的绝对路径，换机器须显式对齐同一归档和私有运行根。SWE每组最多5题×2变体，TB按官方资源缩小组；任务按目录固定顺序，准备、oracle/nop与双变体软件预检均通过后才运行该组模型。某题官方镜像/控制失败保留其两行blocked，其余准入题继续；公共软件/协议/凭据/观测失败全局停止。本批保持49原槽位，不自动启用候补。
+`memweave-eval validate/run configs/long-horizon-49.yaml`复用上述入口。配置包含本机已核验候选包的绝对路径，换机器须显式对齐同一归档和私有运行根。SWE每组最多5题×2变体，TB按官方资源缩小组；任务按目录固定顺序，准备、oracle/nop与双变体软件预检均通过后才运行该组模型。某题官方镜像/控制失败保留其两行blocked，其余准入题继续；公共软件/协议/凭据/观测失败全局停止。本批保持49槽位，用户已确认任务级准入失败按冻结顺序使用同集合/同档候补；表中另列实际题号，不冒充原题成绩。无可用候补才留blocked。
 
 `groups/gNN/`包含组级任务准备、软件锁与Harbor原件。混合解题Job有两个独立ExperimentPi配置；每个Trial仍有新容器、home/config/Session/memory。SWE重放输入按变体拆分并保存原补丁SHA，再用未改动的官方PatchReplayAgent分别在新沙箱评分；不能直接把含两变体的Job交给按题号查找的官方重放器。
 
 当前活动会话使用常驻观察线程和Harbor公开生命周期hook，写`live.json`、`events.jsonl`、`observations.md`、`containers.json`。实际解题并发按agent-start/end计数，安装、评分和sidecar不计入。增量读取原生Session完整JSONL usage，保守峰时估算和Pi原生估算同时保存，不复制聊天正文。达到共享费用止损停止新推理并取消在途，整体时间尚有余额则为已采集补丁完成无模型评分；整体到期仅有界收尾。
 
 `report`离线校验原件并重建Campaign根目录的summary.json、comparison.csv、report.md，覆盖全部98行；blocked/not_run/infra/unknown不冒充官方0。总墙钟来自Campaign首尾差，不加总并行Trial时间。完整契约见[执行方案](../docs/experiments/LONG_HORIZON_49_RUN_PROPOSAL.md)。
+
+`preflight_parent`可选且只接受同根、同清单/候选/runtime/model、已结束且从未开始模型Job的准备run；校验父证据并继承原始截止与任务阻断，不支持付费结果续跑，不重置额度。主表98槽位以actual_task_id标识替换，原题/失败候补的阻断另列。

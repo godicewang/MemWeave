@@ -10,6 +10,42 @@ from .report import duration, normalize_trial, session_diagnostics, summarize
 from .storage import atomic_json, contained, file_digest
 
 
+def valid_replay_binding(root, group, variant, actual_task, original_path, score, lock, indexed):
+    if original_path is None:
+        return False
+    handoff = group / "replay-sources" / variant
+    manifest_path = handoff / "handoff.json"
+    patch = original_path.parent / "agent/model.patch"
+    if not manifest_path.is_file() or not patch.is_file():
+        return False
+    if any(
+        p.relative_to(root).as_posix() not in indexed for p in (manifest_path, patch, original_path)
+    ):
+        return False
+    manifest = json.loads(manifest_path.read_text())
+    entries = [e for e in manifest["patches"] if e["task_id"] == actual_task]
+    if manifest["variant"] != variant or len(entries) != 1:
+        return False
+    entry = entries[0]
+    frozen_root = Path(lock["config"]["root"]) / "runs" / lock["run_id"]
+    expected_handoff = frozen_root / handoff.relative_to(root)
+    source_job = score.get("config", {}).get("agent", {}).get("kwargs", {}).get("source_job")
+    target = contained(handoff, entry["destination"] + "/agent/model.patch")
+    copied_result = contained(handoff, entry["destination"] + "/result.json")
+    if any(p.relative_to(root).as_posix() not in indexed for p in (target, copied_result)):
+        return False
+    return (
+        source_job == str(expected_handoff)
+        and entry["source"] == str(frozen_root / patch.relative_to(root))
+        and file_digest(patch) == entry["sha256"]
+        and file_digest(original_path) == entry["result_sha256"]
+        and target.is_file()
+        and file_digest(target) == entry["sha256"]
+        and copied_result.is_file()
+        and file_digest(copied_result) == entry["result_sha256"]
+    )
+
+
 def generate_campaign_report(root: Path):
     lock = json.loads((root / "experiment.lock.json").read_text())
     state = json.loads((root / "run.json").read_text())
@@ -20,18 +56,48 @@ def generate_campaign_report(root: Path):
         if not contained(root, r["path"]).is_file()
         or file_digest(contained(root, r["path"])) != r["sha256"]
     ]
+    indexed = {r["path"] for r in evidence["files"]}
+    invalid.extend(
+        p.relative_to(root).as_posix()
+        for p in root.glob("groups/*/harbor/*/*/result.json")
+        if p.relative_to(root).as_posix() not in indexed
+    )
+    lineage = lock.get("preflight_lineage")
+    if lineage:
+        parent = Path(lineage["parent"])
+        if parent.resolve().parent != root.resolve().parent or parent.is_symlink():
+            invalid.append("preflight_parent/path")
+        else:
+            for name, digest in lineage["hashes"].items():
+                if name not in (
+                    "experiment.lock.json",
+                    "run.json",
+                    "live.json",
+                    "evidence-index.json",
+                ):
+                    raise ValueError("unknown preflight lineage evidence")
+                if not (parent / name).is_file() or file_digest(parent / name) != digest:
+                    invalid.append("preflight_parent/" + name)
+            if not invalid:
+                for item in json.loads((parent / "evidence-index.json").read_text())["files"]:
+                    path = contained(parent, item["path"])
+                    if not path.is_file() or file_digest(path) != item["sha256"]:
+                        invalid.append("preflight_parent/" + item["path"])
     live_path = root / "live.json"
     live = json.loads(live_path.read_text()) if live_path.exists() else {}
     rows = []
     for plan in lock["plan"]:
         task, variant = plan["task_id"], plan["variant_id"]
         admission = state["tasks"].get(task, {})
+        actual_task = admission.get("actual_task_id", task)
         group = root / "groups" / admission.get("group", "_not_run")
         originals = []
         for path in (group / "harbor/solve").glob("*/result.json"):
+            if path.relative_to(root).as_posix() not in indexed:
+                continue
             raw = json.loads(path.read_text())
             if (
-                raw.get("task_name", "").split("/")[-1] == task
+                raw.get("task_name", "").split("/")[-1] == actual_task
                 and raw.get("config", {}).get("agent", {}).get("kwargs", {}).get("variant")
                 == variant
             ):
@@ -40,6 +106,9 @@ def generate_campaign_report(root: Path):
             raise ValueError("ambiguous campaign solve result")
         original_path, original = originals[0] if originals else (None, None)
         row = normalize_trial(original, plan)
+        row["actual_task_id"] = actual_task
+        row["actual_title"] = admission.get("actual_title", plan.get("title"))
+        row["actual_display_id"] = admission.get("actual_display_id", plan["display_id"])
         row["solve_status"] = row["execution_status"]
         row["admission"] = admission
         if original_path:
@@ -54,10 +123,18 @@ def generate_campaign_report(root: Path):
                 else None
             )
         if plan["suite_id"] == "swe-bench-pro-v2":
+            if original and not original.get("exception_info"):
+                row["solve_status"] = (
+                    "completed_patch"
+                    if (original_path.parent / "agent/model.patch").is_file()
+                    else "missing_patch"
+                )
             scores = []
             for p in (group / "harbor" / ("regrade-" + variant)).glob("*/result.json"):
+                if p.relative_to(root).as_posix() not in indexed:
+                    continue
                 raw = json.loads(p.read_text())
-                if raw.get("task_name", "").split("/")[-1] == task:
+                if raw.get("task_name", "").split("/")[-1] == actual_task:
                     scores.append((p, raw))
             if len(scores) > 1:
                 raise ValueError("ambiguous campaign regrade result")
@@ -69,13 +146,20 @@ def generate_campaign_report(root: Path):
                 row["score_source"] = scores[0][0].relative_to(root).as_posix()
                 row["grading_seconds"] = score["elapsed_seconds"]
                 row["grading_error_type"] = score["error_type"]
+                if score["success"] is not None and not valid_replay_binding(
+                    root, group, variant, actual_task, original_path, scores[0][1], lock, indexed
+                ):
+                    row["success"] = None
+                    row["score_status"] = "invalid_replay_binding"
             row["execution_status"] = (
                 "scored"
-                if score["success"] is not None
+                if row["success"] is not None
                 else row["solve_status"]
                 if original
                 else "not_run"
             )
+            if row["score_status"] == "invalid_replay_binding":
+                row["execution_status"] = "invalid_replay_binding"
         else:
             row["score_status"] = row["execution_status"]
             row["score_source"] = row.get("solve_source")
@@ -85,6 +169,17 @@ def generate_campaign_report(root: Path):
             row.update(execution_status="invalid_evidence", success=None)
         rows.append(row)
     summary = summarize(rows)
+    blocked_attempt_rows = [
+        dict(
+            failure,
+            variant_id=variant,
+            execution_status="blocked",
+            success=None,
+            model_attempted=False,
+        )
+        for failure in state.get("admission_failures", [])
+        for variant in ("pi-native", "pi-memweave")
+    ]
     summary.update(
         schema_version=2,
         run_id=lock["run_id"],
@@ -93,8 +188,13 @@ def generate_campaign_report(root: Path):
         ),
         stop_reason=state.get("stop_reason"),
         rows=rows,
+        blocked_attempt_rows=blocked_attempt_rows,
         invalid_evidence=invalid,
-        overall_wall_seconds=duration(state),
+        overall_wall_seconds=duration(
+            dict(state, started_at=state.get("window_started_at", state.get("started_at")))
+        ),
+        current_run_wall_seconds=duration(state),
+        window_deadline_at=state.get("window_deadline_at"),
         peak_solves=live.get("peak_solves"),
         estimated_known_cost_usd=live.get("estimated_cost_usd"),
         by_suite={
@@ -112,6 +212,9 @@ def generate_campaign_report(root: Path):
         "suite_id",
         "tier",
         "task_id",
+        "actual_task_id",
+        "actual_display_id",
+        "actual_title",
         "variant_id",
         "execution_status",
         "score_status",
@@ -145,6 +248,21 @@ def generate_campaign_report(root: Path):
 
     for i in range(0, len(rows), 2):
         a, b = rows[i : i + 2]
-        text.append(f"| {a['display_id']} | {a['tier']} | {value(a)} | {value(b)} |")
+        label = a["display_id"] + (
+            "→" + a["actual_display_id"] if a["actual_task_id"] != a["task_id"] else ""
+        )
+        text.append(f"| {label} | {a['tier']} | {value(a)} | {value(b)} |")
+    if blocked_attempt_rows:
+        text += [
+            "",
+            "准入阻断原件（不计作模型失败）：",
+            "",
+            "| 原槽位 | 失败题 | 阶段 |",
+            "|---|---|---|",
+        ]
+        for failure in state.get("admission_failures", []):
+            text.append(
+                f"| {failure['slot_task_id']} | {failure['task_id']} | {failure.get('phase')} |"
+            )
     (root / "report.md").write_text("\n".join(text) + "\n")
     return summary
