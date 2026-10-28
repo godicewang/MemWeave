@@ -1,0 +1,33 @@
+schema_version: 2
+experiment_id: long-horizon-49-v1
+catalog: ../subsets/catalogs/long-horizon-49-v1.yaml
+catalog_sha256: b32b5593058c21b74888fde3fe4d6a2447cd45242ce86ee12936cf2ad018ebad
+subject:
+  commit: f3931ce3b4d5d7b504e612e67cd46e4267f309a5
+  package: /Users/godice/.local/share/memweave-experiments/artifacts/godice-memweave-0.1.0.tgz
+  sha256: 4d089821e9590380c8377afa8a44f3883b3a35b9f0696c0e99c2369ff2ab7c04
+runtime:
+  harbor_version: 0.24.0
+  pi_version: 1.4.0
+  node_version: 24.22.0
+model:
+  provider: deepseek
+  id: deepseek-flash
+  api: openai-completions
+  auth_profile: memweave-dev
+  thinking: "off"
+variants:
+  - id: pi-native
+    memweave: false
+  - id: pi-memweave
+    memweave: true
+execution:
+  environment: docker
+  platform: linux/amd64
+  concurrency: 10
+  repetitions: 1
+  automatic_trial_retries: 0
+limits:
+  max_cost_usd: 20
+  max_elapsed_seconds: 172800
+root: /Users/godice/.local/share/memweave-experiments

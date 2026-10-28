@@ -194,6 +194,9 @@ def summarize(rows: list[dict]) -> dict:
 
 def generate_report(root: Path) -> dict:
     lock = json.loads((root / "experiment.lock.json").read_text())
+    if lock.get('schema_version') == 2:
+        from .campaign_report import generate_campaign_report
+        return generate_campaign_report(root)
     state = json.loads((root / "run.json").read_text())
     evidence = json.loads((root / "evidence-index.json").read_text())
     invalid = set()

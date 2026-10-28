@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .report import generate_report
 from .runner import run_experiment, verify_package
-from .spec import load_experiment
+from .spec import load_experiment, load_yaml
 
 
 def main(argv=None) -> int:
@@ -24,6 +24,28 @@ def main(argv=None) -> int:
             summary = generate_report(args.run_dir.resolve())
             print(json.dumps(summary, ensure_ascii=False, indent=2))
             return 0 if summary["complete"] else 2
+        if load_yaml(args.config).get("schema_version") == 2:
+            from .campaign import load_campaign, run_campaign
+
+            spec = load_campaign(args.config)
+            if args.command == "validate":
+                archive = verify_package(spec.subject.package, spec.subject.sha256)
+                print(
+                    json.dumps(
+                        {
+                            "valid": True,
+                            "planned_tasks": 49,
+                            "model_trials": 98,
+                            "package": archive,
+                            "requires_preflight": True,
+                        },
+                        indent=2,
+                    )
+                )
+                return 0
+            root = run_campaign(spec)
+            print(str(root))
+            return 0 if json.loads((root / "summary.json").read_text())["complete"] else 2
         spec, suite, subset = load_experiment(args.config)
         if args.command == "validate":
             archive = verify_package(spec.subject.package, spec.subject.sha256)

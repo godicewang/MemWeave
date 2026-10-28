@@ -64,3 +64,5 @@ badcase区分插件实现/接线错误、记忆使用/约束保持错误、两�
 持续观察增量读取原生Session完整JSONL行，保存偏移与去重ID，只输出usage/调用/错误统计和原件引用。统一费用用于所有Job；未完成尾行等待，非法完整行或原件缩短/替换属于观测错误并阻断模型。每秒检查停止条件，按变化或最长15秒写live.json、events.jsonl、observations.md；记录Docker状态和Trial阶段。实际解题峰值依据agent_execution有效区间与快照核验。当前助手持续复核并追加仓库内阶段观察。
 
 组证据位于groups/<id>/，含runtime-assets和组锁；Campaign根保存experiment.lock.json、run.json、实时观察和总报告。离线报告保留全部98行，infra/blocked/not_run/unknown与官方0分分开。总墙钟取Campaign首尾差，不相加并发Trial时间。
+
+实现核验补充：Harbor 0.24.0公开`Job.create`与`Job.add_hook(TrialEvent, callback)`提供真实agent-start/agent-end生命周期，观察器据此计数；不从“容器存在”猜解题并发。每个Job在独立子进程调用此公开API；父进程统一观察和止损。
