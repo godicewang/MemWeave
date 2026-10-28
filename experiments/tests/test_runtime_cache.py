@@ -150,3 +150,45 @@ def test_node_download_hit_is_offline_and_validates_bytes(tmp_path):
         path.write_bytes(b"corruption")
         with pytest.raises(ValueError, match="checksum"):
             node_download(tmp_path, "24.22.0", "linux/amd64")
+
+
+def test_plan_keeps_native_base_independent_of_candidate_and_excludes_grader(tmp_path):
+    from test_runner import package
+    from test_spec import configuration
+
+    from memweave_eval.runtime_cache import create_plan
+    from memweave_eval.spec import Experiment
+
+    subject = tmp_path / "subject.tgz"
+    package(subject, [("package/resources/embedding/e5-small.json", '{"revision":"one"}'),
+                      ("package/src/storage/paths.ts", "product paths v1")])
+    config = configuration(tmp_path)
+    config["subject"]["package"] = str(subject)
+    images = {"one": {"reference": "fixed", "id": "sha256:one", "platform": "linux/amd64"},
+              "one:verifier": {"reference": "grader", "id": "sha256:two", "platform": "linux/amd64"}}
+    first = create_plan(Experiment.model_validate(config), images)
+    config["subject"]["sha256"] = "c" * 64
+    second = create_plan(Experiment.model_validate(config), images)
+    assert set(first["entries"]) == {"fixed"}
+    a, b = first["entries"]["fixed"], second["entries"]["fixed"]
+    assert a["base"] == b["base"]
+    assert a["addon"] != b["addon"]
+    assert a["models"] == b["models"]
+    package(subject, [("package/resources/embedding/e5-small.json", '{"revision":"one"}'),
+                      ("package/src/storage/paths.ts", "product paths v2")])
+    assert create_plan(Experiment.model_validate(config), images)["entries"]["fixed"]["models"] != a["models"]
+
+
+def test_archive_rejects_hard_links_and_duplicate_members(tmp_path):
+    p = tmp_path / "payload.tar"
+    for duplicate in (False, True):
+        with tarfile.open(p, "w") as stream:
+            item = tarfile.TarInfo("node/file")
+            if duplicate:
+                stream.addfile(item)
+            else:
+                item.type = tarfile.LNKTYPE
+                item.linkname = "node/other"
+            stream.addfile(item)
+        with pytest.raises(ValueError):
+            validate_archive(p, "node")

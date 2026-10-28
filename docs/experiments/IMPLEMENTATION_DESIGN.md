@@ -1,12 +1,12 @@
 # MemWeave 公开基线实验系统实现设计
 
-版本：v0.1
+版本：v0.2
 
-日期：2026-10-26
+日期：2026-10-28
 
 范围：当前 MemWeave 项目的公开评测实验部分
 
-状态：2026-10-27 已完成 Pro V2 四题双变体真实对照；用户已确认官方 Dockerfile 构建与镜像冻结接线，实现及基本检查通过，TB 正式容器与模型验收进行中。实际范围见 `VALIDATION.md`、历史结果见 `PUBLIC_BASELINE_2026-10-27.md`，本次已确认方案见 `DOCKERFILE_FREEZE_PROPOSAL.md`。
+状态：Pro V2 四题真实对照完成，TB 四题执行结束但插件三题准备失败；2026-10-28 按用户确认增加软件缓存及全部变体模型前预检，实际范围见 `VALIDATION.md`、`RUNTIME_CACHE_VALIDATION_2026-10-28.md`。历史成绩保留，不以无模型加载验收替代解题。
 
 ## 第一部分 目标和已确认决策
 
@@ -80,6 +80,8 @@ Docker Desktop 已存在时可复用；需要新建 macOS 容器宿主时优先�
         ↓
 静态校验 → 解析上游版本与子集 → 环境和官方控制测试
         ↓
+全部任务/变体软件准备与无模型加载预检
+        ↓
 冻结本次运行清单
         ↓
 Harbor Job：原生 Pi / Pi + MemWeave
@@ -131,6 +133,7 @@ experiments/
 │   ├── suites.py
 │   ├── runner.py
 │   ├── pi_agent.py
+│   ├── runtime_cache.py
 │   └── report.py
 └── tests/                        # 适配、配置、记录和报告的测试
 ```
@@ -351,6 +354,7 @@ limits:
 |---|---|
 | `experiment.lock.json` | schema 版本、实验/运行 ID、实验代码提交、展开配置、上游/任务/评分器哈希、包哈希、精确工具版本、镜像/platform、任务与变体计划、模型设置和止损条件 |
 | `run.json` | schema 版本、关联 Job 的用途与相对路径、开始/结束时间、停止原因、计划与采集数量、结果完整性 |
+| `runtime-assets.json` / `runtime-assets.lock.json` | 本次软件计划、镜像映射、缓存对象身份与摘要；实际预检原件位于对应 Harbor Job |
 | `evidence-index.json` | schema 版本、逐尝试原件类型、相对位置、SHA256、是否缺失；不复制正文 |
 | `results.json` / `trials.csv` | 逐任务、变体和重复编号的结果、原生评分、状态、用量、时长、错误和证据引用 |
 | `comparison.csv` / `report.md` | 对齐样本、指标差值、完整性、覆盖范围、失败和结果限制 |

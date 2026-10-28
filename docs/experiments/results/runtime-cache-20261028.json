@@ -1,0 +1,820 @@
+{
+  "schema_version": 1,
+  "purpose": "software setup validation; no benchmark solves or grades",
+  "experiment_commit": "005e5ce",
+  "source_hashes": {
+    "runner.py": "8d73afc35a334d3b4a3bcd9b2943b13b4d79cc3dd0d37d1ebc2b8cd51324dfe5",
+    "__init__.py": "44feb6bf5c5e3e00566682acb5da88c24cd54bc11af596764878c757b707815d",
+    "spec.py": "f9271056f69a2dcf38e34721559b38d3d0086f29efdd36e15ba9964da2a64be8",
+    "suites.py": "c94b48105f34f035eccf92f50e3ea1b95e8ee69ae97bea411ab51d6c801e0cdf",
+    "cli.py": "8f77e492e50a0c31770b964b4b7f88a83d924593782a09020e4b8492e89ff474",
+    "storage.py": "a073dc6edd9ad2c607e4ce5dcfed81c338bf2ef0bc5ff72f1bbd625c714a5c44",
+    "images.py": "7ffc3eacce8481e584f2fa20b49b00e5fcf1bfca5ac8cc0fc901b0daeaf3a1a1",
+    "pi_agent.py": "67b9481b7e7b9cc08e00b91dfd1855e10ca6825df3ed60c131f85996d79f0192",
+    "runtime_cache.py": "7cc13d6026e87cc44f5a2ac37d5d235cb63d547381025bca2b71eb6ae93910d2",
+    "report.py": "cc3d5058d26f9c910b483c44cd74206049f27e258df69530b6558d70b78a557a"
+  },
+  "private_evidence": "analysis/runtime-cache-final-20261028T092439Z",
+  "runtime": {
+    "node": "24.22.0",
+    "pi": "1.4.0",
+    "harbor": "0.24.0",
+    "platform": "linux/amd64"
+  },
+  "subject_sha256": "4d089821e9590380c8377afa8a44f3883b3a35b9f0696c0e99c2369ff2ab7c04",
+  "model_requests": 0,
+  "images": {
+    "roy-polymorph-cn": {
+      "reference": "memweave-eval:1acbb471fbca35f9cfb8364ee3e79016237c01eaad91058ee2de29e5e88ca8f9",
+      "id": "sha256:97932982024db63e91381e90ac7ffd5498529628405c756c052dac57320c7c16",
+      "repo_digests": [
+        "memweave-eval@sha256:97932982024db63e91381e90ac7ffd5498529628405c756c052dac57320c7c16"
+      ],
+      "platform": "linux/amd64"
+    },
+    "roy-polymorph-cn:verifier": {
+      "reference": "memweave-eval:fe78a0ce3cc2d16e6bd0fdb8a3aecbd79a6ec5ffb6841b4ec49acb7d147f5fb0",
+      "id": "sha256:7702142fc7484a78f565944454411364cbbb08ee94a0c405bfe75a58b4674da4",
+      "repo_digests": [
+        "memweave-eval@sha256:7702142fc7484a78f565944454411364cbbb08ee94a0c405bfe75a58b4674da4"
+      ],
+      "platform": "linux/amd64"
+    },
+    "production-planning": {
+      "reference": "memweave-eval:ce3bdabbea49f1561d2522caa5da961a6024e20037591b183e817240334b4b5f",
+      "id": "sha256:e4da04055098f05a84d26cf111d8364b95d177ee0cf4b85b1a70fed95a73aedc",
+      "repo_digests": [
+        "memweave-eval@sha256:e4da04055098f05a84d26cf111d8364b95d177ee0cf4b85b1a70fed95a73aedc"
+      ],
+      "platform": "linux/amd64"
+    },
+    "production-planning:verifier": {
+      "reference": "memweave-eval:1fb34acd17bdf773c1e28be6516367fc1f64f6826b9e40ef82e93f6a4405979c",
+      "id": "sha256:018d5bcc5c8a36de6ad4a8ac3cf43a8f3b8db5928676a93b4ddde49e7ea4ae67",
+      "repo_digests": [
+        "memweave-eval@sha256:018d5bcc5c8a36de6ad4a8ac3cf43a8f3b8db5928676a93b4ddde49e7ea4ae67"
+      ],
+      "platform": "linux/amd64"
+    },
+    "instance_element-hq__element-web-b007ea81b2ccd001b00f332bee65070aa7fc00f9-vnan": {
+      "reference": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_element-hq__element-web-b007ea81b2ccd001b00f332bee65070aa7fc00f9-vnan",
+      "id": "sha256:8018b2b2c34ced1ef985ab2f35987ce09fcf091cb530c695c0596f9fbbcfc6e1",
+      "repo_digests": [
+        "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:8018b2b2c34ced1ef985ab2f35987ce09fcf091cb530c695c0596f9fbbcfc6e1"
+      ],
+      "platform": "linux/amd64"
+    }
+  },
+  "rounds": [
+    {
+      "round": "cold",
+      "task": "roy-polymorph-cn",
+      "variant": "pi-native",
+      "setup_seconds": 84.28041099989787,
+      "hits": {
+        "base": false
+      },
+      "probe": {
+        "model_requests": 0,
+        "tools": [
+          "read",
+          "bash",
+          "edit",
+          "write"
+        ],
+        "embedding_dimensions": null,
+        "session_id": "01a181d4-c123-7375-a8d6-968879f31c5c",
+        "compaction": true,
+        "system_prompt_sha256": "477ee498f7d25952cae802e2be57b37d5cb12615a0d0282ae446cfa42612a922"
+      }
+    },
+    {
+      "round": "cold",
+      "task": "instance_element-hq__element-web-b007ea81b2ccd001b00f332bee65070aa7fc00f9-vnan",
+      "variant": "pi-native",
+      "setup_seconds": 100.84966062521562,
+      "hits": {
+        "base": false
+      },
+      "probe": {
+        "model_requests": 0,
+        "tools": [
+          "read",
+          "bash",
+          "edit",
+          "write"
+        ],
+        "embedding_dimensions": null,
+        "session_id": "01a181d7-ffd4-7354-a603-e3073f15bad7",
+        "compaction": true,
+        "system_prompt_sha256": "477ee498f7d25952cae802e2be57b37d5cb12615a0d0282ae446cfa42612a922"
+      }
+    },
+    {
+      "round": "cold",
+      "task": "production-planning",
+      "variant": "pi-native",
+      "setup_seconds": 80.31267454195768,
+      "hits": {
+        "base": false
+      },
+      "probe": {
+        "model_requests": 0,
+        "tools": [
+          "read",
+          "bash",
+          "edit",
+          "write"
+        ],
+        "embedding_dimensions": null,
+        "session_id": "01a181d6-3147-7654-aeb6-bbd0b03bb234",
+        "compaction": true,
+        "system_prompt_sha256": "477ee498f7d25952cae802e2be57b37d5cb12615a0d0282ae446cfa42612a922"
+      }
+    },
+    {
+      "round": "cold",
+      "task": "production-planning",
+      "variant": "pi-memweave",
+      "setup_seconds": 121.77081341668963,
+      "hits": {
+        "base": true,
+        "addon": false,
+        "models": true
+      },
+      "probe": {
+        "model_requests": 0,
+        "tools": [
+          "read",
+          "bash",
+          "edit",
+          "write",
+          "task_clarify",
+          "task_create",
+          "recent_window_set",
+          "task_find",
+          "task_resume",
+          "task_status",
+          "state_append",
+          "update_goal",
+          "state_read",
+          "modify_fact",
+          "state_remain",
+          "memory_read"
+        ],
+        "embedding_dimensions": 384,
+        "session_id": "01a181dd-ef9d-73b8-b557-bc186b3f867c",
+        "compaction": false,
+        "system_prompt_sha256": "477ee498f7d25952cae802e2be57b37d5cb12615a0d0282ae446cfa42612a922"
+      }
+    },
+    {
+      "round": "cold",
+      "task": "instance_element-hq__element-web-b007ea81b2ccd001b00f332bee65070aa7fc00f9-vnan",
+      "variant": "pi-memweave",
+      "setup_seconds": 135.73517308291048,
+      "hits": {
+        "base": true,
+        "addon": false,
+        "models": true
+      },
+      "probe": {
+        "model_requests": 0,
+        "tools": [
+          "read",
+          "bash",
+          "edit",
+          "write",
+          "task_clarify",
+          "task_create",
+          "recent_window_set",
+          "task_find",
+          "task_resume",
+          "task_status",
+          "state_append",
+          "update_goal",
+          "state_read",
+          "modify_fact",
+          "state_remain",
+          "memory_read"
+        ],
+        "embedding_dimensions": 384,
+        "session_id": "01a181e0-56b6-76f2-9464-72c781888de4",
+        "compaction": false,
+        "system_prompt_sha256": "477ee498f7d25952cae802e2be57b37d5cb12615a0d0282ae446cfa42612a922"
+      }
+    },
+    {
+      "round": "cold",
+      "task": "roy-polymorph-cn",
+      "variant": "pi-memweave",
+      "setup_seconds": 235.70259770844132,
+      "hits": {
+        "base": true,
+        "addon": false,
+        "models": true
+      },
+      "probe": {
+        "model_requests": 0,
+        "tools": [
+          "read",
+          "bash",
+          "edit",
+          "write",
+          "task_clarify",
+          "task_create",
+          "recent_window_set",
+          "task_find",
+          "task_resume",
+          "task_status",
+          "state_append",
+          "update_goal",
+          "state_read",
+          "modify_fact",
+          "state_remain",
+          "memory_read"
+        ],
+        "embedding_dimensions": 384,
+        "session_id": "01a181db-d3e9-75f6-9345-f3e04603c1e2",
+        "compaction": false,
+        "system_prompt_sha256": "477ee498f7d25952cae802e2be57b37d5cb12615a0d0282ae446cfa42612a922"
+      }
+    },
+    {
+      "round": "warm",
+      "task": "instance_element-hq__element-web-b007ea81b2ccd001b00f332bee65070aa7fc00f9-vnan",
+      "variant": "pi-native",
+      "setup_seconds": 3.2753251250833273,
+      "hits": {
+        "base": true
+      },
+      "probe": {
+        "model_requests": 0,
+        "tools": [
+          "read",
+          "bash",
+          "edit",
+          "write"
+        ],
+        "embedding_dimensions": null,
+        "session_id": "01a181e1-44ff-70ea-9488-9bd3e90c87ed",
+        "compaction": true,
+        "system_prompt_sha256": "477ee498f7d25952cae802e2be57b37d5cb12615a0d0282ae446cfa42612a922"
+      }
+    },
+    {
+      "round": "warm",
+      "task": "production-planning",
+      "variant": "pi-native",
+      "setup_seconds": 3.074714292306453,
+      "hits": {
+        "base": true
+      },
+      "probe": {
+        "model_requests": 0,
+        "tools": [
+          "read",
+          "bash",
+          "edit",
+          "write"
+        ],
+        "embedding_dimensions": null,
+        "session_id": "01a181e0-f172-7508-8cd9-c8834a2c0dea",
+        "compaction": true,
+        "system_prompt_sha256": "477ee498f7d25952cae802e2be57b37d5cb12615a0d0282ae446cfa42612a922"
+      }
+    },
+    {
+      "round": "warm",
+      "task": "roy-polymorph-cn",
+      "variant": "pi-native",
+      "setup_seconds": 3.1579932081513107,
+      "hits": {
+        "base": true
+      },
+      "probe": {
+        "model_requests": 0,
+        "tools": [
+          "read",
+          "bash",
+          "edit",
+          "write"
+        ],
+        "embedding_dimensions": null,
+        "session_id": "01a181e0-b044-765e-bdc0-860306665db8",
+        "compaction": true,
+        "system_prompt_sha256": "477ee498f7d25952cae802e2be57b37d5cb12615a0d0282ae446cfa42612a922"
+      }
+    },
+    {
+      "round": "warm",
+      "task": "production-planning",
+      "variant": "pi-memweave",
+      "setup_seconds": 6.946065083146095,
+      "hits": {
+        "base": true,
+        "addon": true,
+        "models": true
+      },
+      "probe": {
+        "model_requests": 0,
+        "tools": [
+          "read",
+          "bash",
+          "edit",
+          "write",
+          "task_clarify",
+          "task_create",
+          "recent_window_set",
+          "task_find",
+          "task_resume",
+          "task_status",
+          "state_append",
+          "update_goal",
+          "state_read",
+          "modify_fact",
+          "state_remain",
+          "memory_read"
+        ],
+        "embedding_dimensions": 384,
+        "session_id": "01a181e1-f66e-76f6-bf77-59680710cdf2",
+        "compaction": false,
+        "system_prompt_sha256": "477ee498f7d25952cae802e2be57b37d5cb12615a0d0282ae446cfa42612a922"
+      }
+    },
+    {
+      "round": "warm",
+      "task": "roy-polymorph-cn",
+      "variant": "pi-memweave",
+      "setup_seconds": 6.910221916157752,
+      "hits": {
+        "base": true,
+        "addon": true,
+        "models": true
+      },
+      "probe": {
+        "model_requests": 0,
+        "tools": [
+          "read",
+          "bash",
+          "edit",
+          "write",
+          "task_clarify",
+          "task_create",
+          "recent_window_set",
+          "task_find",
+          "task_resume",
+          "task_status",
+          "state_append",
+          "update_goal",
+          "state_read",
+          "modify_fact",
+          "state_remain",
+          "memory_read"
+        ],
+        "embedding_dimensions": 384,
+        "session_id": "01a181e1-9b91-739f-82f4-639c3cccff41",
+        "compaction": false,
+        "system_prompt_sha256": "477ee498f7d25952cae802e2be57b37d5cb12615a0d0282ae446cfa42612a922"
+      }
+    },
+    {
+      "round": "warm",
+      "task": "instance_element-hq__element-web-b007ea81b2ccd001b00f332bee65070aa7fc00f9-vnan",
+      "variant": "pi-memweave",
+      "setup_seconds": 7.596692583058029,
+      "hits": {
+        "base": true,
+        "addon": true,
+        "models": true
+      },
+      "probe": {
+        "model_requests": 0,
+        "tools": [
+          "read",
+          "bash",
+          "edit",
+          "write",
+          "task_clarify",
+          "task_create",
+          "recent_window_set",
+          "task_find",
+          "task_resume",
+          "task_status",
+          "state_append",
+          "update_goal",
+          "state_read",
+          "modify_fact",
+          "state_remain",
+          "memory_read"
+        ],
+        "embedding_dimensions": 384,
+        "session_id": "01a181e2-68d9-7627-a76f-d2864e27f5b2",
+        "compaction": false,
+        "system_prompt_sha256": "477ee498f7d25952cae802e2be57b37d5cb12615a0d0282ae446cfa42612a922"
+      }
+    }
+  ],
+  "clocks": {
+    "cold": {
+      "overall_seconds": 862.948168,
+      "runtime-preflight-pi-native": 310.378728,
+      "runtime-preflight-pi-memweave": 549.996792
+    },
+    "warm": {
+      "overall_seconds": 135.690511,
+      "runtime-preflight-pi-native": 54.841266,
+      "runtime-preflight-pi-memweave": 78.411507
+    }
+  },
+  "cli": [
+    {
+      "variant": "pi-native",
+      "fresh_before_install": true,
+      "sentinels_written_after_check": true,
+      "setup_seconds": 3.0552918747998774,
+      "rpc": {
+        "model_requests": 0,
+        "responses": [
+          {
+            "id": "cache-state",
+            "type": "response",
+            "command": "get_state",
+            "success": true,
+            "data": {
+              "model": {
+                "id": "deepseek-flash",
+                "name": "DeepSeek V4.1 Flash",
+                "api": "openai-completions",
+                "baseUrl": "https://api.deepseek.com",
+                "provider": "deepseek",
+                "reasoning": true,
+                "thinkingLevelMap": {
+                  "minimal": null,
+                  "low": "low",
+                  "medium": null,
+                  "high": "high",
+                  "max": "max"
+                },
+                "input": [
+                  "text",
+                  "image"
+                ],
+                "cost": {
+                  "input": 0.3,
+                  "output": 1.2,
+                  "cacheRead": 0.006,
+                  "cacheWrite": 0
+                },
+                "contextWindow": 1000000,
+                "maxTokens": 384000,
+                "compat": {
+                  "supportsStore": false,
+                  "supportsDeveloperRole": false,
+                  "maxTokensField": "max_tokens",
+                  "requiresReasoningContentOnAssistantMessages": true,
+                  "thinkingFormat": "deepseek",
+                  "supportsStrictMode": true
+                },
+                "inputLimits": {
+                  "images": {
+                    "resize": {
+                      "maxWidth": 2000,
+                      "maxHeight": 2000,
+                      "maxBytes": 4718592,
+                      "jpegQuality": 80
+                    }
+                  }
+                },
+                "type": "chat"
+              },
+              "thinkingLevel": "high",
+              "isStreaming": false,
+              "isCompacting": false,
+              "steeringMode": "one-at-a-time",
+              "followUpMode": "one-at-a-time",
+              "sessionFile": "/logs/agent/rpc-sessions/2026-10-28T09-37-00-473Z_01a181de-bc38-7441-9734-f402349a38b8.jsonl",
+              "sessionId": "01a181de-bc38-7441-9734-f402349a38b8",
+              "autoCompactionEnabled": true,
+              "messageCount": 0,
+              "pendingMessageCount": 0
+            }
+          },
+          {
+            "id": "cache-commands",
+            "type": "response",
+            "command": "get_commands",
+            "success": true,
+            "data": {
+              "commands": [
+                {
+                  "name": "llama",
+                  "description": "Manage llama.cpp router models",
+                  "source": "extension",
+                  "sourceInfo": {
+                    "path": "builtin:llama.cpp",
+                    "source": "builtin",
+                    "scope": "temporary",
+                    "origin": "top-level"
+                  }
+                },
+                {
+                  "name": "mcp",
+                  "description": "Manage MCP servers: sign in, reconnect, enable or disable, and change exposure",
+                  "source": "extension",
+                  "sourceInfo": {
+                    "path": "builtin:mcp",
+                    "source": "builtin",
+                    "scope": "temporary",
+                    "origin": "top-level"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "stderr": ""
+      }
+    },
+    {
+      "variant": "pi-memweave",
+      "fresh_before_install": true,
+      "sentinels_written_after_check": true,
+      "setup_seconds": 6.80884416680783,
+      "rpc": {
+        "model_requests": 0,
+        "responses": [
+          {
+            "id": "cache-state",
+            "type": "response",
+            "command": "get_state",
+            "success": true,
+            "data": {
+              "model": {
+                "id": "deepseek-flash",
+                "name": "DeepSeek V4.1 Flash",
+                "api": "openai-completions",
+                "baseUrl": "https://api.deepseek.com",
+                "provider": "deepseek",
+                "reasoning": true,
+                "thinkingLevelMap": {
+                  "minimal": null,
+                  "low": "low",
+                  "medium": null,
+                  "high": "high",
+                  "max": "max"
+                },
+                "input": [
+                  "text",
+                  "image"
+                ],
+                "cost": {
+                  "input": 0.3,
+                  "output": 1.2,
+                  "cacheRead": 0.006,
+                  "cacheWrite": 0
+                },
+                "contextWindow": 1000000,
+                "maxTokens": 384000,
+                "compat": {
+                  "supportsStore": false,
+                  "supportsDeveloperRole": false,
+                  "maxTokensField": "max_tokens",
+                  "requiresReasoningContentOnAssistantMessages": true,
+                  "thinkingFormat": "deepseek",
+                  "supportsStrictMode": true
+                },
+                "inputLimits": {
+                  "images": {
+                    "resize": {
+                      "maxWidth": 2000,
+                      "maxHeight": 2000,
+                      "maxBytes": 4718592,
+                      "jpegQuality": 80
+                    }
+                  }
+                },
+                "type": "chat"
+              },
+              "thinkingLevel": "high",
+              "isStreaming": false,
+              "isCompacting": false,
+              "steeringMode": "one-at-a-time",
+              "followUpMode": "one-at-a-time",
+              "sessionFile": "/logs/agent/rpc-sessions/2026-10-28T09-37-19-835Z_01a181df-07d9-7032-9680-d0f2c06c5e79.jsonl",
+              "sessionId": "01a181df-07d9-7032-9680-d0f2c06c5e79",
+              "autoCompactionEnabled": false,
+              "messageCount": 0,
+              "pendingMessageCount": 0
+            }
+          },
+          {
+            "id": "cache-commands",
+            "type": "response",
+            "command": "get_commands",
+            "success": true,
+            "data": {
+              "commands": [
+                {
+                  "name": "memweave-setup",
+                  "description": "Choose this Pi instance's startup mode, initialize MemWeave if enabled, and reload native settings",
+                  "source": "extension",
+                  "sourceInfo": {
+                    "path": "/root/.local/share/memweave-eval/package/src/extension/index.ts",
+                    "source": "cli",
+                    "scope": "temporary",
+                    "origin": "top-level"
+                  }
+                },
+                {
+                  "name": "memweave-restart",
+                  "description": "Start a fresh Task from recent events, preserving old memory; then send a new user request",
+                  "source": "extension",
+                  "sourceInfo": {
+                    "path": "/root/.local/share/memweave-eval/package/src/extension/index.ts",
+                    "source": "cli",
+                    "scope": "temporary",
+                    "origin": "top-level"
+                  }
+                },
+                {
+                  "name": "llama",
+                  "description": "Manage llama.cpp router models",
+                  "source": "extension",
+                  "sourceInfo": {
+                    "path": "builtin:llama.cpp",
+                    "source": "builtin",
+                    "scope": "temporary",
+                    "origin": "top-level"
+                  }
+                },
+                {
+                  "name": "mcp",
+                  "description": "Manage MCP servers: sign in, reconnect, enable or disable, and change exposure",
+                  "source": "extension",
+                  "sourceInfo": {
+                    "path": "builtin:mcp",
+                    "source": "builtin",
+                    "scope": "temporary",
+                    "origin": "top-level"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "stderr": ""
+      }
+    }
+  ],
+  "unique_sessions": 14,
+  "note": "First round builds Node+Pi and addon objects; Node download and embedding already cached. Second round reuses all objects in fresh containers.",
+  "software_objects": {
+    "866d514d536340bddf86de3ef0cb21d743d5c4592dbbf186cc3fa0c7ebdda2d2": {
+      "key": "866d514d536340bddf86de3ef0cb21d743d5c4592dbbf186cc3fa0c7ebdda2d2",
+      "identity": {
+        "schema_version": 1,
+        "kind": "base",
+        "image": "sha256:97932982024db63e91381e90ac7ffd5498529628405c756c052dac57320c7c16",
+        "platform": "linux/amd64",
+        "node": "24.22.0",
+        "pi": "1.4.0",
+        "recipe": "04c19778f8be676ed572748b4baf827fa3e55734358f18a3a82491456a2dcb86"
+      },
+      "sha256": "383b94363d4ab77a310fdd46bea0c13c8f7f81989ecb35f548005ac2bf99cacc",
+      "size": 343541760,
+      "provenance": {
+        "node_download": {
+          "url": "https://nodejs.org/dist/v24.22.0/node-v24.22.0-linux-x64.tar.gz",
+          "checksum_url": "https://nodejs.org/dist/v24.22.0/SHASUMS256.txt",
+          "sha256": "28ea0a438de9a13bd7891fd758eee6c7819ee8af5442dfd8d45bd65e56d4228c"
+        }
+      },
+      "manifest_sha256": "cd34a22dabaed8a39e50f078c2b741a4b6f013c64e9217c73ccb7696a221077c"
+    },
+    "9bd22f2ed78b41fe8ead272f445b6ad15bff72016b2841efcc227f4dd772646c": {
+      "key": "9bd22f2ed78b41fe8ead272f445b6ad15bff72016b2841efcc227f4dd772646c",
+      "identity": {
+        "schema_version": 1,
+        "kind": "addon",
+        "image": "sha256:97932982024db63e91381e90ac7ffd5498529628405c756c052dac57320c7c16",
+        "platform": "linux/amd64",
+        "node": "24.22.0",
+        "pi": "1.4.0",
+        "recipe": "04c19778f8be676ed572748b4baf827fa3e55734358f18a3a82491456a2dcb86",
+        "package": "4d089821e9590380c8377afa8a44f3883b3a35b9f0696c0e99c2369ff2ab7c04"
+      },
+      "sha256": "9fbb34b1f0db80147b8c116231e9f34b2ce716157ebbd276a35d360127adb0ca",
+      "size": 310886400,
+      "provenance": null,
+      "manifest_sha256": "974b96c9ecc37fbb96d5e9fe7a55922e1440f3c877412022bfd04d0f0b4796ff"
+    },
+    "3d56ad58047e4d99bdfcd37771ee1d8af44debddd9cd3b3035742d5ab4c3c75a": {
+      "key": "3d56ad58047e4d99bdfcd37771ee1d8af44debddd9cd3b3035742d5ab4c3c75a",
+      "identity": {
+        "schema_version": 1,
+        "kind": "models",
+        "manifest_sha256": "b7578356c52f0debde3d941f1faa6663acac279af39e4e54c41987a2c3235392",
+        "paths_sha256": "a945f0f9277c9d04c1b9c6c386b7a4004e3c02165c1db2369877ebf13088db44"
+      },
+      "sha256": "971cb8a36e63621a8c93ea758697bb52c0f99ea053c14f83b53a434f3ee59c0e",
+      "size": 135403520,
+      "provenance": null,
+      "manifest_sha256": "0474e06b9756259c8896d728740f0bbc230f17eb914b5320974f954304b7544d"
+    },
+    "87dcef0f6f190816f09d162cc0066fc685709fbcb41a3afe6306235f528636f4": {
+      "key": "87dcef0f6f190816f09d162cc0066fc685709fbcb41a3afe6306235f528636f4",
+      "identity": {
+        "schema_version": 1,
+        "kind": "base",
+        "image": "sha256:e4da04055098f05a84d26cf111d8364b95d177ee0cf4b85b1a70fed95a73aedc",
+        "platform": "linux/amd64",
+        "node": "24.22.0",
+        "pi": "1.4.0",
+        "recipe": "04c19778f8be676ed572748b4baf827fa3e55734358f18a3a82491456a2dcb86"
+      },
+      "sha256": "0d38f9cb798be5a47955d92a9dc4a5dd6631d288029a9b281d5806d90893315f",
+      "size": 343541760,
+      "provenance": {
+        "node_download": {
+          "url": "https://nodejs.org/dist/v24.22.0/node-v24.22.0-linux-x64.tar.gz",
+          "checksum_url": "https://nodejs.org/dist/v24.22.0/SHASUMS256.txt",
+          "sha256": "28ea0a438de9a13bd7891fd758eee6c7819ee8af5442dfd8d45bd65e56d4228c"
+        }
+      },
+      "manifest_sha256": "af3e5cb790a0d46037332e757cf43ee9885b0e4b2e1f6acd935566430ca538cf"
+    },
+    "d8d2f4be75c35951e2b18014cff6c41c38c5500a6b91dd54fa9060f858165872": {
+      "key": "d8d2f4be75c35951e2b18014cff6c41c38c5500a6b91dd54fa9060f858165872",
+      "identity": {
+        "schema_version": 1,
+        "kind": "addon",
+        "image": "sha256:e4da04055098f05a84d26cf111d8364b95d177ee0cf4b85b1a70fed95a73aedc",
+        "platform": "linux/amd64",
+        "node": "24.22.0",
+        "pi": "1.4.0",
+        "recipe": "04c19778f8be676ed572748b4baf827fa3e55734358f18a3a82491456a2dcb86",
+        "package": "4d089821e9590380c8377afa8a44f3883b3a35b9f0696c0e99c2369ff2ab7c04"
+      },
+      "sha256": "5b37d784ae0db06b3406992ec7431d9c15baa95bc5bf4f59e36b138c7a15a63d",
+      "size": 310886400,
+      "provenance": null,
+      "manifest_sha256": "f197231f02492c27b3018cc476578b489dca7e0bf89c7465eaf25aadd71ac460"
+    },
+    "0c04e7928181812f6519b5dfe803be30f1c1b39870401598e47c8b0ea46c649f": {
+      "key": "0c04e7928181812f6519b5dfe803be30f1c1b39870401598e47c8b0ea46c649f",
+      "identity": {
+        "schema_version": 1,
+        "kind": "base",
+        "image": "sha256:8018b2b2c34ced1ef985ab2f35987ce09fcf091cb530c695c0596f9fbbcfc6e1",
+        "platform": "linux/amd64",
+        "node": "24.22.0",
+        "pi": "1.4.0",
+        "recipe": "04c19778f8be676ed572748b4baf827fa3e55734358f18a3a82491456a2dcb86"
+      },
+      "sha256": "00429fa8e7ad40e0f5e3a51328929998f6f53f6642ae1184d347e068a2c80171",
+      "size": 343541760,
+      "provenance": {
+        "node_download": {
+          "url": "https://nodejs.org/dist/v24.22.0/node-v24.22.0-linux-x64.tar.gz",
+          "checksum_url": "https://nodejs.org/dist/v24.22.0/SHASUMS256.txt",
+          "sha256": "28ea0a438de9a13bd7891fd758eee6c7819ee8af5442dfd8d45bd65e56d4228c"
+        }
+      },
+      "manifest_sha256": "c1ac60b315a7c62369fe54290b4791c614b50b5ae47558f3a3dc73b169ca9f6e"
+    },
+    "b2b7b7565a0949be2049468192aebc839304af533f42d7a5b7e1f1d3f98c25ae": {
+      "key": "b2b7b7565a0949be2049468192aebc839304af533f42d7a5b7e1f1d3f98c25ae",
+      "identity": {
+        "schema_version": 1,
+        "kind": "addon",
+        "image": "sha256:8018b2b2c34ced1ef985ab2f35987ce09fcf091cb530c695c0596f9fbbcfc6e1",
+        "platform": "linux/amd64",
+        "node": "24.22.0",
+        "pi": "1.4.0",
+        "recipe": "04c19778f8be676ed572748b4baf827fa3e55734358f18a3a82491456a2dcb86",
+        "package": "4d089821e9590380c8377afa8a44f3883b3a35b9f0696c0e99c2369ff2ab7c04"
+      },
+      "sha256": "7383f8658cdfdf0ad333db09ba1582daafbd37d797ced00f2e45f95de75a3f87",
+      "size": 310886400,
+      "provenance": null,
+      "manifest_sha256": "6e3d0c711a5cc84779e6b5e2dd22294930dbddbd40c554c24b4497a9c8fdf798"
+    }
+  },
+  "evidence_indexes": {
+    "cold": {
+      "sha256": "fdfe48b1a1de5998294cad154a44eec4bbc376ee3f5378f944deff5aadbe10eb",
+      "files": 61
+    },
+    "warm": {
+      "sha256": "5902f9abf37d29eda50a6c3b9fbbe9cc61267346a12e1b759e883badf69625f9",
+      "files": 58
+    }
+  },
+  "cli_mode": {
+    "PI_OFFLINE": "1",
+    "credentials_provided": false,
+    "prompt_commands": 0,
+    "evidence_index_sha256": "b29a557ebde47f199704ae720a09d29adfb60d9b362cf19b61a4abf83ba07e2c"
+  }
+}
