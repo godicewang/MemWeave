@@ -53,6 +53,8 @@ MW-001至MW-003的首批来源：[多场景评估报告](PLUGIN_EFFECT_EVALUATIO
 
 原件：该run `groups/g01/harbor/solve/instance_flipt-io__flipt-c1fd7a8__d6wsj29/agent/pi/sessions/2026-10-28T11-54-33-906Z_01a1825c-ac30-71d1-a430-f6c51e4b6076.jsonl`，及同Trial的memory.tar.gz。此补充不授权插件修复或重跑失败样本。
 
+**长程49题S06补充（2026-10-28）：** run `20261028T132435Z-f172223f56` 插件再次连续两次超长：`c82b4e4a`→`94ac37b5`为115字符、`1d03646e`→`ee42adc3`为109字符，第三次`2784d587`→`94d4a78a`成功到v4。归档state.json实际为JSONL，仅Goal＋F1/F2/F3四条，无非法批次的部分/重复写入；Window边界null、无积压。属于已恢复的长度约束误用，不能解释为窗口遗忘。首次官方评分0、同一补丁串行诊断1，评分稳定性存疑，不能把首次业务失败归因于这两次已恢复错误。原件为该run `groups/g06/harbor/solve/instance_NodeBB__NodeBB-f2082d7d__byPhApx/agent/`下原生Session及memory.tar.gz；本记录不授权修改100字上限、自动截断或重新解题。
+
 ## MW-003：Recent Window提醒被误当成State整理
 
 **状态：待讨论，暂不优化。**

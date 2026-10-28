@@ -112,6 +112,8 @@ def interleave(swe, tb):
 
 def bootstrap_info(spec, catalog):
     """Import one healthy completed pair, never its cognitive state or a retry."""
+    if spec.completed_parent is not None:
+        return completed_info(spec, catalog)
     if spec.bootstrap_parent is None:
         return None, []
     from .campaign_report import generate_campaign_report
@@ -170,6 +172,87 @@ def bootstrap_info(spec, catalog):
         },
     }
     return info, summary["rows"]
+
+
+def completed_info(spec, catalog):
+    """Continue only when every started model pair has complete primary evidence."""
+    from .campaign_report import generate_campaign_report
+
+    supplied = spec.completed_parent
+    parent = supplied.resolve()
+    if supplied.is_symlink() or parent.parent != (spec.root / "runs").resolve():
+        raise ValueError("completed parent must belong to this run root")
+    lock = json.loads((parent / "experiment.lock.json").read_text())
+    state = json.loads((parent / "run.json").read_text())
+    if not state.get("finished_at") or lock.get("phase") != "full":
+        raise ValueError("completed parent must be a closed full phase")
+    config = spec.model_dump(mode="json")
+    for field in ("catalog_sha256", "subject", "runtime", "model", "variants", "execution"):
+        if lock["config"][field] != config[field]:
+            raise ValueError("completed parent identity mismatch: " + field)
+    for name in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py"):
+        relative = "experiments/src/memweave_eval/" + name
+        if lock["implementation_files"].get(relative) != file_digest(REPOSITORY / relative):
+            raise ValueError("Pi/protocol adapter changed since completed phase: " + name)
+    summary = generate_campaign_report(parent)
+    if summary.get("invalid_evidence"):
+        raise ValueError("completed parent has damaged evidence")
+    rows = [r for r in summary["rows"] if r.get("solve_source")]
+    selected = {r["task_id"] for r in catalog["selected"]}
+    keys = {(r["task_id"], r["variant_id"]) for r in rows}
+    tasks = {r["task_id"] for r in rows}
+    if not rows or len(keys) != len(rows) or keys != {(t, v) for t in tasks for v in VARIANTS}:
+        raise ValueError("completed parent must contain whole unique pairs")
+    if not tasks <= selected or any(
+        r.get("solve_status") != "completed_patch"
+        or r.get("success") is None
+        or not r.get("session_diagnostics", {}).get("model_responses_with_usage")
+        for r in rows
+    ):
+        raise ValueError("completed pair has incomplete solve/primary score/model evidence")
+    groups = set()
+    for job in state["jobs"].values():
+        if job["purpose"] != "solve":
+            continue
+        path = Path(job["path"])
+        if len(path.parts) != 4 or path.parts[0] != "groups" or path.parts[2:] != ("harbor", "solve"):
+            raise ValueError("unknown started model Job path")
+        group = path.parts[1]
+        groups.add(group)
+        bound = {t for t, a in state["tasks"].items() if a.get("group") == group}
+        if len(bound) != 1 or not bound <= tasks:
+            raise ValueError("started model pair missing complete primary evidence")
+    for session in parent.glob("groups/*/harbor/solve/*/agent/pi/sessions/*.jsonl"):
+        if session.relative_to(parent).parts[1] not in groups:
+            raise ValueError("unregistered started model Session")
+    cost = summary["estimated_known_cost_usd"]
+    amounts = [r.get("peak_estimated_cost_usd") for r in rows]
+    if (
+        type(cost) not in (int, float) or not math.isfinite(cost) or cost < 0
+        or any(type(c) not in (int, float) or not math.isfinite(c) or c < 0 for c in amounts)
+        or not math.isclose(sum(amounts), cost, abs_tol=1e-9)
+        or not math.isclose(state["estimated_known_cost_usd"], cost, abs_tol=1e-9)
+    ):
+        raise ValueError("completed parent cost is unknown or unaccounted")
+    if spec.limits.max_cost_usd > lock["config"]["limits"]["max_cost_usd"]:
+        raise ValueError("cannot enlarge original campaign allowance")
+    if cost >= spec.limits.max_cost_usd:
+        raise TimeoutError("completed parent has exhausted the shared budget")
+    blocks = {
+        f["task_id"]: dict(f, inherited_from=str(parent))
+        for f in state.get("admission_failures", [])
+        if f["phase"] in ("official_image", "official_controls")
+    }
+    return {
+        "kind": "completed_pairs", "parent": str(parent), "known_cost_usd": cost,
+        "included_keys": [list(k) for k in sorted(keys)], "blocked_admissions": blocks,
+        "window_started_at": state["window_started_at"],
+        "window_deadline_at": state["window_deadline_at"],
+        "hashes": {
+            name: file_digest(parent / name)
+            for name in ("experiment.lock.json", "run.json", "live.json", "evidence-index.json")
+        },
+    }, rows
 
 
 def software_cached(spec, images):
@@ -232,6 +315,7 @@ def run_pairs(spec):
     catalog = load_catalog(spec)
     preflight, blocks = preflight_lineage(spec)
     inherited, old_rows = bootstrap_info(spec, catalog)
+    blocks.update((inherited or {}).get("blocked_admissions", {}))
     package = verify_package(spec.subject.package, spec.subject.sha256, spec.subject.commit)
     if subprocess.check_output(
         ["git", "-C", str(REPOSITORY), "status", "--porcelain", "--", "experiments"], text=True

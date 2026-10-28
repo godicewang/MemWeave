@@ -109,3 +109,5 @@ Agent 正常使用 Pi 默认提示和原生工具；MemWeave 使用生产入口�
 full阶段每题独立完成准入→完整加载→两变体解题→评分，不等5题都准备。最多5个题对Harbor Job流水线，CPU/内存/存储按两份官方峰值包络限流，含可能候补；就绪缓存优先，穿插两套任务集，不读模型成绩决定顺序。新Dockerfile构建串行，官方镜像缓存验证可并行。并行Job使用同一观察器和费用账本；生命周期按时间合并，最终还应核对原始Agent阶段区间，避免按文件顺序虚构峰值。
 
 两侧都有补丁时使用同一评分Job内的两个官方PatchReplayAgent，每个只接自己变体的交接目录、各自新沙箱；报告按source_job区分并验证绑定。`control_parent`只允许复用任务/镜像/平台/Harbor/Docker及官方配置等价、SHA匹配的oracle/nop，不复用模型成绩。完整规则见执行方案§7–8。
+
+2026-10-28受限续跑：schema2可使用`completed_parent`引用同根已结束阶段，和`bootstrap_parent`互斥。必须核验全部已启动模型题对均正常解题且官方首次评分完整，继承全部已知费用和原截止，只继续未尝试槽位，不复制认知或重新解题。损坏、未知费用或半题对拒绝；首次0分不被诊断重评替换。见`docs/experiments/COMPLETED_PAIR_CONTINUATION_PROPOSAL.md`。

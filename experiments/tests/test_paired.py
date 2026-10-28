@@ -161,7 +161,8 @@ def test_bootstrap_import_keeps_cost_deadline_and_rejects_unknown_cost(tmp_path,
         bootstrap_info(s, {"selected": [{"task_id": "first"}]})
 
 
-def test_report_merges_completed_bootstrap_without_reducing_plan(tmp_path, monkeypatch):
+@pytest.mark.parametrize("completed", [False, True])
+def test_report_merges_completed_bootstrap_without_reducing_plan(tmp_path, monkeypatch, completed):
     import memweave_eval.campaign_report as module
     from memweave_eval.report import normalize_trial
     from memweave_eval.storage import atomic_json
@@ -204,6 +205,13 @@ def test_report_merges_completed_bootstrap_without_reducing_plan(tmp_path, monke
             actual_display_id=row["display_id"],
             actual_title=row["title"],
         )
+        if completed:
+            row.update(origin_run_id="grandparent", source_run_dir="/original/source")
+    lineage = {"parent": str(parent), "hashes": {}, "known_cost_usd": 0.2}
+    if completed:
+        lineage.update(kind="completed_pairs", included_keys=[
+            [r["task_id"], r["variant_id"]] for r in old_rows
+        ])
     atomic_json(parent / "evidence-index.json", {"files": []})
     atomic_json(
         root / "experiment.lock.json",
@@ -213,7 +221,7 @@ def test_report_merges_completed_bootstrap_without_reducing_plan(tmp_path, monke
             "phase": "full",
             "plan": active,
             "full_plan": old_plan + active,
-            "bootstrap_lineage": {"parent": str(parent), "hashes": {}, "known_cost_usd": 0.2},
+            "bootstrap_lineage": lineage,
         },
     )
     atomic_json(root / "run.json", {"complete": False, "tasks": {}})
@@ -223,7 +231,8 @@ def test_report_merges_completed_bootstrap_without_reducing_plan(tmp_path, monke
 
     def generate(path):
         if path == parent:
-            return {"complete": True, "run_id": "parent", "rows": old_rows}
+            return {"complete": not completed, "run_id": "parent", "rows": old_rows,
+                    "invalid_evidence": []}
         return real(path)
 
     monkeypatch.setattr(module, "generate_campaign_report", generate)
@@ -234,4 +243,69 @@ def test_report_merges_completed_bootstrap_without_reducing_plan(tmp_path, monke
     assert report["estimated_known_cost_usd"] == pytest.approx(0.5)
     assert report["variants"]["pi-native"]["planned"] == 2
     assert report["variants"]["pi-native"]["scored"] == 1
-    assert report["rows"][0]["origin_run_id"] == "parent"
+    assert report["rows"][0]["origin_run_id"] == ("grandparent" if completed else "parent")
+    if completed:
+        assert report["rows"][0]["source_run_dir"] == "/original/source"
+
+
+def test_completed_parent_keeps_all_started_pairs_and_first_zero_scores(tmp_path, monkeypatch):
+    from test_campaign import spec
+
+    import memweave_eval.campaign_report as reports
+    from memweave_eval.paired import completed_info
+    from memweave_eval.spec import REPOSITORY
+    from memweave_eval.storage import atomic_json, file_digest
+
+    s = spec(tmp_path)
+    parent = s.root / "runs/parent"
+    atomic_json(parent / "experiment.lock.json", {
+        "phase": "full", "config": s.model_dump(mode="json"),
+        "implementation_files": {
+            "experiments/src/memweave_eval/" + n: file_digest(
+                REPOSITORY / "experiments/src/memweave_eval" / n
+            ) for n in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py")
+        },
+    })
+    state = {
+        "finished_at": "2026-10-28T14:00:00+00:00",
+        "window_started_at": "2026-10-28T10:48:39+00:00",
+        "window_deadline_at": "2026-10-30T10:48:39+00:00",
+        "estimated_known_cost_usd": 0.4,
+        "jobs": {"g02/solve": {"purpose": "solve", "path": "groups/g02/harbor/solve"}},
+        "tasks": {"second": {"group": "g02", "actual_task_id": "second"}},
+        "admission_failures": [{"task_id": "third", "phase": "official_image", "reason": "timeout"}],
+    }
+    atomic_json(parent / "run.json", state)
+    for name in ("live.json", "evidence-index.json"):
+        atomic_json(parent / name, {})
+    rows = [
+        {"task_id": t, "variant_id": v, "solve_source": "some-result",
+         "success": t == "first", "solve_status": "completed_patch",
+         "peak_estimated_cost_usd": 0.1,
+         "session_diagnostics": {"model_responses_with_usage": 1}}
+        for t in ("first", "second") for v in ("pi-native", "pi-memweave")
+    ]
+    summary = {"complete": False, "rows": rows, "invalid_evidence": [],
+               "estimated_known_cost_usd": 0.4}
+    monkeypatch.setattr(reports, "generate_campaign_report", lambda _: summary)
+    s.completed_parent = parent
+    catalog = {"selected": [{"task_id": t} for t in ("first", "second", "third")]}
+    info, old = completed_info(s, catalog)
+    assert info["known_cost_usd"] == 0.4
+    assert info["window_deadline_at"] == state["window_deadline_at"]
+    assert len(old) == 4 and old[2]["success"] is False
+    assert info["blocked_admissions"]["third"]["phase"] == "official_image"
+    summary["rows"] = rows[:-1]
+    with pytest.raises(ValueError, match="pair"):
+        completed_info(s, catalog)
+    summary["rows"] = rows
+    state["tasks"]["third"] = {"group": "g03"}
+    state["jobs"]["g03/solve"] = {"purpose": "solve", "path": "groups/g03/harbor/solve"}
+    atomic_json(parent / "run.json", state)
+    with pytest.raises(ValueError, match="started"):
+        completed_info(s, catalog)
+    del state["jobs"]["g03/solve"]
+    atomic_json(parent / "run.json", state)
+    summary["estimated_known_cost_usd"] = 0.5
+    with pytest.raises(ValueError, match="cost"):
+        completed_info(s, catalog)

@@ -183,13 +183,23 @@ def generate_campaign_report(root: Path):
     if lineage:
         parent = Path(lineage["parent"])
         previous = generate_campaign_report(parent)
-        if not previous["complete"]:
+        subset = lineage.get("kind") == "completed_pairs"
+        if previous.get("invalid_evidence") or (not subset and not previous["complete"]):
             invalid.append("bootstrap_parent/incomplete")
         inherited_cost = lineage["known_cost_usd"]
-        for old in previous["rows"]:
-            row = dict(
-                old, origin_run_id=previous["run_id"], source_run_dir=str(parent), inherited=True
-            )
+        included = {tuple(k) for k in lineage.get("included_keys", [])} if subset else None
+        originals = [r for r in previous["rows"] if included is None or
+                     (r["task_id"], r["variant_id"]) in included]
+        if subset and (
+            not included
+            or {(r["task_id"], r["variant_id"]) for r in originals} != included
+            or any(r["success"] is None for r in originals)
+        ):
+            invalid.append("completed_parent/incomplete_included_pairs")
+        for old in originals:
+            row = dict(old, inherited=True)
+            row.setdefault("origin_run_id", previous["run_id"])
+            row.setdefault("source_run_dir", str(parent))
             for field in ("solve_source", "score_source"):
                 if row.get(field):
                     row[field] = str(parent / row[field])

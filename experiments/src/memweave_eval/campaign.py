@@ -78,6 +78,7 @@ class Campaign(StrictModel):
     preflight_parent: Path | None = None
     control_parent: Path | None = None
     bootstrap_parent: Path | None = None
+    completed_parent: Path | None = None
     phase: Literal["bootstrap", "full"] = "full"
 
     @model_validator(mode="after")
@@ -87,6 +88,8 @@ class Campaign(StrictModel):
         if self.model.id != "deepseek-flash" or self.model.thinking != "off":
             raise ValueError("this campaign fixes DeepSeek Flash, thinking off and its peak rates")
         self.root = outside_repository(self.root)
+        if self.bootstrap_parent and self.completed_parent:
+            raise ValueError("choose only one completed result parent")
         return self
 
 
@@ -101,6 +104,10 @@ def load_campaign(path: Path) -> Campaign:
         spec.bootstrap_parent = (path.parent / spec.bootstrap_parent).resolve()
         if spec.phase != "full":
             raise ValueError("bootstrap result inheritance is only for full phase")
+    if spec.completed_parent:
+        spec.completed_parent = (path.parent / spec.completed_parent).resolve()
+        if spec.phase != "full":
+            raise ValueError("completed result inheritance is only for full phase")
     if spec.control_parent:
         spec.control_parent = (path.parent / spec.control_parent).resolve()
         if spec.control_parent.parent != (spec.root / "runs").resolve():
