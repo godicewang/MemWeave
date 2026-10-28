@@ -418,7 +418,7 @@ def verify_adapters(lock):
         "pi_agent.py": "0680e465b92628bc7478be41b7cf04b8d5ff3024c6cf0fb2083cbf8bc82c8abf",
         "runtime_cache.py": "836c83bec3c6babf70e9082027b0a9c8a1101b5cdc83c62a803f2f267450552a",
         "runner.py": "5a753285ba1bbcd5a71002a68d6bbdbad12f6aa49c80d1931c25fa2f8ea2c58c",
-        "images.py": "cd7e5ceecde76b5bd2b4df91f423ff72ff41d5b14117b54b520d9cf0bf90b3f5",
+        "images.py": "09897b3a1695458476b424b1ef9d73fcae107eed90da6e9983929b33b4d7a90c",
         "network_probe.py": "951263a2a9a7b424f1f833e20f097b286a35f0f033852cc9bf3a9b0fa707fe19",
         "public_archive.py": "c9f479fb64c2aaf821c794113181cee395b2b5844f609d138d3e6a4521bf59be",
         "private_runtime.py": "fc68bb73a39aac027a7263958325e043e480c8222524c19a51f89abd833f1b39",
@@ -426,6 +426,12 @@ def verify_adapters(lock):
     current = {base+n: file_digest(REPOSITORY/(base+n)) for n in pinned}
     if all(old.get(path) == digest for path, digest in current.items()):
         return None
+    if (all(old.get(base+n) == current[base+n] for n in pinned if n != "images.py")
+            and old.get(base+"images.py") == "cd7e5ceecde76b5bd2b4df91f423ff72ff41d5b14117b54b520d9cf0bf90b3f5"
+            and current[base+"images.py"] == pinned["images.py"]):
+        return {"reason": "approved exact frozen preparation reuse",
+                "approval": "user 2026-10-29 environment autonomy; run proposal section 24",
+                "old": old.get(base+"images.py"), "current": current[base+"images.py"]}
     if (all(old.get(base+n) == current[base+n] for n in pinned if n != "network_probe.py")
             and old.get(base+"network_probe.py") == "57a62831b10be9fc29ac7683a225b82f8c92e3585513355769fddc66a2b8aa4b"
             and current[base+"network_probe.py"] == pinned["network_probe.py"]):
@@ -922,12 +928,28 @@ def _pair(
             raise ValueError("Harbor Job failed: " + gid + "/" + name)
         return code
 
+    from .campaign_report import retained_original
+
+    inherited_primary = [primary_evidence(r) for r in inherited_rows
+                         if r["task_id"] == slot["task_id"]]
+    frozen = {}
+    for record in inherited_primary:
+        original_path, _ = retained_original(root, record)
+        original_lock = json.loads((original_path.parents[3] / "group.lock.json").read_text())
+        tid = record["actual_task_id"]
+        preparation = original_lock["preparations"][tid]
+        if tid in frozen and frozen[tid] != preparation:
+            raise ValueError("partial continuation has conflicting frozen preparations")
+        frozen[tid] = preparation
+
     # Only a Dockerfile build waits for another build. A cached official image
     # never waits behind an unrelated long build.
     def prepare(source, *args):
         from .images import prepare_task
 
         definition = tomllib.loads((source / "task.toml").read_text())["environment"]
+        if source.name in frozen:
+            return prepare_task(source, *args, frozen=frozen[source.name])
         if definition.get("docker_image"):
             return prepare_task(source, *args)
         with build_lock:
@@ -958,9 +980,6 @@ def _pair(
     paths = [group / preparations[actual["task_id"]]["runtime_path"]]
     docker = docker_preflight(pair_spec, [infos[actual["task_id"]]], preparations)
     images = image_snapshot(paths)
-    from .campaign_report import retained_original
-
-    inherited_primary = [primary_evidence(r) for r in inherited_rows if r["task_id"] == slot["task_id"]]
     old_originals = {}
     for record in inherited_primary:
         if record["actual_task_id"] != actual["task_id"]:

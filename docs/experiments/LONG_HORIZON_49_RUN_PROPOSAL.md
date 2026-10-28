@@ -232,3 +232,5 @@ S21缓存的首次离线导入验证暴露Docker containerd的身份口径：Id�
 T07旧index虽已不在Docker image列表，原blob仍在专用VM的containerd内容目录。仅只读导出原index与其递归描述符，逐blob核对SHA／大小，制作仓库外OCI归档；用Docker load恢复，断言Id与旧group lock完全一致。不得直接修改containerd数据库或内容，不从解过题容器导出模板，不修改／补造attestation。若任何原blob缺失则保留阻断并报告，不能悄悄换新图。归档SHA、源group lock及旧build日志摘要、原件路径和恢复回执全部保存。该归档可供以后精确恢复，不算新的能力样本。
 
 实现只增prepare_task内部可选冻结准备记录及题对续跑接线，无新用户CLI参数，不改Pi、模型、工具、Task／State／Window持久化。先测完整角色／上下文／平台／Id变化拒绝和禁止build，再做真实T07两角色恢复验证。允许实验适配器等价表精确列出此次旧／新images.py摘要，其他未审查改变仍拒绝续跑。无模型关闭阶段的费用与全部53条首次评分／3条待首评继续继承。
+
+§24恢复实测补充：旧index及可执行manifest仍在，旧in-toto证明layer有一份不可读，首次全描述符导出明确失败并保留。允许再验证Docker官方`load --platform linux/amd64`的定向导入：原index字节和SHA不变，只导出其amd64可执行子图，逐个校验config及全部文件层；非运行unknown/unknown attestation子图缺失明确记录，不补造。仍要求Docker最终Id等于原index、原平台和完整执行子图一致；若Id变化或任何执行blob缺失则拒绝，不能改为只比较近似文件系统。归档／回执必须称平台子图归档，不声称全部attestation已恢复。此为精确原身份恢复的有限验证，不改变任务或能力结果。

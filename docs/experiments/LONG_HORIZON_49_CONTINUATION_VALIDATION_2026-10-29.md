@@ -36,3 +36,11 @@
 在S22原始官方镜像中启动一个无网络、0.25 CPU／64MiB、无模型的临时文件增删容器，交替各执行30次旧查询与修复查询。旧查询2次失败，修复查询30次全部成功且均包含该容器ID；只清理本次诊断容器，未重启虚拟机。仓库外回执：`analysis/long49/continuation-preflight-20261029/observer-size-acceptance.json`。此验收验证观察接线，不是模型能力或官方评分。
 
 续跑继续继承26个正常题对、T07插件首次0，以及累计模型费用；S14插件／S23双方原补丁只补首次官方评分，S14被基础设施取消的原生侧保留历史后重新完成。所有首次0分、评分疑点和中断费用保留。
+
+## 原构建镜像身份的部分题对续跑验收
+
+46b54b48d8无新增模型调用即被原镜像身份保护阻断，累计费用仍$4.318621224。T07官方Dockerfile所有层命中，manifest／config与旧日志一致，重导出attestation导致外层index不同。新增内部冻结准备输入：从已校验原group lock取记录，先核对全任务、各角色context／Dockerfile／来源／平台／原Id，再设本实验别名；不build，不使用解过题实例。8项新增边界检查及全套147项、Ruff均通过，生产候选不变。
+
+T07原index、manifest／config及完整amd64文件层从专用VM内容目录只读导出并逐blob SHA／大小验证。原attestation的in-toto payload有缺失，第一次全图恢复明确失败；平台定向归档保留旧index及manifest元数据，Docker官方load --platform linux/amd64成功恢复main 55b450e…／verifier 558cb38…原Id。必须使用完整docker.io/library引用，未规范化短引用导入后不能按正常名称查找；这两次有限失败及回执保留。没有改内容存储或补造证明payload，不声称attestation完整。
+
+随后使用真实prepare_task冻结路径重建运行副本、verify_prepared_task及image_snapshot核验：两角色原Id／平台完全相同，官方协议不变，0模型。归档、SHA、源group lock／build日志SHA和验收位于仓库外`analysis/long49/t07-original-index-recovery-20261029/`。续跑仍53条已评分、3条只补首评、42侧新模型，保留10条中断历史。

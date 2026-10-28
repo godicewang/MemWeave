@@ -158,7 +158,8 @@ def protocol_view(path: Path) -> dict:
 
 
 def prepare_task(
-    source: Path, root: Path, platform: str, deadline: float, env: dict, limits: dict
+    source: Path, root: Path, platform: str, deadline: float, env: dict, limits: dict,
+    *, frozen: dict | None = None,
 ) -> dict:
     source, root = source.resolve(), root.resolve()
     if time.monotonic() >= deadline:
@@ -180,6 +181,25 @@ def prepare_task(
             raise TaskPreparationError("official verifier requires an unsupported platform")
         if verifier.bundled_tests:
             definitions.append(("verifier", verifier.directory, verifier.config))
+    if frozen is not None:
+        if (frozen.get("task_id") != source.name
+                or frozen.get("source_sha256") != original_hash
+                or frozen.get("platform") != platform
+                or set(frozen.get("images", {})) != {role for role, _, _ in definitions}):
+            raise ValueError("frozen preparation task/platform/roles changed")
+        # Validate every role before changing any experiment alias.
+        for role, directory, config in definitions:
+            old = frozen["images"][role]
+            dockerfile = directory / "Dockerfile"
+            if (old.get("context_sha256") != task_digest(directory)
+                    or old.get("dockerfile_sha256") != (
+                        file_digest(dockerfile) if dockerfile.is_file() else None)
+                    or old.get("source_image") != config.docker_image
+                    or old.get("platform") != platform):
+                raise ValueError("frozen preparation context/source changed")
+            actual = inspect_image(old["id"], env)
+            if actual["id"] != old["id"] or actual["platform"] != platform:
+                raise ValueError("frozen preparation image identity changed")
     evidence_dir = root / "preparation" / source.name
     evidence_dir.mkdir(parents=True, exist_ok=False)
     built = {}
@@ -196,7 +216,16 @@ def prepare_task(
         ).hexdigest()
         reference = "memweave-eval:" + name
         log = evidence_dir / f"{role}.log"
-        identity = _build_image(directory, config, reference, log, platform, deadline, env)
+        if frozen is None:
+            identity = _build_image(directory, config, reference, log, platform, deadline, env)
+        else:
+            original = frozen["images"][role]
+            log.write_text(json.dumps({"reuse_frozen_preparation": original}) + "\n")
+            _run_docker(["docker", "tag", original["id"], reference], log,
+                        min(30, max(0.01, deadline - time.monotonic())), env)
+            identity = inspect_image(reference, env)
+            if identity["id"] != original["id"]:
+                raise ValueError("frozen preparation alias changed identity")
         if identity["platform"] != platform:
             raise TaskPreparationError("prepared image platform differs from the frozen platform")
         if task_digest(directory) != context_hash:
