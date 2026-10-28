@@ -17,3 +17,5 @@
 prepare_only的build_addon上传归档，用固定Node自带npm的offline cache add灌入容器独立缓存，再运行原安装命令；缺失的其他依赖仍按既定无凭据准备网络获取。禁止安装脚本与原参数保持一致，不跨镜像复用安装产物。先在network=none的新官方镜像中验证npm可按原URL＋integrity从种入缓存恢复字节一致的tarball，再做完整真实Harbor无模型预检。
 
 新旧适配器只允许这一份已批准准备下载变化及此前Node探针变化，用明确SHA对审查后保留原模型结果链。准备配方新键仍按原规则冻结，旧对象不改名、不伪造身份；完成／中断模型尝试和首次成绩不重跑，原费用／截止完整继承。
+
+验证证据（尚未接入正式框架）：独立network=none官方S05镜像中，灌入后按原URL＋SSRI恢复完全相同SHA归档；随后另一新官方镜像使用同一公开归档预热、执行原安装命令约4分钟退出0，产品LocalEmbedding实际输出384维，均无认证／模型请求，未创建新软件缓存身份。原件：仓库外analysis/long49/public-npm-archive-import/offline-feasibility-2.json与seeded-npm-full-install/result.json。首轮验证误用底层缓存父目录导致ENOTCACHED的失败记录也保留，不冒称首试即通过。

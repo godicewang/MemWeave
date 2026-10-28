@@ -69,3 +69,7 @@
 - 22:45:05 CST：新阶段run=20261028T144505Z-36cd22f224，接线31346ea已推送；活动计划92行、总体98行。继承S01／S03／S06六行原模型尝试及0.093063336美元，新推理余额19.906936664美元，原截止不变。S03中断补丁分数另表1/0，不改原取消状态；S05已证实旧尝试无Pi，才列入新阶段首次真实解题。当前新配方软件准备开始，未用旧对象改头换面绕过完整预检。
 
 - 23:05:05 CST：当前阶段已结束，新增模型0、费用0，累计仍0.093063336美元，98行报告invalid_evidence=[]。S05准备再次ECONNRESET，已确认串行化不能消除大包重复下载。只从本机npm内容缓存选取公开onnxruntime-node@1.30.0原tar，113507888字节，SHA-512与锁文件一致，SHA256 6e3390d6…，未复制任何其他缓存或npmrc。独立network=none新官方镜像中，offline cache add后按原URL＋SSRI取回相同SHA，验证通过（首轮调用底层读取库误给父目录导致ENOTCACHED，改为_cacache后通过，失败原件保留）。提案PUBLIC_NPM_ARCHIVE_CACHE_PROPOSAL.md待用户确认；不擅自发布新缓存契约。进一步同镜像全安装＋384维向量验证无模型进行中。
+
+- 23:15:01 CST：独立npm公开归档断网取回验证已通过，恢复SHA256与原tar一致，无模型。完整安装＋实际本地embedding兼容验证仍在进行；缓存契约接入仍等待用户确认。另发现npm一次Date.now差为-29ms；对宿主arm64 Node23与官方NodeBB amd64 Node22各采15秒，均未观察到时钟回退。因此只保留瞬时现象，不将S06不稳定唯一归因于虚拟机时钟。S03评分交接原件／副本／result哈希与父索引逐一复核，两变体各匹配自身，见analysis/long49/s03-interrupted-patch-grading/binding-audit.json。
+
+- 23:15:52 CST：公开tar预热后的完整安装约4分钟退出0，LocalEmbedding实际384维，模型0、无凭据，无新软件对象伪装。原件seeded-npm-full-install/result.json。正式缓存接入仍待确认；本阶段所有付费Job已结束，累计0.093063336美元不变。
