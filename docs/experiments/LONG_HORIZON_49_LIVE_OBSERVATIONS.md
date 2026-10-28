@@ -84,3 +84,35 @@
 ### 2026-10-29 01:14:24 CST
 
 已审计7个正常题对；S03、S05原生1／插件0，S06保留首次不稳定0／0；其他4题两边1。旧S08取消后补丁评分1／1、T01插件正常1／原生取消均不算正常题对，保留后恢复。总估算费用0.443876028美元。S09 Alpine导致GNU Node fcntl64缺符号，私有GNU loader原型已通过完整双SDK、embedding384、网络探针；固定最终recipe及CLI超时壳再验。单镜像准备故障隔离和TB scored续跑边界118项实验测试通过，Ruff／编译通过。生产候选未变。
+
+### 2026-10-29 01:18:20 CST
+
+修复191146f已锁定并启动run `20261028T171721Z-1962af9075`，继承14个正常结果、84个待运行结果、历史6行及全部0.443876028美元。最终musl原生／插件验收通过，双方CLI、完整SDK、embedding及隔离网络正常，0模型。并行准入S08／S09／S10／S13／S14；仅将真实Pi生命周期计入解题峰值。S05额外原样类／属性描述符探针：注入SIP_VERSION_STR=6.7，原生返回6.7、插件返回None，证明遗漏单元素tuple缺陷；仅独立依赖桩，不冒充完整Qt测试或增加模型样本，原件analysis/long49/s05-sip-static-replay.json。
+
+- 01:21:43 CST：[('g08', 'preparing'), ('g13', 'software_preflight'), ('g14', 'preparing'), ('g10', 'preparing'), ('g09', 'preparing')]；本阶段模型返回0。S08 oracle在测试重置git checkout处报Segmentation fault，官方必需156项过155，缺RoomPreviewBar rejecting message；没有Pi能力分数，准入证据保留。S13 oracle1/nop0已核验。
+
+- 01:29:35 CST：S13正常解题并官方评分1／1，累计8／49正常题对；S09 oracle1/nop0、musl双侧完整预检通过后真实解题。S13插件Task goal109超100一次，随后同批bash被TASK_BINDING_REQUIRED拒绝，均可恢复；没有窗口移动，不称长程记忆收益。S14官方控制Go1.22.12父进程等待、多个vet僵尸，宿主exe为Rosetta，暂不推定Rosetta根因；等待官方预算／退出并保留限制。T02原Dockerfile双镜像预建成功。
+
+- 01:33:50 CST：S09双方正常解题、agent_settled，进入两份新沙箱官方评分；T01双方真实解题，模型返回累计122，本阶段已测峰值3；总估算美元0.545172804。T02／T03官方原始双Dockerfile已预建，后续辅助预建用独立memweave-eval-prewarm标签，不写正式冻结tag；正式任务仍按原Dockerfile构建／命中原层。已核对并删除旧已结束run141814的孤立egress sidecar，未触碰活动容器。
+
+- 2026-10-29 01:34:42 CST 人工复核快照：{"run": "20261028T171721Z-1962af9075", "groups": [["S08", "preparing"], ["S13", "finished"], ["S14", "preparing"], ["S10", "preparing"], ["S09", "regrading"], ["T01", "solving"]], "model_responses": 122, "active": {}, "peak": 3, "total_estimated_usd": 0.545172804, "stop": null, "finished_at": null}。
+
+- 2026-10-29 01:35:29 CST 人工复核快照：{"run": "20261028T171721Z-1962af9075", "groups": [["S08", "preparing"], ["S13", "finished"], ["S14", "preparing"], ["S10", "preparing"], ["S09", "regrading"], ["T01", "solving"]], "model_responses": 122, "active": {}, "peak": 3, "total_estimated_usd": 0.545172804, "stop": null, "finished_at": null}。
+
+- 2026-10-29 01:36:02 CST 用户明确取消20美元上限；已准备unlimited_cost=true的后续续跑配置，继承当前阶段原件。当前冻结阶段继续，不原地改锁。后续至49正常题对完成，所有费用继续累计。
+
+- 2026-10-29 01:36:02 CST 人工复核快照：{"run": "20261028T171721Z-1962af9075", "groups": [["S08", "preparing"], ["S13", "finished"], ["S14", "preparing"], ["S10", "preparing"], ["S09", "regrading"], ["T01", "solving"]], "model_responses": 122, "active": {}, "peak": 3, "total_estimated_usd": 0.545172804, "stop": null, "finished_at": null}。
+
+- 2026-10-29 01:36:48 CST 人工复核快照：{"run": "20261028T171721Z-1962af9075", "groups": [["S08", "preparing"], ["S13", "finished"], ["S14", "preparing"], ["S10", "preparing"], ["S09", "finished"], ["T01", "finished"], ["S11", "preparing"], ["S12", "preparing"]], "model_responses": 122, "active": {}, "peak": 3, "total_estimated_usd": 0.545172804, "stop": null, "finished_at": null}。
+
+- 2026-10-29 01:38:49 CST 人工复核快照：{"run": "20261028T171721Z-1962af9075", "groups": [["S08", "preparing"], ["S13", "finished"], ["S14", "preparing"], ["S10", "preparing"], ["S09", "finished"], ["T01", "finished"], ["S11", "preparing"], ["S12", "preparing"]], "model_responses": 122, "active": {}, "peak": 3, "total_estimated_usd": 0.545172804, "stop": null, "finished_at": null}。
+
+- 2026-10-29 01:39:49 CST 人工复核快照：{"run": "20261028T171721Z-1962af9075", "groups": [["S08", "preparing"], ["S13", "finished"], ["S14", "preparing"], ["S10", "preparing"], ["S09", "finished"], ["T01", "finished"], ["S11", "software_preflight"], ["S12", "preparing"]], "model_responses": 122, "active": {}, "peak": 3, "total_estimated_usd": 0.545172804, "stop": null, "finished_at": null}。
+
+- 2026-10-29 01:40:48 CST 人工复核快照：{"run": "20261028T171721Z-1962af9075", "groups": [["S08", "preparing"], ["S13", "finished"], ["S14", "preparing"], ["S10", "preparing"], ["S09", "finished"], ["T01", "finished"], ["S11", "software_preflight"], ["S12", "preparing"]], "model_responses": 122, "active": {}, "peak": 3, "total_estimated_usd": 0.545172804, "stop": null, "finished_at": null}。
+
+- 2026-10-29 01:41:45 CST 人工复核：模型返回122，在途{}，峰值3，累计估算$0.545173，停止原因None。
+
+- 2026-10-29 01:42:57 CST 人工复核：S11:software_preflight→solving；模型返回122，在途{'pi-native': 1, 'pi-memweave': 1}，峰值3，累计估算$0.545173，停止原因None。
+
+- 2026-10-29 01:43:41 CST 人工复核：模型返回158，在途{'pi-native': 1, 'pi-memweave': 1}，峰值3，累计估算$0.579547，停止原因None。
