@@ -177,3 +177,41 @@ def test_dockerfile_task_cannot_be_falsely_declared_frozen(tmp_path):
 
     with pytest.raises(ValueError, match="must be prepared"):
         image_snapshot([make_task(tmp_path, "one")])
+
+
+def test_runtime_preflight_has_no_auth_or_verifier_and_does_not_change_solve_budget(tmp_path):
+    from harbor.models.job.config import JobConfig
+
+    spec = Experiment.model_validate(configuration(tmp_path))
+    plan = tmp_path / "runtime-assets.json"
+    plan.write_text("{}")
+    cfg = build_job_config(spec, tmp_path, "prepare", [], variant="pi-memweave",
+                           runtime_plan=plan, prepare_only=True)
+    agent = cfg["agents"][0]
+    JobConfig.model_validate(cfg)
+    assert agent["kwargs"]["auth_path"] == ""
+    assert agent["kwargs"]["prepare_only"]
+    assert cfg["verifier"]["disable"]
+    assert cfg["n_concurrent_trials"] == 1
+    (tmp_path / "runtime-assets.lock.json").write_text('{"objects":{}}')
+    solve = build_job_config(spec, tmp_path, "solve", [], variant="pi-native", runtime_plan=plan)
+    assert "override_setup_timeout_sec" not in solve["agents"][0]
+    assert "override_timeout_sec" not in solve["agents"][0]
+    assert not solve["agents"][0]["kwargs"]["prepare_only"]
+
+
+def test_runtime_failure_blocks_before_auth_and_cannot_trigger_reserve(tmp_path):
+    from memweave_eval.runner import prepare_runtimes
+
+    spec = Experiment.model_validate(configuration(tmp_path))
+    calls = []
+
+    def failed(cfg):
+        calls.append(cfg)
+
+    from unittest.mock import patch
+    with (patch("memweave_eval.runner.create_plan", return_value={"entries": {}}),
+          pytest.raises(ValueError, match="preflight")):
+        prepare_runtimes(spec, tmp_path, [tmp_path / "one"], {}, {"jobs": {}}, failed, 1e30)
+    assert len(calls) == 1
+    assert calls[0]["agents"][0]["kwargs"]["prepare_only"]

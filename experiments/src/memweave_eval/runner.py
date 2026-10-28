@@ -19,6 +19,7 @@ import yaml
 
 from .images import TaskPreparationError, prepare_task, verify_prepared_task
 from .report import generate_report
+from .runtime_cache import create_plan, snapshot
 from .spec import REPOSITORY, Experiment, Subset, Suite
 from .storage import atomic_json, check_private_evidence, evidence_index, file_digest
 from .suites import resolve_suite, select_tasks, task_digest
@@ -120,6 +121,8 @@ def build_job_config(
     protocol="tb4",
     control: str | None = None,
     source_job: Path | None = None,
+    runtime_plan: Path | None = None,
+    prepare_only: bool = False,
 ) -> dict:
     if control:
         agent = {"name": control}
@@ -140,9 +143,12 @@ def build_job_config(
                 "variant": variant,
                 "package_path": str(spec.subject.package),
                 "package_sha256": spec.subject.sha256,
-                "auth_path": str(auth_path),
+                "auth_path": "" if prepare_only else str(auth_path),
                 "protocol": protocol,
                 "thinking": spec.model.thinking,
+                "runtime_plan": str(runtime_plan) if runtime_plan else None,
+                "runtime_plan_sha256": file_digest(runtime_plan) if runtime_plan else None,
+                "prepare_only": prepare_only,
             },
         }
     cfg = {
@@ -158,6 +164,13 @@ def build_job_config(
     }
     if protocol == "swe-pro-v2" and not control and source_job is None:
         cfg["verifier"] = {"disable": True}
+    if prepare_only:
+        cfg["verifier"] = {"disable": True}
+        cfg["n_concurrent_trials"] = 1
+        cfg["agents"][0].update(override_setup_timeout_sec=3600, override_timeout_sec=240)
+    elif runtime_plan and not control and not source_job:
+        frozen = runtime_plan.with_name("runtime-assets.lock.json")
+        agent["kwargs"]["runtime_objects"] = json.loads(frozen.read_text())["objects"]
     return cfg
 
 
@@ -411,6 +424,33 @@ def admit_tb_tasks(spec, subset, candidates, task_root, root, state, env, deadli
     return admitted, paths, preparations
 
 
+def prepare_runtimes(spec, root, paths, images, state, execute, deadline) -> dict:
+    """All task/variant software checks precede any credential access or inference."""
+    plan = create_plan(spec, images)
+    plan_path = root / "runtime-assets.json"
+    atomic_json(plan_path, plan, immutable=True)
+    for variant in spec.variants:
+        name = "runtime-preflight-" + variant.id
+        state["jobs"][name] = {"path": "harbor/" + name, "purpose": "software_preflight"}
+        atomic_json(root / "run.json", state)
+        cfg = build_job_config(spec, root, name, paths, variant=variant.id,
+                               runtime_plan=plan_path, prepare_only=True)
+        cfg["agents"][0]["override_setup_timeout_sec"] = min(
+            3600, max(1, deadline - time.monotonic()))
+        execute(cfg)
+        results = trial_results(root / "harbor" / name)
+        for task in paths:
+            item = results.get(task.name)
+            if not item or item[1].get("exception_info"):
+                raise ValueError(f"runtime preflight failed: {variant.id}/{task.name}; no model started")
+            output = item[0].parent / "agent/runtime-preflight.json"
+            if not output.is_file() or json.loads(output.read_text()).get("model_requests") != 0:
+                raise ValueError("runtime preflight evidence missing; no model started")
+    record = {"plan_sha256": file_digest(plan_path), "objects": snapshot(plan)}
+    atomic_json(root / "runtime-assets.lock.json", record, immutable=True)
+    return record
+
+
 def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
     if importlib.metadata.version("harbor") != spec.runtime.harbor_version:
         raise ValueError("installed Harbor version does not match experiment")
@@ -508,6 +548,9 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                         raise ValueError(
                             f"official empty control failed: {task_id}; review before admitting")
             images = image_snapshot(paths)
+            runtimes = prepare_runtimes(spec, root, paths, images, state, execute, deadline)
+            if image_snapshot(paths) != images:
+                raise ValueError("task image changed during runtime preflight")
             if any(file_digest(REPOSITORY / path) != digest for path, digest in code_files.items()):
                 raise ValueError(
                     "experiment implementation changed during preflight; start a new run"
@@ -541,6 +584,7 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                 },
                 "docker": docker,
                 "images": images,
+                "runtime_assets": runtimes,
                 "preparations": preparations,
                 "tooling_sha256": {
                     p.relative_to(upstream).as_posix(): file_digest(p)
@@ -556,6 +600,10 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
             credential = json.loads(auth_file().read_text())["deepseek"]["key"].encode()
 
             def verify_inputs():
+                plan_path = root / "runtime-assets.json"
+                if (file_digest(plan_path) != runtimes["plan_sha256"]
+                        or snapshot(json.loads(plan_path.read_text())) != runtimes["objects"]):
+                    raise ValueError("frozen software cache changed; no implicit reinstall")
                 for task in selected:
                     if task_digest(upstream / suite.tasks_dir / task["task_id"]) != task["sha256"]:
                         raise ValueError("official task changed after freezing")
@@ -584,6 +632,7 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                         variant=variant.id,
                         auth_path=auth_file(),
                         protocol=suite.protocol,
+                        runtime_plan=root / "runtime-assets.json",
                     )
                     execute(cfg)
                     if suite.protocol == "swe-pro-v2":

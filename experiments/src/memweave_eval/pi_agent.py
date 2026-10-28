@@ -9,10 +9,10 @@ import time
 from pathlib import Path
 from typing import Annotated, Literal
 
-from harbor.agents.installed.node_install import nvm_node_install_snippet
 from harbor.agents.installed.pi import Pi, PiOptions
 from harbor.agents.options import Cli
 
+from .runtime_cache import materialize, node_download
 from .storage import file_digest
 
 
@@ -24,6 +24,10 @@ class PiExperimentOptions(PiOptions):
     package_sha256: str
     auth_path: str
     protocol: Literal["tb4", "swe-pro-v2"]
+    runtime_plan: str | None = None
+    runtime_plan_sha256: str | None = None
+    prepare_only: bool = False
+    runtime_objects: dict[str, dict] | None = None
     extension: Annotated[str | None, Cli("--extension")] = None
 
 
@@ -48,88 +52,245 @@ class ExperimentPi(Pi):
             command = f"chown {shlex.quote(str(owner))} {target} && " + command
         await self.exec_as_root(environment, command)
 
+    def get_version_command(self) -> str:
+        return "pi --version"
+
+    async def pack_asset(self, environment, directory: str, top: str, target: Path):
+        remote = self._experiment_home + "/.memweave-export.tar"
+        try:
+            await self.exec_as_agent(
+                environment,
+                f"tar -cf {shlex.quote(remote)} -C {shlex.quote(directory)} {shlex.quote(top)}",
+            )
+            await environment.download_file(remote, target)
+        finally:
+            await self.exec_as_agent(environment, "rm -f " + shlex.quote(remote))
+
+    async def deploy_asset(self, environment, cache: Path, desc: dict, destination: str):
+        remote = self._experiment_home + "/.memweave-import.tar"
+        try:
+            await environment.upload_file(cache / desc["key"] / "payload.tar", remote)
+            await self.exec_as_agent(
+                environment,
+                f"mkdir -p {shlex.quote(destination)} && "
+                f"tar -xf {shlex.quote(remote)} -C {shlex.quote(destination)}",
+            )
+        finally:
+            await self.exec_as_root(environment, "rm -f " + shlex.quote(remote))
+
+    def model_script(self, *, allow_download=False) -> str:
+        package = self._asset_root + "/package"
+        return (
+            f"const {{memoryPaths}}=await import({json.dumps(package + '/src/storage/paths.ts')});"
+            f"const {{ensureEmbeddingModel}}=await import({json.dumps(package + '/src/task/embedding.ts')});"
+            "const fs=await import('node:fs/promises');const paths=memoryPaths();"
+            f"const defaults=JSON.parse(await fs.readFile({json.dumps(package + '/src/config/defaults.json')},'utf8'));"
+            + ("" if allow_download else
+               "globalThis.fetch=()=>{throw Error('Frozen embedding invalid; downloads disabled');};")
+            + "await ensureEmbeddingModel(paths,defaults.task_search);"
+        )
+
     async def install(self, environment) -> None:
-        # Normal installed-agent setup, in the task's existing user and image.
-        await self.ensure_system_dependencies(environment, ("curl",))
-        node = shlex.quote(self.options.node_version)
-        bootstrap = nvm_node_install_snippet(int(self.options.node_version.split(".")[0]))
+        started = time.monotonic()
+        if not self.options.runtime_plan or not self.options.runtime_plan_sha256:
+            raise ValueError("a frozen software cache plan is required")
+        plan_path = Path(self.options.runtime_plan)
+        if file_digest(plan_path) != self.options.runtime_plan_sha256:
+            raise ValueError("runtime cache plan changed")
+        plan = json.loads(plan_path.read_text())
+        reference = environment.task_env_config.docker_image
+        entry = plan["entries"][reference]
+        cache = Path(plan["cache"])
+        info = await self.exec_as_agent(environment, 'printf \'%s\\n%s\\n\' "$HOME" "$PWD"')
+        home, cwd = info.stdout.strip().splitlines()
+        if not home.startswith("/") or not cwd.startswith("/"):
+            raise ValueError("container has no absolute home/cwd")
+        self._experiment_home, self._experiment_cwd = home, cwd
+        self._asset_root = home + "/.local/share/memweave-eval"
+        profile = home + "/.pi/agent"
         await self.exec_as_agent(
             environment,
-            f"set -euo pipefail; export METHOD=script; {bootstrap} && nvm install {node} && nvm alias default {node} "
-            "&& npm install -g --ignore-scripts @earendil-works/pi-coding-agent@1.4.0 "
-            "&& node --version && pi --version",
-            timeout_sec=1200,
+            f"test ! -e {shlex.quote(profile)} && "
+            f"test ! -e {shlex.quote(home + '/.pi/memory')} && "
+            f"test ! -e {shlex.quote(self._asset_root)} && "
+            f"mkdir -p {shlex.quote(self._asset_root)}",
         )
-        info = await self.exec_as_agent(
-            environment,
-            '. "$HOME/.nvm/nvm.sh"; node -e '
-            + shlex.quote(
-                "console.log(JSON.stringify({home:require('os').homedir(),cwd:process.cwd()}))"
-            ),
-        )
-        locations = json.loads(info.stdout.strip().splitlines()[-1])
-        home = locations["home"]
-        if not home.startswith("/"):
-            raise ValueError("container has no absolute home directory")
-        self._experiment_home = home
-        self._experiment_cwd = locations["cwd"]
-        profile = home + "/.pi/agent"
+        resources = {}
+
+        async def resource(name, top, builder, destination):
+            desc = entry[name]
+            record, hit = await materialize(
+                cache, desc, top, builder, allow_create=self.options.prepare_only
+            )
+            if not self.options.prepare_only and (
+                self.options.runtime_objects is None
+                or self.options.runtime_objects.get(desc["key"]) != record
+            ):
+                raise ValueError("runtime software differs from the frozen object")
+            if hit:
+                await self.deploy_asset(environment, cache, desc, destination)
+            resources[name] = dict(record, cache_hit=hit)
+
+        async def build_base(target):
+            archive, receipt = node_download(
+                cache, self.options.node_version, entry["image"]["platform"]
+            )
+            remote = self._asset_root + "/node.tar.gz"
+            await environment.upload_file(archive, remote)
+            await self.exec_as_agent(
+                environment,
+                f"mkdir -p {shlex.quote(self._asset_root + '/node')} && "
+                f"tar -xzf {shlex.quote(remote)} --strip-components=1 "
+                f"-C {shlex.quote(self._asset_root + '/node')} && rm {shlex.quote(remote)}",
+            )
+            await self.exec_as_agent(
+                environment,
+                f"npm install -g --prefix {shlex.quote(self._asset_root + '/node')} "
+                "--ignore-scripts @earendil-works/pi-coding-agent@1.4.0",
+                timeout_sec=1800,
+            )
+            await self.pack_asset(environment, self._asset_root, "node", target)
+            (self.logs_dir / "node-download.json").write_text(json.dumps(receipt) + "\n")
+            return {"node_download": receipt}
+
+        await resource("base", "node", build_base, self._asset_root)
+        versions = await self.exec_as_agent(environment, "node --version && pi --version")
+        if versions.stdout.strip().splitlines() != [
+            "v" + self.options.node_version,
+            self.options.version,
+        ]:
+            raise ValueError("cached Node/Pi version mismatch")
+
+        if self.options.variant == "pi-memweave":
+            archive = Path(self.options.package_path)
+            if file_digest(archive) != self.options.package_sha256:
+                raise ValueError("frozen MemWeave package changed")
+
+            async def build_addon(target):
+                remote = self._asset_root + "/subject.tgz"
+                await environment.upload_file(archive, remote)
+                await self.exec_as_agent(
+                    environment,
+                    f"tar -xzf {shlex.quote(remote)} -C {shlex.quote(self._asset_root)} && "
+                    f"rm {shlex.quote(remote)} && "
+                    f"npm install --prefix {shlex.quote(self._asset_root + '/package')} "
+                    "--omit=dev --ignore-scripts --legacy-peer-deps",
+                    timeout_sec=1800,
+                )
+                await self.pack_asset(environment, self._asset_root, "package", target)
+
+            await resource("addon", "package", build_addon, self._asset_root)
+            # Product-owned paths/functions determine and verify embedding resources.
+            model_info = await self.exec_as_agent(
+                environment,
+                "node --input-type=module -e "
+                + shlex.quote(
+                    self.model_script().split("await ensureEmbeddingModel")[0]
+                    + "console.log(paths.root);"
+                ),
+            )
+            memory = model_info.stdout.strip().splitlines()[-1]
+
+            async def build_models(target):
+                await self.exec_as_agent(
+                    environment,
+                    "node --input-type=module -e " + shlex.quote(self.model_script(allow_download=True)),
+                    timeout_sec=1800,
+                )
+                await self.pack_asset(environment, memory, "models", target)
+
+            await resource("models", "models", build_models, memory)
+            await self.exec_as_agent(
+                environment,
+                "node --input-type=module -e "
+                + shlex.quote(
+                    self.model_script()
+                    + f"await fs.copyFile({json.dumps(self._asset_root + '/package/resources/rule.md')},paths.rule);"
+                ),
+                timeout_sec=120,
+            )
+            self.options.extension = self._asset_root + "/package/src/extension/index.ts"
+
         await self.exec_as_agent(environment, f"mkdir -p {shlex.quote(profile)}")
-        auth = json.loads(Path(self.options.auth_path).read_text())
-        if "deepseek" not in auth or auth["deepseek"].get("type") != "api_key":
-            raise ValueError("an API-key DeepSeek private profile is required")
-        # The key is transferred as a private file, never placed in command text or job config.
-        await self.upload_private(
-            environment, json.dumps({"deepseek": auth["deepseek"]}), profile + "/auth.json"
-        )
+        # No credential file is read or uploaded by preparation Jobs.
+        if not self.options.prepare_only:
+            auth = json.loads(Path(self.options.auth_path).read_text())
+            if "deepseek" not in auth or auth["deepseek"].get("type") != "api_key":
+                raise ValueError("an API-key DeepSeek private profile is required")
+            await self.upload_private(
+                environment, json.dumps({"deepseek": auth["deepseek"]}), profile + "/auth.json"
+            )
         await self.upload_private(
             environment,
             json.dumps({"compaction": {"enabled": self.options.variant == "pi-native"}}),
             profile + "/settings.json",
         )
-        if self.options.variant == "pi-memweave":
-            archive = Path(self.options.package_path)
-            if file_digest(archive) != self.options.package_sha256:
-                raise ValueError("frozen MemWeave package changed")
-            remote = home + "/.local/share/memweave-eval"
-            await self.exec_as_agent(environment, f"mkdir -p {shlex.quote(remote)}")
-            await environment.upload_file(archive, remote + "/subject.tgz")
-            await self.exec_as_agent(
-                environment,
-                '. "$HOME/.nvm/nvm.sh"; set -e; '
-                f"tar -xzf {shlex.quote(remote + '/subject.tgz')} -C {shlex.quote(remote)} && "
-                f"npm install --prefix {shlex.quote(remote + '/package')} --omit=dev "
-                "--ignore-scripts --legacy-peer-deps",
-                timeout_sec=1200,
-            )
-            package = remote + "/package"
-            # Reuse product-owned path and resource functions; no parallel memory layout.
-            script = (
-                f"const {{memoryPaths}}=await import({json.dumps(package + '/src/storage/paths.ts')});"
-                f"const {{ensureEmbeddingModel}}=await import({json.dumps(package + '/src/task/embedding.ts')});"
-                "const fs=await import('node:fs/promises');const paths=memoryPaths();"
-                f"const defaults=JSON.parse(await fs.readFile({json.dumps(package + '/src/config/defaults.json')},'utf8'));"
-                "await fs.mkdir(paths.root,{recursive:true});"
-                f"await fs.copyFile({json.dumps(package + '/resources/rule.md')},paths.rule);"
-                "await ensureEmbeddingModel(paths,defaults.task_search);"
-            )
-            await self.exec_as_agent(
-                environment,
-                '. "$HOME/.nvm/nvm.sh"; node --input-type=module -e ' + shlex.quote(script),
-                timeout_sec=1200,
-            )
-            self.options.extension = package + "/src/extension/index.ts"
         setup = {
             "pi_version": self.options.version,
             "node_version": self.options.node_version,
             "variant": self.options.variant,
-            "cwd": self._experiment_cwd,
+            "cwd": cwd,
+            "prepare_only": self.options.prepare_only,
+            "fresh_profile_and_memory": True,
+            "resources": resources,
+            "deployment_seconds": time.monotonic() - started,
             "package_sha256": self.options.package_sha256 if self.options.extension else None,
         }
         (self.logs_dir / "experiment-setup.json").write_text(json.dumps(setup, indent=2) + "\n")
 
+    async def runtime_preflight(self, environment):
+        # Public SDK startup with full defaults/production entry, never prompt()/LLM.
+        sdk = (
+            self._asset_root
+            + "/node/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js"
+        )
+        script = (
+            "import fs from 'node:fs/promises';import {createHash} from 'node:crypto';"
+            f"const sdk=await import({json.dumps(sdk)});"
+            f"const agentDir={json.dumps(self._experiment_home + '/.pi/agent')};"
+            "const settings=sdk.SettingsManager.create(process.cwd(),agentDir);"
+            "const loader=new sdk.DefaultResourceLoader({cwd:process.cwd(),agentDir,settingsManager:settings,"
+            f"additionalExtensionPaths:{json.dumps([self.options.extension] if self.options.extension else [])}}});"
+            "await loader.reload();const runtime=await sdk.ModelRuntime.create({"
+            "authPath:agentDir+'/auth.json',modelsPath:agentDir+'/models.json',"
+            "allowModelNetwork:false,refreshOnCreate:false});"
+            "const {session,extensionsResult}=await sdk.createAgentSession({agentDir,resourceLoader:loader,"
+            "settingsManager:settings,modelRuntime:runtime});"
+            "try{const errors=[];await session.bindExtensions({onError:e=>errors.push(String(e.message||e))});"
+            "if(extensionsResult.errors.length||errors.length)throw Error('Extension startup failed: '+JSON.stringify({errors,load:extensionsResult.errors}));"
+            "const tools=session.getActiveToolNames();"
+            "for(const t of ['read','bash','edit','write'])if(!tools.includes(t))throw Error('Missing native tool '+t);"
+            f"const enabled={json.dumps(self.options.variant == 'pi-memweave')};"
+            "if(tools.includes('task_create')!==enabled)throw Error('Wrong variant tools');"
+            "if(session.autoCompactionEnabled===enabled)throw Error('Wrong effective compaction');"
+            "let embedding=null;"
+        )
+        if self.options.variant == "pi-memweave":
+            script += self.model_script().replace(
+                "const fs=await import('node:fs/promises');", ""
+            ) + (
+                f"const {{LocalEmbedding}}=await import({json.dumps(self._asset_root + '/package/src/task/embedding.ts')});"
+                "const worker=new LocalEmbedding(paths);try{const result=await worker.embed(['runtime preflight'],'query',defaults.task_search);"
+                "embedding=result.vectors[0].length;if(embedding!==384)throw Error('Invalid embedding');}finally{await worker.dispose();}"
+            )
+        script += (
+            "await fs.writeFile('/logs/agent/runtime-preflight.json',JSON.stringify({"
+            "model_requests:0,tools,embedding_dimensions:embedding,"
+            "session_id:session.sessionId,"
+            "compaction:session.autoCompactionEnabled,system_prompt_sha256:"
+            "createHash('sha256').update(session.systemPrompt).digest('hex')}));"
+            "}finally{session.dispose();}"
+        )
+        await self.exec_as_agent(
+            environment, "node --input-type=module -e " + shlex.quote(script), timeout_sec=180
+        )
+
     async def exec_as_agent(self, environment, command: str, **kwargs):
         is_pi = "pi --print --mode json" in command
+        if hasattr(self, "_asset_root"):
+            if command.startswith(". ~/.nvm/nvm.sh; "):
+                command = command.removeprefix(". ~/.nvm/nvm.sh; ")
+            command = f"export PATH={shlex.quote(self._asset_root + '/node/bin')}:$PATH; " + command
         if is_pi:
             # Public upstream Pi command is reused verbatim inside a pipefail shell.
             # The official locked Pro wrappers reserve 60s for patch capture.
@@ -157,6 +318,9 @@ class ExperimentPi(Pi):
         return result
 
     async def run(self, instruction, environment, context) -> None:
+        if self.options.prepare_only:
+            await self.runtime_preflight(environment)
+            return
         self._agent_started = time.monotonic()
         try:
             if self.options.protocol == "swe-pro-v2":

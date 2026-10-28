@@ -1,4 +1,25 @@
-from memweave_eval.report import normalize_trial, summarize
+from memweave_eval.report import normalize_trial, summarize, timing_summary
+
+
+def test_preparation_and_solve_clocks_are_reported_separately(tmp_path):
+    import json
+
+    for name in ("prep", "solve"):
+        directory = tmp_path / name
+        directory.mkdir()
+        (directory / "result.json").write_text(json.dumps({
+            "started_at": "2026-01-01T00:00:00", "finished_at": "2026-01-01T00:00:10"}))
+    state = {"started_at": "2026-01-01T00:00:00Z", "finished_at": "2026-01-01T00:00:30Z",
+             "jobs": {"prep": {"path": "prep", "purpose": "software_preflight"},
+                      "solve": {"path": "solve", "purpose": "solve"}}}
+    assert timing_summary(tmp_path, state) == {
+        "overall_wall_seconds": 30, "software_preflight_job_seconds": 10,
+        "solve_job_seconds": 10,
+    }
+    assert timing_summary(tmp_path, {}) == {
+        "overall_wall_seconds": None, "software_preflight_job_seconds": None,
+        "solve_job_seconds": None,
+    }
 
 
 def test_missing_score_and_cost_are_not_zero_or_success():

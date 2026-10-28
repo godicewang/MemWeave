@@ -24,6 +24,20 @@ def duration(record: dict) -> float | None:
         return None
 
 
+def timing_summary(root: Path, state: dict) -> dict:
+    result = {"overall_wall_seconds": duration(state)}
+    for purpose, field in (("software_preflight", "software_preflight_job_seconds"),
+                           ("solve", "solve_job_seconds")):
+        spans = []
+        for job in state.get("jobs", {}).values():
+            if job.get("purpose") != purpose:
+                continue
+            path = contained(root, job["path"] + "/result.json")
+            spans.append(duration(json.loads(path.read_text())) if path.is_file() else None)
+        result[field] = sum(spans) if spans and all(s is not None for s in spans) else None
+    return result
+
+
 def session_diagnostics(paths: list[Path]) -> dict | None:
     if not paths:
         return None
@@ -286,6 +300,7 @@ def generate_report(root: Path) -> dict:
         not invalid and not state.get("stop_reason") and all(r["success"] is not None for r in rows)
     )
     summary["suite"] = lock["suite"]["id"]
+    summary["timing"] = timing_summary(root, state)
     output = root / "reports"
     atomic_json(output / "results.json", {"schema_version": 1, "summary": summary, "trials": rows})
     for filename, records in [
@@ -331,6 +346,7 @@ def generate_report(root: Path) -> dict:
         "缺失用量和评分保留为未知，失败与未运行行不从计划分母删除。",
         "",
         "任务未触发记忆机制时，本次结果不能证明长程记忆收益；仿真耗时不外推到原生 Linux。",
+        f"阶段墙钟（秒）：`{json.dumps(summary['timing'], ensure_ascii=False)}`；准备 Job 包括软件构建/部署和无模型加载预检，解题 Job 包括环境/安装/解题及其评分，整体还包括官方构建与控制。并发 Trial 的时间不能相加作为 Job 墙钟。",
         "",
     ]
     (output / "report.md").write_text("\n".join(lines))

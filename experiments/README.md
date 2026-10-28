@@ -2,7 +2,7 @@
 
 在官方任务环境中实际重跑原生 Pi 和 Pi + MemWeave，保存原件，离线生成 JSON、CSV 和 Markdown 对照。只接入 Terminal-Bench 4.0 与 SWE-bench Pro V2，不包含自进化。行为边界见 [实现设计](../docs/experiments/IMPLEMENTATION_DESIGN.md)，实际通过范围见 [验收记录](../docs/experiments/VALIDATION.md)。
 
-当前验收：Pro V2 的完整真实对照已跑通；TB 4.0 的官方 Dockerfile 镜像冻结接线已获确认并实现，47 项检查与真实 Docker 接线探针通过，官方控制和模型对照另行记录。TB 先前首题官方评分镜像构建失败的原件保留；边界见 [已确认方案](../docs/experiments/DOCKERFILE_FREEZE_PROPOSAL.md)。没有可核对的镜像身份时执行器阻断模型阶段。
+当前历史结果：Pro V2 四题原生 4/4、插件 3/4；TB 四题原生均有效未通过，插件一题有效未通过、三题在安装阶段失败。软件缓存改造用于减少重复安装和提前发现此类问题，不改变这些历史成绩。边界见 [镜像接线方案](../docs/experiments/DOCKERFILE_FREEZE_PROPOSAL.md) 和 [软件缓存设计](../docs/experiments/RUNTIME_CACHE_DESIGN.md)，实际验证见验收记录。
 
 ## 安装实验依赖
 
@@ -55,7 +55,11 @@ uv run --locked memweave-eval report /absolute/path/to/runs/RUN_ID
 
 `validate` 只读本地配置和已有归档，不下载、安装、启动容器或调用模型。它会列出尚待运行预检的项目，不证明任务已经可用。
 
-`run` 要求实验源码已提交。它解析精确上游，做 Docker/架构/容量预检，执行官方 oracle 与 nop 控制测试，冻结清单与镜像身份，然后顺序运行两个变体的 Harbor Job。每个任务/变体/重复均是独立冷启动；Harbor 管理任务并发。新调用始终生成新 run_id；没有自动重试、续跑或 best-of-N。Ctrl-C、时间和估算费用止损都会收尾并保留已有原件。
+`run` 要求实验源码已提交。它解析精确上游，做 Docker/架构/容量预检，执行官方 oracle 与 nop 控制测试，再对全部任务的两个变体完成无凭据、无模型的软件准备与完整入口加载检查。全部通过后冻结镜像、软件对象与计划，再顺序运行正式 Harbor Job。每个任务/变体/重复使用新的可写实例；固定软件由缓存复制，Harbor 管理任务并发。新调用始终生成新 run_id；没有自动重试、续跑或 best-of-N。Ctrl-C、时间和估算费用止损覆盖准备阶段，都会收尾并保留已有原件。
+
+软件缓存在 `<实验根>/cache/agent-assets/v1/`：Node 官方下载按精确版本/架构复用，Node+Pi 安装和插件依赖按官方镜像 ID/平台/版本/准备代码哈希复用，插件再绑定候选包；embedding 按产品资源与路径清单哈希复用。首次遇到新镜像或软件身份仍需准备，后续 Trial 不运行 npm、NVM 或资源下载。原生 Pi 只接收 Node+Pi；插件包与模型归档分开保存。缓存不包含认证、设置、Session、Task、State 或搜索索引，也不接收正式 Trial 的回写。
+
+准备失败会在首次模型调用之前阻断，不能把公共软件错误当成解题失败或据此替换任务。正式 Trial 的缓存缺失、摘要不符会报错，不能静默重装。需要重建时，在没有活动运行的情况下显式移除相应对象目录，再发起新 run；不要删除历史 `runs/`。此优化没有重启旧实验，也没有延续已经结束的费用窗口。
 
 TB 使用原始 Dockerfile 和 context 构建两阶段镜像，运行副本只调整镜像引用及必要的等价继承展开；TOML 排版 diff 单独保存，其他文件逐字不变。按公开 Harbor resolver 保持共享/独立 verifier、资源、网络与测试上传语义。构建或官方控制失败时，按 selection.json 的既定候补顺序在模型阶段前替换并记录；整体止损不触发替补，模型开始后不因答错换题。独立 verifier 资源也参与并发容量检查。
 
@@ -69,6 +73,7 @@ Pro V2 解题 Job 显式关闭 verifier，按官方口径捕获包含未跟踪�
 - `admission.json`：TB 按固定候选顺序的构建/控制准入与失败原因，不含模型成绩。
 - `preparation/`、`runtime-tasks/`：TB 原始构建日志、镜像身份、配置 diff、等价校验和仓库外运行副本；均纳入证据索引。
 - `experiment.lock.json`：配置、源码/包/上游/工具/镜像身份及全部计划行。
+- `runtime-assets.json`、`runtime-assets.lock.json`：本次软件计划、冻结对象摘要与来源；原件离线可读，不要求历史报告读取全局缓存。
 - `run.json`：Job 路径、原尝试与 Pro 补丁关联、停止原因和完整性。
 - `harbor/`：原生 Job/Trial、评分输出、直接写入的 Pi Session、派生 ATIF、Pro 补丁和允许的记忆快照。
 - `harbor-console/`：本地诊断输出；不自动上传，也不作为可公开分享的报告。
@@ -76,5 +81,7 @@ Pro V2 解题 Job 显式关闭 verifier，按官方口径捕获包含未跟踪�
 - `reports/`：逐任务 JSON/CSV、变体比较 CSV、Markdown 报告，可离线重建。
 
 Agent 正常使用 Pi 默认提示和原生工具；MemWeave 使用生产入口与完整默认 Rule。安装阶段准备原有 embedding 资源，不把它变成 Pro 离线阶段的网络例外。原始聊天只由 Pi Session 保存，不另建全量聊天数据库。
+
+`experiment-setup.json` 分别记录缓存命中、对象摘要、独立配置和部署秒数；预检原件为 `runtime-preflight.json`。预检使用完整 Pi SDK/生产扩展加载，并实际运行本机 embedding，不发起模型推理，不能当作任务能力成绩。报告单列软件准备 Job、正式解题 Job 和整体墙钟；首次准备与缓存命中的运行需要分别解释。
 
 两个任务集分别报告。小样本、资源筛选、amd64 仿真和未触发记忆压力的限制均须保留；本地子集结果不能冒充官方榜单或证明长程记忆优势。遇到官方协议与实现冲突、平台不可靠或权限扩大，遵守设计第 3 节，先对齐重大决定，再继续受影响实现。
