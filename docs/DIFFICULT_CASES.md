@@ -48,6 +48,11 @@ MW-001至MW-003的首批来源：[多场景评估报告](PLUGIN_EFFECT_EVALUATIO
 
 **Terminal Roy补充（2026-10-28核对）：** 插件连续两批分别因items[0]为133字符、items[1]为102字符被拒，第三次成功，最终归档为Goal＋4F＋1D。没有把前两次非法批次部分写入。缩短一次仍有另一条超限，说明修正应检查整批而非只看已报告字段；这仍是已恢复工具误用，不放宽长度或增加自动截断。
 
+
+**长程49题单题闭环补充（2026-10-28，S01 Flipt）：** run `20261028T114908Z-6fe6754177` 插件真实Pi解题后，首次state_append中Fact为117字符被拒（调用entry `c52f0c5a`，结果`d7f19176`）；第二次只缩短Fact，Decision仍120字符，被拒（`1273a954`→`617c287a`）；第三次两项均合规后成功（`62e443e9`→`b4bc51bc`，State v3）。归档state.json按既定JSONL格式解析，恰为update_goal、append_fact F1、append_decision D1三条，没有失败批次的部分/重复落库。证据T16/T23对应成功edit，T29对应config包go test成功，T30对应后续验证；来源存在性和已核对内容支持没有丢失。Window边界仍null、无积压、原生也无压缩，本现象不能归因于历史移出。官方新沙箱评分随后两边均1分、无异常，见[单题闭环报告](experiments/BOOTSTRAP_S01_REPORT_2026-10-28.md)；不把本次可恢复参数错误计成业务失败，也不放宽100字上限。
+
+原件：该run `groups/g01/harbor/solve/instance_flipt-io__flipt-c1fd7a8__d6wsj29/agent/pi/sessions/2026-10-28T11-54-33-906Z_01a1825c-ac30-71d1-a430-f6c51e4b6076.jsonl`，及同Trial的memory.tar.gz。此补充不授权插件修复或重跑失败样本。
+
 ## MW-003：Recent Window提醒被误当成State整理
 
 **状态：待讨论，暂不优化。**
