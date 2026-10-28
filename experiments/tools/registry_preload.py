@@ -25,17 +25,21 @@ ACCEPT = ('application/vnd.oci.image.index.v1+json, '
           'application/vnd.docker.distribution.manifest.v2+json')
 
 
+class PreparationError(ValueError):
+    """Only fixed, credential-free diagnostics may cross the CLI boundary."""
+
+
 def digest_hex(value):
     if not re.fullmatch(r'sha256:[0-9a-f]{64}', value):
-        raise ValueError('invalid SHA256 descriptor')
+        raise PreparationError('invalid SHA256 descriptor')
     return value.split(':')[1]
 
 
 def validate_reference(value):
     if not re.fullmatch(r'ghcr\.io/[a-z0-9._/-]+(?::[A-Za-z0-9_.-]+|@sha256:[0-9a-f]{64})', value):
-        raise ValueError('only canonical public GHCR references are supported')
+        raise PreparationError('only canonical public GHCR references are supported')
     if '..' in value.split('/') or '?' in value:
-        raise ValueError('invalid registry reference')
+        raise PreparationError('invalid registry reference')
     return value
 
 
@@ -50,17 +54,17 @@ def sha(path):
 def fetch_blob(cache, digest, size, resolve, *, workers=32, chunk_size=4194304, progress=None):
     name = digest_hex(digest)
     if type(size) is not int or size < 0 or not 1 <= workers <= 32 or chunk_size < 1:
-        raise ValueError('invalid blob preparation limits')
+        raise PreparationError('invalid blob preparation limits')
     directory = cache / 'sha256'
     directory.mkdir(parents=True, exist_ok=True)
     target = directory / name
     if target.is_symlink():
-        raise ValueError('cached blob cannot be a symlink')
+        raise PreparationError('cached blob cannot be a symlink')
     with (directory / (name + '.lock')).open('a') as lease:
         fcntl.flock(lease, fcntl.LOCK_EX)
         if target.exists():
             if target.stat().st_size != size or sha(target) != name:
-                raise ValueError('cached blob checksum or size mismatch')
+                raise PreparationError('cached blob checksum or size mismatch')
             return target
         parts = directory / (name + '.parts')
         parts.mkdir(exist_ok=True)
@@ -70,11 +74,11 @@ def fetch_blob(cache, digest, size, resolve, *, workers=32, chunk_size=4194304, 
 
         def chunk(span):
             if stopped.is_set():
-                raise ValueError('preparation cancelled after another range failed')
+                raise PreparationError('preparation cancelled after another range failed')
             start, end = span
             path = parts / f'{start:016d}.part'
             if path.is_symlink():
-                raise ValueError('part cannot be a symlink')
+                raise PreparationError('part cannot be a symlink')
             if path.is_file() and path.stat().st_size == end-start+1:
                 return path
             for attempt in range(3):
@@ -87,15 +91,15 @@ def fetch_blob(cache, digest, size, resolve, *, workers=32, chunk_size=4194304, 
                     with urllib.request.urlopen(request, timeout=30) as response, temp.open('wb') as out:
                         expected = f'bytes {start}-{end}/{size}'
                         if response.status != 206 or response.headers.get('Content-Range') != expected:
-                            raise ValueError('server did not honor exact Range')
+                            raise PreparationError('server did not honor exact Range')
                         count = 0
                         while data := response.read1(min(65536, end-start+2-count)):
                             count += len(data)
                             if stopped.is_set() or count > end-start+1 or time.monotonic()-began > 120:
-                                raise ValueError('range body exceeds size or wall limit')
+                                raise PreparationError('range body exceeds size or wall limit')
                             out.write(data)
                         if count != end-start+1:
-                            raise ValueError('truncated range body')
+                            raise PreparationError('truncated range body')
                     os.replace(temp, path)
                     return path
                 except (urllib.error.URLError, TimeoutError, OSError):
@@ -103,7 +107,7 @@ def fetch_blob(cache, digest, size, resolve, *, workers=32, chunk_size=4194304, 
                     if hasattr(resolve, 'invalidate'):
                         resolve.invalidate()
                     if attempt == 2:
-                        raise ValueError('range transport failed after three attempts') from None
+                        raise PreparationError('range transport failed after three attempts') from None
                     time.sleep(attempt+1)
                 except BaseException:
                     temp.unlink(missing_ok=True)
@@ -135,7 +139,7 @@ def fetch_blob(cache, digest, size, resolve, *, workers=32, chunk_size=4194304, 
             temp.unlink(missing_ok=True)
             for part in parts.iterdir():
                 part.unlink()
-            raise ValueError('complete blob SHA256 mismatch')
+            raise PreparationError('complete blob SHA256 mismatch')
         os.replace(temp, target)
         for part in parts.iterdir():
             part.unlink()
@@ -172,11 +176,11 @@ class Registry:
         with urllib.request.urlopen(request, timeout=30) as response:
             raw = response.read(4*1024*1024+1)
             if len(raw) > 4*1024*1024:
-                raise ValueError('manifest too large')
+                raise PreparationError('manifest too large')
             digest = 'sha256:'+hashlib.sha256(raw).hexdigest()
             expected = response.headers.get('Docker-Content-Digest', digest)
             if digest != expected or (reference.startswith('sha256:') and reference != digest):
-                raise ValueError('manifest digest mismatch')
+                raise PreparationError('manifest digest mismatch')
         return raw, digest
 
     def resolver(self, digest):
@@ -204,7 +208,7 @@ class Registry:
                             raise
                         url = urllib.parse.urljoin(url, error.headers['Location'])
                         if urllib.parse.urlparse(url).scheme != 'https':
-                            raise ValueError('insecure blob redirect') from None
+                            raise PreparationError('insecure blob redirect') from None
                         headers = {}  # Never forward registry authorization to another host.
                     self.current, self.expires = (url, headers), time.monotonic()+600
                     return self.current
@@ -216,9 +220,9 @@ def store(cache, data):
     path = cache / 'sha256' / name
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.is_symlink():
-        raise ValueError('cached metadata cannot be a symlink')
+        raise PreparationError('cached metadata cannot be a symlink')
     if path.exists() and path.read_bytes() != data:
-        raise ValueError('cached metadata corrupt')
+        raise PreparationError('cached metadata corrupt')
     if not path.exists():
         temp = path.with_suffix('.tmp')
         temp.write_bytes(data)
@@ -246,7 +250,7 @@ def write_oci(stream, reference, manifest, cache):
             name = digest_hex(digest)
             path = cache / 'sha256' / name
             if path.stat().st_size != size or sha(path) != name:
-                raise ValueError('OCI export blob not verified')
+                raise PreparationError('OCI export blob not verified')
             info = tarfile.TarInfo('blobs/sha256/'+name); info.size = size; info.mode = 0o644
             with path.open('rb') as source:
                 archive.addfile(info, source)
@@ -284,10 +288,10 @@ def main():
                    workers=args.workers, progress=progress)
     config = json.loads((args.cache/'sha256'/digest_hex(doc['config']['digest'])).read_text())
     if config['os'] != 'linux' or config['architecture'] != 'amd64':
-        raise ValueError('unexpected image platform')
+        raise PreparationError('unexpected image platform')
     receipt = {'reference': args.reference, 'registry_root': root_digest,
                'manifest': 'sha256:'+hashlib.sha256(raw).hexdigest(), 'blobs': records,
-               'model_requests': 0, 'changed_image_bytes': False}
+               'model_requests': 0, 'changed_image_bytes': False, 'tool_source_sha256': sha(Path(__file__))}
     if args.load:
         with (args.evidence/'docker-load.log').open('wb') as log:
             process = subprocess.Popen(['docker', 'load'], stdin=subprocess.PIPE, stdout=log,
@@ -296,7 +300,7 @@ def main():
                 write_oci(process.stdin, args.reference, raw, args.cache)
                 process.stdin.close()
                 if process.wait(timeout=600):
-                    raise ValueError('Docker OCI import failed; inspect local log')
+                    raise PreparationError('Docker OCI import failed; inspect local log')
             finally:
                 if process.poll() is None:
                     process.terminate()
@@ -304,11 +308,11 @@ def main():
         loaded = json.loads(subprocess.check_output(['docker','image','inspect',args.reference], text=True))[0]
         if (loaded['Architecture'] != 'amd64' or loaded['Os'] != 'linux'
                 or loaded['RootFS']['Layers'] != config['rootfs']['diff_ids']):
-            raise ValueError('imported platform or filesystem digest mismatch')
+            raise PreparationError('imported platform or filesystem digest mismatch')
         for key, value in config.get('config', {}).items():
             if (key in ('Env', 'Cmd', 'Entrypoint', 'User', 'WorkingDir', 'Labels', 'Healthcheck', 'Volumes')
                     and loaded['Config'].get(key) != value):
-                raise ValueError('imported image configuration mismatch')
+                raise PreparationError('imported image configuration mismatch')
         receipt['loaded'] = {key: loaded.get(key) for key in ('Id', 'RepoDigests', 'Os', 'Architecture')}
     (args.evidence/'receipt.json').write_text(json.dumps(receipt, indent=2)+'\n')
     print(json.dumps({'prepared': True, 'reference': args.reference, 'model_requests': 0}), flush=True)
@@ -319,5 +323,5 @@ if __name__ == '__main__':
         main()
     except Exception as error:  # noqa: BLE001 -- sanitize signed URLs in all failure paths.
         # HTTP exception text may contain a temporary signed URL: never emit it.
-        print(json.dumps({'prepared': False, 'error_type': type(error).__name__}), flush=True)
+        print(json.dumps({'prepared': False, 'error_type': type(error).__name__, 'reason': str(error) if isinstance(error, PreparationError) else None}), flush=True)
         sys.exit(1)
