@@ -27,11 +27,11 @@ docker compose version
 docker buildx version
 ```
 
-本轮虚拟机为 8 CPU、16 GiB RAM、120 GiB disk，VZ/Rosetta，关闭 SSH agent 转发和自动切换 context；仅将实验根目录挂载到虚拟机。被测容器不挂载宿主 home 或 Docker socket。amd64 和 ARM 镜像可能同时存在；执行器实际运行对应架构探针，检查磁盘并按内存降低并发，不削减官方资源。
+2026-10-28用户已批准将专用虚拟机扩为12 CPU、42 GiB RAM、240 GiB disk（此前为8/16/120），VZ/Rosetta，关闭 SSH agent 转发和自动切换 context；仅将实验根目录挂载到虚拟机。被测容器不挂载宿主 home 或 Docker socket。amd64 和 ARM 镜像可能同时存在；执行器实际运行对应架构探针，检查磁盘并按内存降低并发，不削减官方资源。
 
 ## 准备冻结输入
 
-2026-10-28 用户确认的长程专项另有 [49题逐项选择](../docs/experiments/LONG_HORIZON_49_SELECTION.md) 和 [冻结审查清单](subsets/catalogs/long-horizon-49-v1.yaml)：SWE 35、TB 14，四档7/7/14/21。它与下述旧随机smoke/baseline并列保存，尚不是CLI可执行的Subset格式；本次只选题，未构建、控制验收或付费运行。不能把旧模板count改成35/14就声称执行了这49题。
+2026-10-28 用户确认的长程专项另有 [49题逐项选择](../docs/experiments/LONG_HORIZON_49_SELECTION.md) 和 [冻结审查清单](subsets/catalogs/long-horizon-49-v1.yaml)：SWE 35、TB 14，四档7/7/14/21。它与下述旧随机smoke/baseline并列保存；清单不是schema1的Subset，但新增schema2入口`configs/long-horizon-49.yaml`直接按冻结ID/哈希执行。选题时未执行；用户随后授权完整双变体测试，整批共用20美元/48小时止损。不能把旧模板count改成35/14就声称执行了这49题。
 
 `configs/smoke.yaml` 和 `configs/baseline.yaml` 是有意不能直接运行的模板。填写完整源码提交、仓库外 npm 归档路径与 SHA256；不能使用 `latest`、短提交或占位哈希。沿用项目构建检查，使用干净提交的临时 checkout 执行 `npm pack`，不改变版本或发布 tag。执行时还逐文件比对归档与指定提交；不能把当前未提交源码冒充冻结包。
 
@@ -87,3 +87,14 @@ Agent 正常使用 Pi 默认提示和原生工具；MemWeave 使用生产入口�
 `experiment-setup.json` 分别记录缓存命中、对象摘要、独立配置和部署秒数；预检原件为 `runtime-preflight.json`。预检使用完整 Pi SDK/生产扩展加载，并实际运行本机 embedding，不发起模型推理，不能当作任务能力成绩。报告单列软件准备 Job、正式解题 Job 和整体墙钟；首次准备与缓存命中的运行需要分别解释。
 
 两个任务集分别报告。小样本、资源筛选、amd64 仿真和未触发记忆压力的限制均须保留；本地子集结果不能冒充官方榜单或证明长程记忆优势。遇到官方协议与实现冲突、平台不可靠或权限扩大，遵守设计第 3 节，先对齐重大决定，再继续受影响实现。
+
+
+## 49题混合并行Campaign（schema2）
+
+`memweave-eval validate/run configs/long-horizon-49.yaml`复用上述入口。配置包含本机已核验候选包的绝对路径，换机器须显式对齐同一归档和私有运行根。SWE每组最多5题×2变体，TB按官方资源缩小组；任务按目录固定顺序，准备、oracle/nop与双变体软件预检均通过后才运行该组模型。某题官方镜像/控制失败保留其两行blocked，其余准入题继续；公共软件/协议/凭据/观测失败全局停止。本批保持49原槽位，不自动启用候补。
+
+`groups/gNN/`包含组级任务准备、软件锁与Harbor原件。混合解题Job有两个独立ExperimentPi配置；每个Trial仍有新容器、home/config/Session/memory。SWE重放输入按变体拆分并保存原补丁SHA，再用未改动的官方PatchReplayAgent分别在新沙箱评分；不能直接把含两变体的Job交给按题号查找的官方重放器。
+
+当前活动会话使用常驻观察线程和Harbor公开生命周期hook，写`live.json`、`events.jsonl`、`observations.md`、`containers.json`。实际解题并发按agent-start/end计数，安装、评分和sidecar不计入。增量读取原生Session完整JSONL usage，保守峰时估算和Pi原生估算同时保存，不复制聊天正文。达到共享费用止损停止新推理并取消在途，整体时间尚有余额则为已采集补丁完成无模型评分；整体到期仅有界收尾。
+
+`report`离线校验原件并重建Campaign根目录的summary.json、comparison.csv、report.md，覆盖全部98行；blocked/not_run/infra/unknown不冒充官方0。总墙钟来自Campaign首尾差，不加总并行Trial时间。完整契约见[执行方案](../docs/experiments/LONG_HORIZON_49_RUN_PROPOSAL.md)。
