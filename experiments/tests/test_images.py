@@ -331,3 +331,22 @@ def test_os_path_alias_does_not_change_verifier_resolution(tmp_path, builder):
     assert images.protocol_view(alias) == images.protocol_view(source)
     record = prepare(alias, tmp_path / "run")
     images.verify_prepared_task(tmp_path / "run", record)
+
+
+def test_cached_official_digest_avoids_remote_pull(tmp_path, monkeypatch):
+    import time
+    from types import SimpleNamespace
+
+    import memweave_eval.images as module
+
+    calls = []
+    monkeypatch.setattr(module, "inspect_image", lambda ref, env: {
+        "reference": ref, "id": "sha256:abc", "platform": "linux/amd64",
+        "repo_digests": ["ghcr.io/official/tasks@sha256:def"],
+    })
+    monkeypatch.setattr(module, "_run_docker", lambda args, *a: calls.append(args))
+    module._build_image(tmp_path, SimpleNamespace(docker_image="ghcr.io/official/tasks:task",
+                        build_timeout_sec=600), "frozen:image", tmp_path/"main.log",
+                        "linux/amd64", time.monotonic()+60, {})
+    assert all("pull" not in c for c in calls)
+    assert calls[0][:2] == ["docker", "tag"]

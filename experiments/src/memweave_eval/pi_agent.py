@@ -13,6 +13,7 @@ from harbor.agents.installed.pi import Pi, PiOptions
 from harbor.agents.options import Cli
 
 from .network_probe import check_network
+from .public_archive import public_archive
 from .runtime_cache import materialize, node_download
 from .storage import file_digest
 
@@ -170,15 +171,25 @@ class ExperimentPi(Pi):
             async def build_addon(target):
                 remote = self._asset_root + "/subject.tgz"
                 await environment.upload_file(archive, remote)
+                public, receipt = public_archive(cache)
+                seed = self._asset_root + "/onnxruntime-node-1.30.0.tgz"
+                await environment.upload_file(public, seed)
+                (self.logs_dir / "public-npm-archive.json").write_text(json.dumps(receipt) + "\n")
+                installed = self._asset_root + "/production-install"
+                destination = self._asset_root + "/package"
                 await self.exec_as_agent(
                     environment,
-                    f"tar -xzf {shlex.quote(remote)} -C {shlex.quote(self._asset_root)} && "
-                    f"rm {shlex.quote(remote)} && "
-                    f"npm install --prefix {shlex.quote(self._asset_root + '/package')} "
-                    "--omit=dev --ignore-scripts --legacy-peer-deps",
+                    f"npm --offline --ignore-scripts cache add {shlex.quote(seed)} && "
+                    f"npm install --prefix {shlex.quote(installed)} {shlex.quote(remote)} "
+                    "--omit=dev --ignore-scripts --legacy-peer-deps --no-audit --no-fund && "
+                    f"mv {shlex.quote(installed + '/node_modules/@godice/memweave')} "
+                    f"{shlex.quote(destination)} && "
+                    f"mv {shlex.quote(installed + '/node_modules')} {shlex.quote(destination + '/node_modules')} && "
+                    f"rm -rf {shlex.quote(installed)} && rm {shlex.quote(seed)} {shlex.quote(remote)}",
                     timeout_sec=1800,
                 )
                 await self.pack_asset(environment, self._asset_root, "package", target)
+                return {"public_npm_archive": receipt, "install": "production tarball dependency"}
 
             await resource("addon", "package", build_addon, self._asset_root)
             # Product-owned paths/functions determine and verify embedding resources.

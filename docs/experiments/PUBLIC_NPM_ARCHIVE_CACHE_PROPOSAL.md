@@ -1,6 +1,6 @@
 # 公开npm大包归档缓存提案
 
-2026-10-28，待用户确认。只处理无模型软件准备的阻断，不改变产品包或题目。
+2026-10-29，用户已同意并授权适配、缓存及实验环境问题由执行者自行审议修复。只处理无模型软件准备的阻断，不改变产品包或题目。
 
 ## 第一部分：目的与范围
 
@@ -19,3 +19,5 @@ prepare_only的build_addon上传归档，用固定Node自带npm的offline cache 
 新旧适配器只允许这一份已批准准备下载变化及此前Node探针变化，用明确SHA对审查后保留原模型结果链。准备配方新键仍按原规则冻结，旧对象不改名、不伪造身份；完成／中断模型尝试和首次成绩不重跑，原费用／截止完整继承。
 
 验证证据（尚未接入正式框架）：独立network=none官方S05镜像中，灌入后按原URL＋SSRI恢复完全相同SHA归档；随后另一新官方镜像使用同一公开归档预热、执行原安装命令约4分钟退出0，产品LocalEmbedding实际输出384维，均无认证／模型请求，未创建新软件缓存身份。原件：仓库外analysis/long49/public-npm-archive-import/offline-feasibility-2.json与seeded-npm-full-install/result.json。首轮验证误用底层缓存父目录导致ENOTCACHED的失败记录也保留，不冒称首试即通过。
+
+2026-10-29执行细化：以正常npm消费归档方式将候选包安装为临时项目的依赖，保留omit=dev／ignore-scripts／legacy-peer-deps，随后整理为原package目录与独立node_modules。候选文件逐字保留，不解析候选自身的开发依赖、不捆绑宿主SDK；每镜像仍完整加载验收。公开tar记录仅含锁定URL／版本／SSRI／SHA及字节数，单独缓存并复核，不读取其他个人npm条目。

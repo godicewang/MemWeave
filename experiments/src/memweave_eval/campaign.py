@@ -80,6 +80,8 @@ class Campaign(StrictModel):
     bootstrap_parent: Path | None = None
     completed_parent: Path | None = None
     phase: Literal["bootstrap", "full"] = "full"
+    completion_mode: Literal["window", "all_tasks"] = "window"
+    unlimited_cost: bool = False
 
     @model_validator(mode="after")
     def consistent(self):

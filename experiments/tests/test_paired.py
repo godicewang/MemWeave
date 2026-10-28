@@ -137,7 +137,7 @@ def test_bootstrap_import_keeps_cost_deadline_and_rejects_unknown_cost(tmp_path,
                 "experiments/src/memweave_eval/" + n: file_digest(
                     REPOSITORY / "experiments/src/memweave_eval" / n
                 )
-                for n in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py", "network_probe.py")
+                for n in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py", "network_probe.py", "public_archive.py")
             },
         },
     )
@@ -279,7 +279,7 @@ def test_completed_parent_keeps_all_started_pairs_and_first_zero_scores(tmp_path
         "implementation_files": {
             "experiments/src/memweave_eval/" + n: file_digest(
                 REPOSITORY / "experiments/src/memweave_eval" / n
-            ) for n in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py", "network_probe.py")
+            ) for n in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py", "network_probe.py", "public_archive.py")
         },
     })
     state = {
@@ -337,6 +337,28 @@ def test_completed_parent_keeps_all_started_pairs_and_first_zero_scores(tmp_path
     info, imported = completed_info(s, catalog)
     assert info["retained_interrupted_tasks"] == ["second"]
     assert len(imported) == 4
+    s.completion_mode = "all_tasks"
+    info, imported = completed_info(s, catalog)
+    assert len(imported) == 2
+    assert len(info["historical_attempts"]) == 2
+    assert info["known_cost_usd"] == 0.4
+
+
+def test_all_tasks_window_has_no_deadline_and_keeps_origin(tmp_path):
+    from datetime import UTC, datetime
+
+    from test_campaign import spec
+
+    from memweave_eval.paired import campaign_window
+
+    s = spec(tmp_path)
+    old = {"window_started_at": "2026-10-01T00:00:00+00:00",
+           "window_deadline_at": "2026-10-02T00:00:00+00:00"}
+    with pytest.raises(TimeoutError):
+        campaign_window(s, old, datetime(2026, 10, 29, tzinfo=UTC))
+    s.completion_mode = "all_tasks"
+    start, end, deadline = campaign_window(s, old, datetime(2026, 10, 29, tzinfo=UTC))
+    assert start == old["window_started_at"] and end is None and deadline == float("inf")
 
 
 def test_zero_model_proof_requires_exact_pre_pi_failure(tmp_path):
@@ -382,13 +404,14 @@ def test_only_approved_probe_adapter_change_can_cross_lineage(tmp_path):
 
     files = {"experiments/src/memweave_eval/" + n: file_digest(
         REPOSITORY / "experiments/src/memweave_eval" / n
-    ) for n in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py", "network_probe.py")}
+    ) for n in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py", "network_probe.py", "public_archive.py")}
     assert verify_adapters({"implementation_files": files}) is None
     files.pop("experiments/src/memweave_eval/network_probe.py")
+    files.pop("experiments/src/memweave_eval/public_archive.py")
     files["experiments/src/memweave_eval/pi_agent.py"] = (
         "67b9481b7e7b9cc08e00b91dfd1855e10ca6825df3ed60c131f85996d79f0192"
     )
-    assert verify_adapters({"implementation_files": files})["reason"] == "approved Node probe only"
+    assert verify_adapters({"implementation_files": files})["reason"] == "approved preparation and Node probe"
     files["experiments/src/memweave_eval/pi_agent.py"] = "0" * 64
     with pytest.raises(ValueError, match="adapter changed"):
         verify_adapters({"implementation_files": files})

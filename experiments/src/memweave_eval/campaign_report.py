@@ -240,6 +240,7 @@ def generate_campaign_report(root: Path):
         rows=rows,
         blocked_attempt_rows=blocked_attempt_rows,
         pre_pi_failures=(lineage or {}).get("pre_pi_failures", []),
+        historical_attempts=(lineage or {}).get("historical_attempts", []),
         invalid_evidence=invalid,
         overall_wall_seconds=duration(
             dict(state, started_at=state.get("window_started_at", state.get("started_at")))

@@ -80,9 +80,21 @@ def _build_image(directory, config, reference, log, platform, deadline, env) -> 
     timeout = min(config.build_timeout_sec, remaining)
     try:
         if config.docker_image:
-            _run_docker(
-                ["docker", "pull", "--platform", platform, config.docker_image], log, timeout, env
-            )
+            cached = None
+            try:
+                found = inspect_image(config.docker_image, env)
+                repository = config.docker_image.split("@", 1)[0].rsplit(":", 1)[0]
+                if (found["platform"] == platform and
+                        any(d.startswith(repository + "@") for d in found["repo_digests"])):
+                    cached = found
+            except subprocess.CalledProcessError:
+                pass
+            if cached:
+                log.write_text(json.dumps({"reuse_official_digest": cached}) + "\n")
+            else:
+                _run_docker(
+                    ["docker", "pull", "--platform", platform, config.docker_image], log, timeout, env
+                )
             _run_docker(
                 ["docker", "tag", config.docker_image, reference],
                 log,

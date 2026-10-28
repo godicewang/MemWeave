@@ -239,7 +239,12 @@ def completed_info(spec, catalog):
         if session.relative_to(parent).parts[1] not in groups:
             raise ValueError("unregistered started model Session")
     cost = summary["estimated_known_cost_usd"]
-    amounts = [r.get("peak_estimated_cost_usd") for r in rows]
+    history = list(summary.get("historical_attempts", []))
+    financial = {}
+    for row in rows + history:
+        source = Path(row["solve_source"])
+        financial[(row["task_id"], row["variant_id"], str(source if source.is_absolute() else parent / source))] = row
+    amounts = [r.get("peak_estimated_cost_usd") for r in financial.values()]
     if (
         type(cost) not in (int, float) or not math.isfinite(cost) or cost < 0
         or any(type(c) not in (int, float) or not math.isfinite(c) or c < 0 for c in amounts)
@@ -247,20 +252,38 @@ def completed_info(spec, catalog):
         or not math.isclose(state["estimated_known_cost_usd"], cost, abs_tol=1e-9)
     ):
         raise ValueError("completed parent cost is unknown or unaccounted")
-    if spec.limits.max_cost_usd > lock["config"]["limits"]["max_cost_usd"]:
+    if not spec.unlimited_cost and spec.limits.max_cost_usd > lock["config"]["limits"]["max_cost_usd"]:
         raise ValueError("cannot enlarge original campaign allowance")
-    if cost >= spec.limits.max_cost_usd:
+    if not spec.unlimited_cost and cost >= spec.limits.max_cost_usd:
         raise TimeoutError("completed parent has exhausted the shared budget")
     blocks = {
         f["task_id"]: dict(f, inherited_from=str(parent))
         for f in state.get("admission_failures", [])
         if f["phase"] in ("official_image", "official_controls")
     }
+    if spec.completion_mode == "all_tasks":
+        for row in rows:
+            if row["task_id"] in interrupted:
+                record = dict(row, source_run_dir=row.get("source_run_dir", str(parent)),
+                              origin_run_id=row.get("origin_run_id", lock.get("run_id")),
+                              retained_interrupted=True, comparison_eligible=False)
+                for field in ("solve_source", "score_source"):
+                    if record.get(field):
+                        record[field] = str(parent / record[field])
+                history.append(record)
+        rows = [r for r in rows if r["task_id"] not in interrupted]
+        keys = {(r["task_id"], r["variant_id"]) for r in rows}
+        interrupted = []
+        # Keep an already chosen reserve binding; re-admit other image/control failures.
+        replaced = {t for t, a in state["tasks"].items()
+                    if a.get("actual_task_id") and a["actual_task_id"] != t}
+        blocks = {t: b for t, b in blocks.items() if t in replaced}
     return {
         "kind": "completed_pairs", "parent": str(parent), "known_cost_usd": cost,
         "adapter_equivalence": equivalence,
         "included_keys": [list(k) for k in sorted(keys)], "blocked_admissions": blocks,
         "retained_interrupted_tasks": interrupted,
+        "historical_attempts": list({r["solve_source"]: r for r in history}.values()),
         "pre_pi_failures": [r for r in candidates if r["task_id"] in zero],
         "window_started_at": state["window_started_at"],
         "window_deadline_at": state["window_deadline_at"],
@@ -297,22 +320,34 @@ def pre_pi_failure(parent, row, adapter_sha):
 def verify_adapters(lock):
     old = lock["implementation_files"]
     base = "experiments/src/memweave_eval/"
+    names = ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py",
+             "network_probe.py", "public_archive.py")
+    current = {base+n: file_digest(REPOSITORY/(base+n)) for n in names}
+    if all(old.get(path) == digest for path, digest in current.items()):
+        return None
     legacy = "67b9481b7e7b9cc08e00b91dfd1855e10ca6825df3ed60c131f85996d79f0192"
-    replacement = "2599b4fb16c93592eab936942c0ddd7e177ed13eb047d69fe40e745dd0954eed"
+    probe = "2599b4fb16c93592eab936942c0ddd7e177ed13eb047d69fe40e745dd0954eed"
+    new_pi = "551512dc149c519954a9cbf45394fdc72f6c979552006ad7f1bb7214e37442f6"
+    old_image = "7ffc3eacce8481e584f2fa20b49b00e5fcf1bfca5ac8cc0fc901b0daeaf3a1a1"
+    new_image = "cd7e5ceecde76b5bd2b4df91f423ff72ff41d5b14117b54b520d9cf0bf90b3f5"
     helper = "57a62831b10be9fc29ac7683a225b82f8c92e3585513355769fddc66a2b8aa4b"
-    migration = (
-        old.get(base + "pi_agent.py") == legacy
-        and file_digest(REPOSITORY / (base + "pi_agent.py")) == replacement
-        and old.get(base + "network_probe.py") is None
-        and file_digest(REPOSITORY / (base + "network_probe.py")) == helper
+    public = "c9f479fb64c2aaf821c794113181cee395b2b5844f609d138d3e6a4521bf59be"
+    approved = (
+        old.get(base+"pi_agent.py") in (legacy, probe)
+        and current[base+"pi_agent.py"] == new_pi
+        and old.get(base+"images.py") in (old_image, new_image)
+        and current[base+"images.py"] == new_image
+        and old.get(base+"network_probe.py") == (None if old.get(base+"pi_agent.py") == legacy else helper)
+        and current[base+"network_probe.py"] == helper
+        and old.get(base+"public_archive.py") is None
+        and current[base+"public_archive.py"] == public
+        and all(old.get(base+n) == current[base+n] for n in ("runtime_cache.py", "runner.py"))
     )
-    for name in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py", "network_probe.py"):
-        if migration and name in ("pi_agent.py", "network_probe.py"):
-            continue
-        if old.get(base + name) != file_digest(REPOSITORY / (base + name)):
-            raise ValueError("Pi/protocol adapter changed since completed phase: " + name)
-    return {"reason": "approved Node probe only", "old_pi_sha256": legacy,
-            "new_pi_sha256": replacement, "probe_sha256": helper} if migration else None
+    if not approved:
+        changed = [n for n in names if old.get(base+n) != current[base+n]]
+        raise ValueError("Pi/protocol adapter changed since completed phase: " + ",".join(changed))
+    return {"reason": "approved preparation and Node probe", "approval": "user 2026-10-29",
+            "old": {base+n: old.get(base+n) for n in names}, "current": current}
 
 
 def software_cached(spec, images):
@@ -415,7 +450,7 @@ def run_pairs(spec):
     completed = {r["task_id"] for r in old_rows}
     slots = [r for r in catalog["selected"] if r["task_id"] not in completed]
     inherited_cost = (inherited or {}).get("known_cost_usd", 0)
-    budget = spec.limits.max_cost_usd - inherited_cost
+    budget = math.inf if spec.unlimited_cost else spec.limits.max_cost_usd - inherited_cost
     spec.root.mkdir(parents=True, exist_ok=True, mode=0o700)
     with (spec.root / ".run.lock").open("a") as lease:
         try:
@@ -423,18 +458,7 @@ def run_pairs(spec):
         except BlockingIOError as exc:
             raise ValueError("another experiment is active") from exc
         now = datetime.now(UTC)
-        start = (inherited or preflight or {}).get("window_started_at", now.isoformat())
-        window_end = (inherited or preflight or {}).get(
-            "window_deadline_at",
-            (now + timedelta(seconds=spec.limits.max_elapsed_seconds)).isoformat(),
-        )
-        remaining = min(
-            spec.limits.max_elapsed_seconds,
-            (datetime.fromisoformat(window_end) - now).total_seconds(),
-        )
-        if remaining <= 0:
-            raise TimeoutError("original window has ended")
-        deadline = time.monotonic() + remaining
+        start, window_end, deadline = campaign_window(spec, inherited or preflight or {}, now)
         run_id = now.strftime("%Y%m%dT%H%M%SZ-") + uuid.uuid4().hex[:10]
         root = spec.root / "runs" / run_id
         root.mkdir(parents=True, mode=0o700)
@@ -452,7 +476,7 @@ def run_pairs(spec):
             "window_started_at": start,
             "window_deadline_at": window_end,
             "inherited_model_cost_usd": inherited_cost,
-            "remaining_model_budget_usd": budget,
+            "remaining_model_budget_usd": budget if math.isfinite(budget) else None,
         }
         atomic_json(root / "run.json", state)
         atomic_json(
@@ -478,7 +502,7 @@ def run_pairs(spec):
                     "unit": "USD/million tokens",
                     "basis": "conservative peak estimate, not billed",
                     "source": "https://api-docs.deepseek.com/quick_start/pricing/",
-                    "checked_on": "2026-10-28",
+                    "checked_on": "2026-10-29",
                 },
             },
             immutable=True,
@@ -648,6 +672,20 @@ def run_pairs(spec):
 
             generate_campaign_report(root)
         return root
+
+
+def campaign_window(spec, inherited, now):
+    start = inherited.get("window_started_at", now.isoformat())
+    if spec.completion_mode == "all_tasks":
+        return start, None, math.inf
+    end = inherited.get("window_deadline_at") or (
+        now + timedelta(seconds=spec.limits.max_elapsed_seconds)
+    ).isoformat()
+    remaining = min(spec.limits.max_elapsed_seconds,
+                    (datetime.fromisoformat(end) - now).total_seconds())
+    if remaining <= 0:
+        raise TimeoutError("original window has ended")
+    return start, end, time.monotonic() + remaining
 
 
 def _pair(
