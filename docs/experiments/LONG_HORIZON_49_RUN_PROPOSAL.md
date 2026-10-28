@@ -222,3 +222,13 @@ S21缓存的首次离线导入验证暴露Docker containerd的身份口径：Id�
 204027阶段21:19 UTC因docker ps全JSON查询返回snapshotter.Usage/lstat ENOENT而保护性关闭；Docker随后的普通查询正常，VM有约40GiB available、磁盘约100GiB空闲，没有本次VM OOM证据。上游已记录同一问题：全字段JSON隐式请求可写层Size，临时文件删除与计量走访相遇可导致整次列表失败（[Moby #53920](https://github.com/moby/moby/issues/53920)，其说明也给出显式size=false的调用方规避方式）。
 
 按环境自主修复授权，仅在现有观察命令加--size=false；保留JSON结构、ID／标签／状态等元数据和15秒频率，Size不再作为实时测量。资源准入仍用原CPU／内存／VM文件系统余量，Session用量观察及其他Docker／解析错误仍失败停止，不用错误冒充空列表。先增测试再修改；以无模型文件增删容器验证旧调用与修复调用，记录失败率。所有正常首分、S22官方0及费用继承，S14插件／S23两侧正常原补丁只补缺失首次评分，S14原生基础设施取消则保留历史后补齐；不重启VM、不改模型／候选／官方任务或评分协议。
+
+§19有限无模型软件预热继续按小批扩至S23–S25：原index身份验收通过且正式组尚未开始时才执行，每次仍一个0.25 CPU／1GiB容器，未带认证，不调用模型，不替代正式控制／双侧准入。后续S26–S35仍先仅主机blob预取；是否导入按实际磁盘余量和在途任务判断。本批预热与付费阶段重叠须记录，不纳入真实解题并发。
+
+### 24 部分题对复用原始Dockerfile构建身份
+
+46b54b48d8阶段无新模型调用即被身份检查阻断：T07各层均命中缓存、运行manifest与config摘要和旧日志相同，但BuildKit每次导出新的attestation，使index／Docker Id变化。不得放宽已确认的两侧原镜像一致要求。按环境自主修复授权，部分题对从已哈希核验的原group lock读取preparations；先核对完整任务源、平台、每个角色的官方Dockerfile／context摘要、来源和不可变image Id，再复用原图，只重设本实验冻结别名，不重新build。所有角色均先校验通过才设标签；缺原图／上下文变化仍阻断，不以近似重建替换。正式oracle／nop、双侧软件检查和独立实例仍保留。
+
+T07旧index虽已不在Docker image列表，原blob仍在专用VM的containerd内容目录。仅只读导出原index与其递归描述符，逐blob核对SHA／大小，制作仓库外OCI归档；用Docker load恢复，断言Id与旧group lock完全一致。不得直接修改containerd数据库或内容，不从解过题容器导出模板，不修改／补造attestation。若任何原blob缺失则保留阻断并报告，不能悄悄换新图。归档SHA、源group lock及旧build日志摘要、原件路径和恢复回执全部保存。该归档可供以后精确恢复，不算新的能力样本。
+
+实现只增prepare_task内部可选冻结准备记录及题对续跑接线，无新用户CLI参数，不改Pi、模型、工具、Task／State／Window持久化。先测完整角色／上下文／平台／Id变化拒绝和禁止build，再做真实T07两角色恢复验证。允许实验适配器等价表精确列出此次旧／新images.py摘要，其他未审查改变仍拒绝续跑。无模型关闭阶段的费用与全部53条首次评分／3条待首评继续继承。

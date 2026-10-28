@@ -302,3 +302,9 @@ MW-001至MW-003的首批来源：[多场景评估报告](PLUGIN_EFFECT_EVALUATIO
 **MW-013场景C（二进制标记与官方重放回退）：** 当前Pro捕获的git diff对上述二进制只输出“Binary files … differ”，没有可恢复的binary payload。S19插件的首次官方replay.json记录git apply／3way先报二进制错误，官方既有patch --fuzz=3回退后整体apply_rc=0，随后官方28／28。不能把哈希交接绑定通过表述成全部工作区逐字节复原，也不能仅凭中间stderr就宣布官方成绩无效。
 
 **本次业务文本的独立核验：** 在相同原始镜像、无网络／模型的新诊断容器按原样官方回退命令应用原补丁，再从同一初始git状态仅排除core标记、精确git apply两份业务文本，helper与hook逐个SHA完全相同；回退产生的core是0字节占位，业务代码没有被回退改写。诊断s19-replay-diagnostic-20261029/replay-comparison.json，原评分／补丁均未改。扫描整个当前谱系只发现4份含二进制标记的原始补丁，另三份为RS01两侧Redis rdb及S05原生core；原件清单primary-binary-patch-audit.json。它们是运行残留，不是所选PR要求的二进制交付；不在本批中静默清洗、补造原二进制或择优重评。该格式边界属于实验限制，未来若任务本身要求二进制修改，必须先明确完整捕获与重放的准入；本次S19仅对已核对的两份业务文本给出保真结论。
+
+**MW-013场景D（S22官方测试的位置参数假设，2026-10-29）：** Ansible委派迁移首分原生1／插件0；要求的20项原生全过、插件19过，仅`test_get_delegated_vars_legacy_path_emits_deprecation_warning`失败。测试先确认deprecated确实调用一次，随后直接读`call_args[0][0]`而IndexError。插件使用`msg=...`，原生使用位置消息；原镜像真实Display.deprecated的签名允许msg关键字，公开任务要求每次旧helper入口都提示、包含get_vars／TaskExecutor，没有为此提示规定位置参数。不可将这个0分描述为“插件漏做警告”或已证明业务不正确。
+
+无模型语义诊断分别将原样补丁应用于同一原始镜像，调用真实VariableManager、DataLoader、InventoryManager、Task及Display；只在调用前用真实签名bind记录消息后继续调用真实方法。每侧连续调用旧helper三次，均完成并收到三次合法提示。原生位置消息、插件关键字消息的差异稳定；没有修改测试、补丁或官方首分，也不能据此证明其余隐藏行为全正确。证据：仓库外`analysis/long49/s22-warning-diagnostic-20261029/`，含原件／补丁／镜像／诊断源码SHA。官方0仍进入冻结对照，报告另列测试兼容性疑点，避免把测试消费者的参数表达假设当作确定的插件能力差距。
+
+**MW-013C补充核验（2026-10-29）：** 其余三份二进制标记补丁也已恢复原始registry digest，在无网络、无模型的新容器核对。RS01原生8份业务文本、插件4份业务文本在官方fallback（整体rc=1）和干净精确文本应用后逐文件SHA一致；S05原生2份亦一致（fallback rc=0）。因此本批4份此类补丁的业务文本均通过保真核验，二进制原内容仍不可重建；不把回退非零自动等同于业务补丁未落地，不改首分。证据：`analysis/long49/remaining-binary-replay-diagnostic-20261029/`。

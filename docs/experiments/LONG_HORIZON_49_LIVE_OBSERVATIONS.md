@@ -430,3 +430,13 @@
 - 2026-10-29 05:18:51 CST 人工复核：模型返回647，在途{'pi-native': 1}，峰值5，累计估算$4.318621，停止原因None。
 
 - 2026-10-29 05:20:16 CST 人工复核：S14:solving→regrading；S23:solving→regrading；T08:preparing→software_preflight；模型返回647，在途{}，峰值5，累计估算$4.318621，停止原因ValueError: continuous observation failed: CalledProcessError: Command '['docker', 'ps', '--format', '{{json .}}']' returned non-zero exit status 1.。
+
+- 2026-10-29 05:27:22 CST 人工复核：模型返回0，在途{}，峰值0，累计估算$4.318621，停止原因None。
+
+- 2026-10-29 05:27:58 CST 人工复核：S18:未开始→preparing；T07:未开始→preparing；S14:未开始→preparing；模型返回0，在途{}，峰值0，累计估算$4.318621，停止原因None。
+
+- 2026-10-29 05:28 CST 续跑审计：已修复Docker观察Size走访竞争，旧调用无模型竞争测试失败2/30，显式size=false成功30/30；139项实验检查及Ruff通过，生产候选未改。续跑46b54b48d8保留53条首分、3条原补丁仅补首评、42侧待真实解题，历史10条不覆盖，累计$4.318621224。
+- S22首分1/0的唯一失败是官方mock只读位置消息；真实Display允许msg关键字。两份原补丁在原镜像真实helper及真实Display各调用3次均成功发出提示。官方0保留，单列测试兼容性疑点。
+- 二进制标记补丁剩余RS01双方／S05原生的业务文本保真已完成：官方回退与干净文本应用逐文件SHA一致；所有首分与原始二进制缺失限制保留。
+
+- 2026-10-29 05:31:44 CST 人工复核：S18:preparing→software_preflight；S23:未开始→preparing；模型返回0，在途{}，峰值0，累计估算$4.318621，停止原因ValueError: partial continuation changed the original task image。
