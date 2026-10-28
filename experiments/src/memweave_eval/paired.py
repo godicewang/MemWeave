@@ -264,6 +264,24 @@ def software_cached(spec, images):
     )
 
 
+def software_writer_busy(spec, images):
+    plan = create_plan(spec, images)
+    for entry in plan["entries"].values():
+        for kind in ("base", "addon", "models"):
+            key = entry[kind]["key"]
+            cache = Path(plan["cache"])
+            if (cache / key / "manifest.json").is_file():
+                continue
+            path = cache / (key + ".lock")
+            if path.exists():
+                with path.open("a") as writer:
+                    try:
+                        fcntl.flock(writer, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    except BlockingIOError:
+                        return True
+    return False
+
+
 def prepare_pair_runtimes(spec, group, paths, images, cold_lock, check, execute, deadline):
     check()
     if software_cached(spec, images):
@@ -272,6 +290,9 @@ def prepare_pair_runtimes(spec, group, paths, images, cold_lock, check, execute,
         check()
     try:
         check()
+        while software_writer_busy(spec, images):
+            check()
+            time.sleep(0.5)
         return prepare_runtimes(spec, group, paths, images, {"jobs": {}}, execute, deadline)
     finally:
         cold_lock.release()

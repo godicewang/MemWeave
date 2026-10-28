@@ -77,6 +77,7 @@ def test_cold_preflight_serializes_and_checks_stop(tmp_path, monkeypatch):
     import memweave_eval.paired as module
 
     monkeypatch.setattr(module, "software_cached", lambda *_: False)
+    monkeypatch.setattr(module, "software_writer_busy", lambda *_: False)
     lock = threading.Lock()
     calls = []
 
@@ -99,6 +100,21 @@ def test_cold_preflight_serializes_and_checks_stop(tmp_path, monkeypatch):
         module.prepare_pair_runtimes(None, tmp_path, [], {}, lock, stop, lambda: True, 1)
     lock.release()
     assert calls == [True]
+
+
+def test_external_preparation_writer_is_observed_before_start(tmp_path, monkeypatch):
+    import fcntl
+
+    import memweave_eval.paired as module
+
+    plan = {"cache": str(tmp_path), "entries": {"image": {
+        k: {"key": k} for k in ("base", "addon", "models")
+    }}}
+    monkeypatch.setattr(module, "create_plan", lambda *_: plan)
+    with (tmp_path / "addon.lock").open("a") as writer:
+        fcntl.flock(writer, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        assert module.software_writer_busy(None, {})
+    assert not module.software_writer_busy(None, {})
 
 
 def test_bootstrap_import_keeps_cost_deadline_and_rejects_unknown_cost(tmp_path, monkeypatch):
