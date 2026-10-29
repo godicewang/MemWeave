@@ -965,3 +965,17 @@
 - 2026-10-29 12:49:43 CST 人工复核：模型返回1500，在途{}，峰值7，累计估算$8.311207，停止原因None。
 
 - 2026-10-29 12:50:34 CST 人工复核：T12:solving→finished；模型返回1500，在途{}，峰值7，累计估算$8.311207，停止原因None。
+
+- 2026-10-29 12:51:52 CST 人工复核：S35:blocked→preparing；S34:blocked→preparing；模型返回0，在途{}，峰值0，累计估算$8.311207，停止原因None。
+
+- 2026-10-29 12:55:45 CST 人工复核：S35:preparing→software_preflight；S34:preparing→software_preflight；模型返回0，在途{}，峰值0，累计估算$8.311207，停止原因None。
+
+- 2026-10-29T04:58 UTC 续跑准入审计：S34／S35原题均official oracle1／nop0、双侧完整SDK预检通过，现4个真实Pi活跃。S35并非AES已恢复：同源／同图／同parser，仍两个256(expected128)bailout；官方解析器因“All 8093 assertions passed”直接固定108项PASSED，忽略bails，旧阶段另一个超时断言才使它返回0。原解析器0模型重放确认，记录MW-013O及评分限制，不改分／换题／追发提示。已批准候补未消费，RS05仅公共图字节预取完成、0控制／模型。
+
+- 2026-10-29 12:56:29 CST 人工复核：S35:software_preflight→solving；S34:software_preflight→solving；模型返回0，在途{'pi-native': 1, 'pi-memweave': 1}，峰值2，累计估算$8.311207，停止原因None。
+
+- 2026-10-29 12:56:44 CST 人工复核：模型返回17，在途{'pi-native': 2, 'pi-memweave': 2}，峰值4，累计估算$8.331693，停止原因None。
+
+- 2026-10-29 12:57:20 CST 人工复核：模型返回66，在途{'pi-native': 2, 'pi-memweave': 2}，峰值4，累计估算$8.378764，停止原因None。
+
+- 2026-10-29 12:57:52 CST 人工复核：模型返回95，在途{'pi-native': 2, 'pi-memweave': 2}，峰值4，累计估算$8.403306，停止原因None。
