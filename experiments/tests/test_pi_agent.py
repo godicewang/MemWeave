@@ -1,6 +1,56 @@
 import asyncio
 
+import pytest
+
 from memweave_eval.pi_agent import ExperimentPi, PiExperimentOptions
+
+
+@pytest.mark.parametrize("default_user,identity", [(None, "65534\n65534\n"), ("named", "1000\n1001\n"), (None, "0\n0\n")])
+def test_private_file_uses_actual_execution_identity(tmp_path, default_user, identity):
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    agent = ExperimentPi(version="1.4.0", logs_dir=tmp_path, model_name="deepseek/deepseek-flash",
+                         node_version="24.22.0", variant="pi-native", package_path="/tmp/a",
+                         package_sha256="a" * 64, auth_path="/tmp/auth", protocol="tb4")
+    calls, uploads = [], []
+
+    class Environment:
+        async def upload_file(self, source, target):
+            assert source.stat().st_mode & 0o777 == 0o600
+            uploads.append((source.read_text(), target))
+
+    environment = Environment()
+    environment.default_user = default_user
+
+    async def as_agent(*args, **kwargs):
+        assert args[-1] == "id -u && id -g"
+        return SimpleNamespace(stdout=identity, return_code=0)
+
+    async def as_root(*args, **kwargs):
+        calls.append(args[-1])
+
+    with patch.object(agent, "exec_as_agent", as_agent), patch.object(agent, "exec_as_root", as_root):
+        asyncio.run(agent.upload_private(environment, "private fixture", "/tmp/a file.json"))
+    uid, gid = identity.splitlines()
+    assert calls == [f"chown {uid}:{gid} '/tmp/a file.json' && chmod 600 '/tmp/a file.json'"]
+    assert uploads == [("private fixture", "/tmp/a file.json")]
+    assert "private fixture" not in calls[0]
+
+
+@pytest.mark.parametrize("identity", ["nobody\n65534\n", "1;touch /tmp/x\n1\n", "1\n", "1\n2\n3\n"])
+def test_private_file_rejects_unexpected_identity_before_upload(tmp_path, identity):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, patch
+
+    agent = ExperimentPi(version="1.4.0", logs_dir=tmp_path, model_name="deepseek/deepseek-flash",
+                         node_version="24.22.0", variant="pi-native", package_path="/tmp/a",
+                         package_sha256="a" * 64, auth_path="/tmp/auth", protocol="tb4")
+    environment = SimpleNamespace(default_user=None, upload_file=AsyncMock())
+    with patch.object(agent, "exec_as_agent", AsyncMock(return_value=SimpleNamespace(stdout=identity))):
+        with pytest.raises(ValueError, match="identity"):
+            asyncio.run(agent.upload_private(environment, "private fixture", "/tmp/file"))
+    environment.upload_file.assert_not_called()
 
 
 def test_wrapper_keeps_native_pi_defaults_and_full_memweave_entry():

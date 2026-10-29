@@ -6,6 +6,36 @@ import pytest
 from memweave_eval.paired import ResourcePool
 
 
+def test_instance_quota_blocks_sixth_pair_even_when_hardware_fits():
+    pool = ResourcePool((100, 100, 100))
+    for _ in range(5):
+        pool.acquire((1, 1, 1), lambda: False)
+    entered, cancel = threading.Event(), threading.Event()
+
+    def sixth():
+        try:
+            pool.acquire((1, 1, 1), cancel.is_set)
+            entered.set()
+            pool.release((1, 1, 1))
+        except TimeoutError:
+            pass
+
+    thread = threading.Thread(target=sixth)
+    thread.start()
+    try:
+        assert not entered.wait(0.1), "sixth pair would exceed ten actual solve instances"
+        pool.release((1, 1, 1))
+        assert entered.wait(1)
+    finally:
+        cancel.set()
+        with pool.condition:
+            pool.condition.notify_all()
+        thread.join(timeout=2)
+        for _ in range(4):
+            pool.release((1, 1, 1))
+    assert pool.used == [0, 0, 0] and not pool.waiting
+
+
 @pytest.mark.parametrize("axis", [0, 1, 2])
 def test_fitting_pair_can_pass_blocked_head_without_overbooking(axis):
     pool = ResourcePool((10, 10, 10))
