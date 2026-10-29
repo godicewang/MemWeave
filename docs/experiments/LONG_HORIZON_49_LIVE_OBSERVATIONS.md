@@ -664,3 +664,43 @@
 - 2026-10-29 08:32 CST 人工维护观察：160项开发检查与Ruff通过，2ccb732已形成代码检查点；真实T12双侧完整SDK通过，T11官方产物26文件完整重放／再收集SHA相等。恢复只读核验73侧有效首分＋T11插件score_only，24侧未做模型待后续，累计6.266888844美元不变。十分钟时钟采样仍在进行；所有诊断0模型，不占真实解题并发。T14原提交Event调度探针3次分别复现原生同键旧值覆盖、插件无后续物理进度，原评分不变。
 
 - 2026-10-29 08:34:30 CST 维护结束：ARM／amd64各600秒带2 CPU负载均0次墙钟倒退；chrony选源、guestagent无SYS_TIME，64个镜像身份集合相同。160项开发检查、完整T12 SDK及T11 26文件重放验收已通过。允许下一阶段只补24侧模型＋1侧评分，73侧有效首分与全部费用继承。
+
+- 2026-10-29 08:35:00 CST 人工复核：模型返回0，在途{}，峰值0，累计估算$6.266889，停止原因None。
+
+- 2026-10-29 08:35:18 CST 人工复核：S33:未开始→preparing；S31:未开始→preparing；S27:未开始→preparing；T11:未开始→preparing；S32:未开始→preparing；模型返回0，在途{}，峰值0，累计估算$6.266889，停止原因None。
+
+- 2026-10-29 08:36:52 CST 人工复核：S33:preparing→software_preflight；模型返回0，在途{}，峰值0，累计估算$6.266889，停止原因None。
+
+- 2026-10-29 08:38:26 CST 人工复核：S33:software_preflight→solving；S27:preparing→software_preflight；模型返回8，在途{'pi-native': 1, 'pi-memweave': 1}，峰值2，累计估算$6.279642，停止原因None。
+
+- 2026-10-29 08:40:02 CST 人工复核：S31:preparing→solving；T11:preparing→regrading；模型返回56，在途{'pi-native': 1}，峰值2，累计估算$6.312877，停止原因None。
+
+- 2026-10-29 08:41:16 CST 人工复核：S27:software_preflight→solving；T11:regrading→finished；S32:preparing→software_preflight；S34:未开始→preparing；模型返回107，在途{'pi-native': 3, 'pi-memweave': 2}，峰值5，累计估算$6.366793，停止原因None。
+
+- 2026-10-29 08:42:13 CST 人工复核：模型返回118，在途{'pi-native': 3, 'pi-memweave': 2}，峰值5，累计估算$6.379311，停止原因None。
+
+- 2026-10-29 08:42:49 CST 人工复核：模型返回121，在途{'pi-native': 3, 'pi-memweave': 2}，峰值5，累计估算$6.380775，停止原因None。
+
+- 2026-10-29 08:43:24 CST 人工复核：模型返回123，在途{'pi-native': 3, 'pi-memweave': 2}，峰值5，累计估算$6.381628，停止原因None。
+
+- 2026-10-29 08:43:49 CST 人工复核：S32:software_preflight→solving；模型返回131，在途{'pi-native': 4, 'pi-memweave': 3}，峰值7，累计估算$6.385664，停止原因None。
+
+- 2026-10-29 08:44:15 CST 人工复核：S34:preparing→blocked；S29:未开始→preparing；模型返回145，在途{'pi-native': 3, 'pi-memweave': 3}，峰值7，累计估算$6.400968，停止原因None。
+
+- 2026-10-29 08:45:15 CST 人工复核：S31:solving→regrading；模型返回183，在途{'pi-native': 3, 'pi-memweave': 2}，峰值7，累计估算$6.435682，停止原因None。
+
+- 2026-10-29 08:46:12 CST 人工复核：模型返回236，在途{'pi-native': 3, 'pi-memweave': 2}，峰值7，累计估算$6.482087，停止原因None。
+
+- 2026-10-29 08:46:44 CST 人工复核：S33:solving→regrading；模型返回270，在途{'pi-native': 2, 'pi-memweave': 2}，峰值7，累计估算$6.506986，停止原因None。
+
+- 2026-10-29 08:47:26 CST 人工复核：S31:regrading→finished；S28:未开始→preparing；模型返回278，在途{'pi-memweave': 2, 'pi-native': 1}，峰值7，累计估算$6.512559，停止原因None。
+
+- 2026-10-29 08:48:40 CST 人工复核：S33:regrading→finished；S30:未开始→preparing；模型返回283，在途{'pi-memweave': 2, 'pi-native': 1}，峰值7，累计估算$6.516588，停止原因None。
+
+- 2026-10-29 08:49:39 CST 人工复核：模型返回285，在途{'pi-memweave': 1, 'pi-native': 1}，峰值7，累计估算$6.517836，停止原因None。
+
+- 2026-10-29 08:50:39 CST 人工复核：S30:preparing→software_preflight；模型返回290，在途{'pi-memweave': 1, 'pi-native': 1}，峰值7，累计估算$6.522719，停止原因None。
+
+- 2026-10-29 08:52:30 CST 人工复核：S32:solving→regrading；S30:software_preflight→solving；模型返回328，在途{'pi-memweave': 2, 'pi-native': 1}，峰值7，累计估算$6.557871，停止原因None。
+
+- 2026-10-29 08:52 CST 人工复核：39／49完整题对，原生23过、插件20过；S31首个插件独过0／1，明确为FFmpeg参数位置，原生7次／插件10次模型返回且未移窗。T11原产物首个有效官方0在86.090秒结束，26文件SHA不变，初次超时仍保留。S34 oracle／nop缺bootstrapTests-api.js，均无模型，保留阻断；启动时序诊断1 CPU下三次从spawn到listen约1113／1145／1246ms，与两次600ms连接窗口接近，仍未唯一归因。S27插件Go构建实测约1核／1.55GiB，S32进入重评分，不能将usage暂不增长称为无进展。当前实际解题峰值7，不将侧车／控制／诊断计数。
