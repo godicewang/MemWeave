@@ -376,3 +376,10 @@ MW-001至MW-003的首批来源：[多场景评估报告](PLUGIN_EFFECT_EVALUATIO
 
 
 **MW-013场景K（S34模型前构建启动失败，2026-10-29）：** 官方oracle／nop均得到0，要求4项未执行；stderr缺/app/test/build/bootstrapTests-api.js，尚无Pi。不能将workspace的11＋882＋223个依赖断言通过当作该题已准入。原镜像BuildServerClient仅在600ms间隔内连接两次；同一原镜像、1 CPU、无网络／模型的builder启动测量，三次从子进程spawn到listen约1113／1145／1246ms，与约1200ms窗口接近。此为有根据的启动竞态疑点，尚未证明是首失败唯一原因；未改客户端、测试、资源或评分。S34暂无可用同档候补（RS04已用于S24），保留两行阻断，其余题继续；按执行方案§33继续受限诊断和正式重新准入，不填能力0。静态源码／启动回执位于s34-build-admission-20261029。
+
+
+**MW-011场景X（S32验证进程耗尽官方内存，2026-10-29）：** 原生自然完成、插件exit137，双方原补丁首次官方均0，不能把插件侧说成正常交付或基础设施取消后重跑。插件执行`jest src/app/components/composer`未加runInBand／maxWorkers；原生实际使用runInBand。00:49:17 UTC内核报告Docker cgroup用量与上限均4194304KiB，CONSTRAINT_MEMCG杀pi，组内另有11个约300余MiB的Jest worker；Pi自身约351MiB。可以定位到官方4GiB边界内验证并行策略的资源风险，不能把4GiB全部归为插件记忆堆，也不是专用VM42GiB全局OOM。Docker历史事件已不含该CID，缺少CID到Trial标签的直接回溯，关联来自唯一未限worker的命令、同时Pi被杀及该侧137，须保留这个限制。官方预算内原补丁已经新沙箱评分0；不扩内存、不重跑模型，不泛化放行其他137。证据s32-exit137-audit-20261029、执行方案§34；后续仅补严格续跑解释，冻结产品不改。
+
+**MW-011场景Y（S30获胜同时存在记忆工具重复拒绝，2026-10-29）：** 插件官方11／11、1，原生9／11、0；原生update_keys漏return聚合状态，删除／重定向消费者读None.deletes失败。插件业务修复完成、自测通过后尝试将成果写State，却连续6次STATE_CONTENT_TOO_LONG；第3次后某条内容仍105字，后两次重复同一超长内容，最后缩短才成功。错误字段与实际长度均由工具明确返回，属于执行纠错成本，非State丢写。插件58次usage／210.145秒／0.068665896美元，原生72次／236.497秒／0.072657372美元；不能因为最终更快更便宜就忽略这些无效调用，也不能把末期State写入倒置为正确实现的原因。本题没有Window移出或memory_read。精确entry、原Session／patch／评分SHA见s30-plugin-win-audit-20261029.json；仅记录，不修改工具长度契约或插件候选。
+
+**MW-013场景L（S35官方参考解与测试密钥长度不兼容，2026-10-29）：** 模型前oracle／nop均0，没有真实Pi。oracle的EntropyFacade.storeEntropy调用原encryptBytes，后者走aes128Encrypt；官方新增EntropyFacadeTest却用aes256RandomKey替代getUserGroupKey，两个路径实际抛Illegal key length:256(expected128)。全套另有ConfigFileTest的500ms时间敏感失败（实测604ms）；官方parser仅在All N assertions passed时展开必需suite名，否则从stderr把预期负例的“oh no!!!”列为Build/Runtime Error。故输出格式确有误导性，但不可以只改解析器把真实crypto异常忽略，更不能填两变体能力0。保留完整stdout／stderr、官方参考补丁及测试哈希，按补充候补提案对齐后处理；不修改官方题目／测试／参考解或预算。
