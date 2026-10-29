@@ -34,7 +34,7 @@
 | [experiments/IMPLEMENTATION_DESIGN.md](experiments/IMPLEMENTATION_DESIGN.md) | 2026-10-26 确认的公开基线实验设计：Terminal-Bench 4.0 与 SWE-bench Pro V2 子集的实际重跑、记录和比较；不含自进化，不改变产品运行时契约 |
 | [experiments/LONG_HORIZON_49_SELECTION.md](experiments/LONG_HORIZON_49_SELECTION.md) | 2026-10-28 用户确认的49题长程定向清单：SWE 35、TB 14，四档7/7/14/21；逐题结构审查、源哈希与候补，环境准入和执行接线待完成，本轮未运行 |
 | [experiments/LONG_HORIZON_49_PROGRESS_REPORT_2026-10-28.md](experiments/LONG_HORIZON_49_PROGRESS_REPORT_2026-10-28.md) | 49题运行阶段报告：S01闭环、S06评分不稳定、S03中断补丁对照与探针修复；不是最终98行结果 |
-| [experiments/LONG_HORIZON_49_CONTINUATION_VALIDATION_2026-10-29.md](experiments/LONG_HORIZON_49_CONTINUATION_VALIDATION_2026-10-29.md) | 49题单侧恢复与模型前传输故障接线：160项开发检查、原镜像恢复、36题审计、实际用户文件归属与仅产物评分接线；VM时钟维护验收中；保留首次评分，不冒充最终49题结果 |
+| [experiments/LONG_HORIZON_49_CONTINUATION_VALIDATION_2026-10-29.md](experiments/LONG_HORIZON_49_CONTINUATION_VALIDATION_2026-10-29.md) | 49题单侧恢复与模型前传输故障接线：160项开发检查、原镜像恢复、36题审计、实际用户文件归属与仅产物评分接线；VM时钟十分钟带负载验收通过（有限观察）；保留首次评分，不冒充最终49题结果 |
 | [experiments/RUNTIME_CACHE_DESIGN.md](experiments/RUNTIME_CACHE_DESIGN.md) | 2026-10-28 用户确认的软件准备复用：官方任务镜像不变、固定资源缓存、全部变体模型前预检、每次试验独立配置/会话/记忆；不复用已解题容器 |
 | [experiments/VALIDATION.md](experiments/VALIDATION.md) | 实验 CLI、47 项开发检查、Pro V2 双变体/全新沙箱重评分、TB四题控制及最终执行；TB插件三题准备失败，有效评测不完整 |
 | [experiments/PUBLIC_BASELINE_2026-10-27.md](experiments/PUBLIC_BASELINE_2026-10-27.md) | 公开 Pro V2 四仓库真实对照：原生 4/4、插件 3/4，输入/缓存/费用/阶段时间、Element Web 算法失败与 TB 未进入模型阶段的原因；含可复查汇总 JSON |

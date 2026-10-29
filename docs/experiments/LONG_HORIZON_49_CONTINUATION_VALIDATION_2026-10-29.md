@@ -73,3 +73,5 @@ be3cc95ea7阶段全部真实Pi先自然结束，再只暂停控制父PID，最�
 - 专用VM数据盘240→280GiB，CPU12／内存42GiB保持；实测数据盘空闲112GiB。Lima guestagent有效能力已无SYS_TIME，chrony4.5配置无makestep／initstepslew且已选NTP源。ARM／amd64十分钟带负载时钟验收仍在进行，尚不宣布修复通过。
 
 证据在仓库外analysis/long49/vm-maintenance-20261029，含JUnit、SDK原件、roundtrip-receipt、服务备份／配置和时钟采样。另见maintenance-gate-20261029的OS父子检查／实际暂停／关闭回执。后续阶段尚需时钟验收、源码检查点与冻结，不把本节当49题最终报告。
+
+时钟最终验收（08:34 CST）：相同括号采样程序在ARM与amd64各运行600秒，同时独立2 CPU有限负载，负墙钟增量均0；完整样本数、残差与程序SHA见clock-acceptance.json。Lima失败校时日志明确operation not permitted，有效能力无SYS_TIME；chrony已选源，NTP频率／误差估计仍在收敛，不把零次回拨宣称为永远无抖动或绝对时间零误差。扩容前后64个不同官方／缓存镜像ID集合完全相同，未丢图。全部诊断0模型，随后才允许新付费阶段。
