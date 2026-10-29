@@ -35,7 +35,7 @@
 | [experiments/LONG_HORIZON_49_SELECTION.md](experiments/LONG_HORIZON_49_SELECTION.md) | 2026-10-28 用户确认的49题长程定向清单：SWE 35、TB 14，四档7/7/14/21；逐题结构审查、源哈希与候补，环境准入和执行接线待完成，本轮未运行 |
 | [experiments/LONG_HORIZON_49_PROGRESS_REPORT_2026-10-28.md](experiments/LONG_HORIZON_49_PROGRESS_REPORT_2026-10-28.md) | 49题运行阶段报告：S01闭环、S06评分不稳定、S03中断补丁对照与探针修复；不是最终98行结果 |
 | [experiments/LONG_HORIZON_49_CONTINUATION_VALIDATION_2026-10-29.md](experiments/LONG_HORIZON_49_CONTINUATION_VALIDATION_2026-10-29.md) | 49题单侧恢复与模型前传输故障接线：160项开发检查、原镜像恢复、36题审计、实际用户文件归属与仅产物评分接线；VM时钟十分钟带负载验收通过（有限观察）；保留首次评分，不冒充最终49题结果 |
-| [experiments/LONG_HORIZON_49_PLUGIN_ANALYSIS_2026-10-29.md](experiments/LONG_HORIZON_49_PLUGIN_ANALYSIS_2026-10-29.md) | 49题运行中审计草稿：已完成45题的实际对照、三个插件独过、状态工具摩擦、确定业务缺陷、来源混淆与环境／评分限制；待98侧齐全后冻结 |
+| [experiments/LONG_HORIZON_49_PLUGIN_ANALYSIS_2026-10-29.md](experiments/LONG_HORIZON_49_PLUGIN_ANALYSIS_2026-10-29.md) | 49题运行中审计草稿：已完成46题的实际对照、三个插件独过、状态工具摩擦、确定业务缺陷、来源混淆与环境／评分限制；待98侧齐全后冻结 |
 | [experiments/LONG_HORIZON_49_ADDITIONAL_RESERVES_PROPOSAL.md](experiments/LONG_HORIZON_49_ADDITIONAL_RESERVES_PROPOSAL.md) | 待确认的三个SWE超难候补：只处理无法按原协议准入的槽位，保留原题失败与全部正常首分；尚未改变冻结清单 |
 | [experiments/RUNTIME_CACHE_DESIGN.md](experiments/RUNTIME_CACHE_DESIGN.md) | 2026-10-28 用户确认的软件准备复用：官方任务镜像不变、固定资源缓存、全部变体模型前预检、每次试验独立配置/会话/记忆；不复用已解题容器 |
 | [experiments/VALIDATION.md](experiments/VALIDATION.md) | 实验 CLI、47 项开发检查、Pro V2 双变体/全新沙箱重评分、TB四题控制及最终执行；TB插件三题准备失败，有效评测不完整 |
