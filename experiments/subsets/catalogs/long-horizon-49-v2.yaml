@@ -1,0 +1,2372 @@
+# Original v1 header is a historical review snapshot, not current batch progress.
+# New reserves RS05-RS07 were frozen separately in reserve_addendum.
+schema_version: 1
+catalog_id: memweave-long-horizon-49-v2
+frozen_on: '2026-10-28'
+status: selection_frozen_environment_admission_pending
+artifact_kind: review_catalog_not_cli_subset_config
+selection_basis: human_review_of_agent_visible_instructions_and_materials
+difficulty_basis: project_structural_prerating_not_official_or_measured_success
+quota_by_suite:
+  swe-bench-pro-v2:
+    simple: 5
+    medium: 5
+    hard: 10
+    extreme: 15
+  terminal-bench-4:
+    simple: 2
+    medium: 2
+    hard: 4
+    extreme: 6
+resource_filter:
+  max_cpus: 4
+  max_memory_mb: 8192
+  max_storage_mb: 32768
+sources:
+  swe-bench-pro-v2:
+    repository: https://github.com/scaleapi/SWE-bench_Pro-os.git
+    revision: 66f92766bba642462d4bbe5479e83f91f9211862
+    tasks_dir: v2/tasks
+  terminal-bench-4:
+    repository: https://github.com/harbor-framework/terminal-bench.git
+    revision: 452bf305c6daa62fc59061d22133a7cbc7c1572e
+    tasks_dir: tasks
+no_model_calls: true
+no_images_built_or_pulled: true
+reuse_policy: official images/software cache reusable; every solve has fresh workspace/profile/session/memory
+reserve_policy: same suite and tier only, in listed order, before any model inference; abort unfilled slot when
+  no reviewed reserve exists; never replace based on solve performance
+unfilled_reserve_strata:
+- suite: terminal-bench-4
+  tier: simple
+- suite: terminal-bench-4
+  tier: medium
+- suite: terminal-bench-4
+  tier: extreme
+selected:
+- display_id: S01
+  suite: swe-bench-pro-v2
+  task_id: instance_flipt-io__flipt-c1fd7a81ef9f23e742501bfb26d914eb683262aa
+  title: Flipt：认证配置校验
+  tier: simple
+  tier_basis: 配置加载、GitHub/OIDC两类提供方与错误回执；保留字段校验、组织scope约束和精确错误归属
+  memory_relevance: control
+  hypothesis: 小范围集成对照；不预期形成显著窗口压力
+  review_profile:
+    boundaries: 2
+    constraints: 2
+    lifecycle: 1
+    validation: 2
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_flipt-io__flipt-c1fd7a81ef9f23e742501bfb26d914eb683262aa/instruction.md
+  instruction_sha256: be5f98736ef5e8c21999b94d95b79769b68838f0074787d7ea0dfb26ecefcfc2
+  task_sha256: 10e273a9d5cec1e05c7fba0a5418ccbe61f8ddaf878ae0ec5a080b1cebaa96e3
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: legacy_run_known
+  repository: flipt-io/flipt
+  declared_paths:
+  - /app
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S02
+  suite: swe-bench-pro-v2
+  task_id: instance_future-architect__vuls-7e91f5ef7e5712b1a3d7d5066ad6607e9debc21c
+  title: Vuls：Trivy包元数据转换
+  tier: simple
+  tier_basis: OS包、源包、漏洞及语言库结果四种表示；完整版本/架构与源包到二进制关联不能在转换中丢失
+  memory_relevance: control
+  hypothesis: 小型数据路径对照；考察关联完整性而非长记忆优势
+  review_profile:
+    boundaries: 2
+    constraints: 2
+    lifecycle: 1
+    validation: 2
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_future-architect__vuls-7e91f5ef7e5712b1a3d7d5066ad6607e9debc21c/instruction.md
+  instruction_sha256: 41437427f12b00fc78bda3421d5527eb6857ba360667be9de0eb6f3c9bdc44e8
+  task_sha256: 095536d44b99754eef621cb55fe64c4327080924736055bcd5d257195c758289
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: future-architect/vuls
+  declared_paths:
+  - /app
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S03
+  suite: swe-bench-pro-v2
+  task_id: instance_internetarchive__openlibrary-03095f2680f7516fca35a58e665bf2a41f006273-v8717e18970bcdc4e0d2cea3b1527752b21e74866
+  title: OpenLibrary：迁移版本后更新旧索引
+  tier: simple
+  tier_basis: 变更日志、before/after记录与Solr更新键；兼顾新文档顶层键与旧关系删除后的失效索引
+  memory_relevance: control
+  hypothesis: 有界状态迁移对照；实际过程可能很短
+  review_profile:
+    boundaries: 2
+    constraints: 2
+    lifecycle: 2
+    validation: 2
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_internetarchive__openlibrary-03095f2680f7516fca35a58e665bf2a41f006273-v8717e18970bcdc4e0d2cea3b1527752b21e74866/instruction.md
+  instruction_sha256: 931d2d78a666ec101946de674182dca2b5da10b722f2ef88979ab6a62b7499b0
+  task_sha256: 9bf3dab3805d3aad032a1739f91aa46027372c48084daba67a3ce25d176664e8
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: internetarchive/openlibrary
+  declared_paths:
+  - scripts/new-solr-updater.py
+  - /app
+  - '''/books/OL34239002M'''
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S04
+  suite: swe-bench-pro-v2
+  task_id: instance_navidrome__navidrome-23bebe4e06124becf1000e88472ae71a6ca7de4c
+  title: Navidrome：公共扩展查询与认证边界
+  tier: simple
+  tier_basis: 公共路由、参数检查和其余受保护路由；开放指定端点且保留其他端点认证；不能误用nil依赖
+  memory_relevance: control
+  hypothesis: 小型安全边界对照；不把通过等同记忆收益
+  review_profile:
+    boundaries: 2
+    constraints: 2
+    lifecycle: 1
+    validation: 2
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_navidrome__navidrome-23bebe4e06124becf1000e88472ae71a6ca7de4c/instruction.md
+  instruction_sha256: dc6d12b94ea91ad28b19516bf76e003d79364a34fc04cd2140aa8db8885a7953
+  task_sha256: 3baa5ed18abdc5f4dcdcdfc8d56a8907f5d2a3f5a19b81460cbf2023f4833a9c
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: navidrome/navidrome
+  declared_paths:
+  - /app
+  - server/subsonic/api.go
+  - 'Content-Type: application/json'
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S05
+  suite: swe-bench-pro-v2
+  task_id: instance_qutebrowser__qutebrowser-01d1d1494411380d97cac14614a829d3a69cecaf-v2ef375ac784985212b1805e1d0431dc8f1b3c171
+  title: Qutebrowser：版本缓存与下载完成通知
+  tier: simple
+  tier_basis: 版本检测缓存、统一显示和逐项/整批通知；缓存失效后重新检测；完成通知次数和总量保持一致
+  memory_relevance: control
+  hypothesis: 两个有界子流程对照；仅为难度梯度底部
+  review_profile:
+    boundaries: 2
+    constraints: 2
+    lifecycle: 2
+    validation: 2
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_qutebrowser__qutebrowser-01d1d1494411380d97cac14614a829d3a69cecaf-v2ef375ac784985212b1805e1d0431dc8f1b3c171/instruction.md
+  instruction_sha256: 08893d0583dcc54f25e0ed568e77fb2f65cae5fee98a1b3ca917ba30e26ee279
+  task_sha256: a83228a2652c824b9b88d7bb97fe92b1d4ac44d09bafba128caf479a282fde24
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: qutebrowser/qutebrowser
+  declared_paths:
+  - /app
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S06
+  suite: swe-bench-pro-v2
+  task_id: instance_NodeBB__NodeBB-f2082d7de85eb62a70819f4f3396dd85626a0c0a-vd59a5728dfc977f44533186ace531248c2917516
+  title: NodeBB：跨API的帖子读取权限
+  tier: medium
+  tier_basis: posts API、两个HTTP控制器与权限调整后的内容；原文/摘要、删除帖例外与拒绝回执需一致
+  memory_relevance: moderate
+  hypothesis: 已运行旧题；作为跨接口权限约束对照，单列历史暴露
+  review_profile:
+    boundaries: 3
+    constraints: 2
+    lifecycle: 2
+    validation: 2
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_NodeBB__NodeBB-f2082d7de85eb62a70819f4f3396dd85626a0c0a-vd59a5728dfc977f44533186ace531248c2917516/instruction.md
+  instruction_sha256: 2acd37667bf19678056b31911cd0d80ae6f9d454499bca6293d78c057c4bae40
+  task_sha256: 8065a4b55e6a67841e94d7a8c4083516d56d424a723e487e1af7a8047d1233c4
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: legacy_run_known
+  repository: NodeBB/NodeBB
+  declared_paths:
+  - src/api/posts.js
+  - src/controllers/write/posts.js
+  - /app
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S07
+  suite: swe-bench-pro-v2
+  task_id: instance_ansible__ansible-e22e103cdf8edc56ff7d9b848a58f94f1471a263-v1055803c3a812189a1133297f7f5468579283f86
+  title: Ansible：WinRM认证参数与凭据缓存
+  tier: medium
+  tier_basis: 配置优先级、subprocess/pexpect两条认证路径；显式参数优先、委派默认值、单次调用和独立凭据缓存
+  memory_relevance: moderate
+  hypothesis: 已运行旧题；重点是路径一致性，实际记忆压力未知
+  review_profile:
+    boundaries: 3
+    constraints: 2
+    lifecycle: 2
+    validation: 3
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_ansible__ansible-e22e103cdf8edc56ff7d9b848a58f94f1471a263-v1055803c3a812189a1133297f7f5468579283f86/instruction.md
+  instruction_sha256: c5e9a90e789bcf5cd1243b073e58e29875c4f130ec89fd91ca3c399aa88b6278
+  task_sha256: 5830bab745fb9b48b608ae5a7c1cc278d3a5761fe892e24d29939462597d62af
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: legacy_run_known
+  repository: ansible/ansible
+  declared_paths:
+  - /app
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S08
+  suite: swe-bench-pro-v2
+  task_id: instance_element-hq__element-web-459df4583e01e4744a52d45446e34183385442d6-vnan
+  title: Element：录音前清理已有播放
+  tier: medium
+  tier_basis: 预录制工厂、录音对象、播放Store与PiP视图；依赖注入贯穿调用链；先pause/clear，再创建录音
+  memory_relevance: moderate
+  hypothesis: 调查到集成的状态切换；不以代码名含store推断长程
+  review_profile:
+    boundaries: 3
+    constraints: 2
+    lifecycle: 2
+    validation: 3
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_element-hq__element-web-459df4583e01e4744a52d45446e34183385442d6-vnan/instruction.md
+  instruction_sha256: 9a63aa68957390aa53af1e80503fd553ff86c06dfa5b2d8c05ade20e4ae05172
+  task_sha256: 3d10f9dacbfeeb4b6893e9fbd9a9badcef6002ec1e7ff63492881e146e606f35
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: element-hq/element-web
+  declared_paths:
+  - /app
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S09
+  suite: swe-bench-pro-v2
+  task_id: instance_gravitational__teleport-32bcd71591c234f0d8b091ec01f1f5cbfdc0f13c-vee9b09fb20c43af7e520f57e9239bbcf46b7113d
+  title: Teleport：设备注册后入库失败
+  tier: medium
+  tier_basis: 注册/登记两阶段、结果对象与集成测试环境；部分成功时保留已注册设备、错误分类和并发安全限额开关
+  memory_relevance: moderate
+  hypothesis: 适合错误恢复和跨阶段事实保持
+  review_profile:
+    boundaries: 3
+    constraints: 2
+    lifecycle: 3
+    validation: 3
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_gravitational__teleport-32bcd71591c234f0d8b091ec01f1f5cbfdc0f13c-vee9b09fb20c43af7e520f57e9239bbcf46b7113d/instruction.md
+  instruction_sha256: 0062361adadaef974e1c91951f0bc14b3ce9a1282046b670747d65dad67dcec9
+  task_sha256: 4fb53c8688365976b3c2fa59d90d730a3f7a6b5dda4c888d912690b26b34ebb4
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: gravitational/teleport
+  declared_paths:
+  - lib/devicetrust/testenv/fake_device_service.go
+  - /app
+  - lib/devicetrust/enroll
+  - lib/devicetrust/testenv
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S10
+  suite: swe-bench-pro-v2
+  task_id: instance_protonmail__webclients-d8ff92b414775565f496b830c9eb6cc5fa9620e6
+  title: Proton Drive：共享成员与邀请隔离
+  tier: medium
+  tier_basis: 成员Store、内/外邀请Store和shareId消费者；替换与增量语义不能混淆；各share互不污染
+  memory_relevance: moderate
+  hypothesis: 多实体状态隔离与接口迁移，范围仍相对有限
+  review_profile:
+    boundaries: 3
+    constraints: 2
+    lifecycle: 2
+    validation: 3
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_protonmail__webclients-d8ff92b414775565f496b830c9eb6cc5fa9620e6/instruction.md
+  instruction_sha256: b8ca8cb4b1c9e8388ec5cd9aa2513fb8cb8f03b67768d24bc02203266fc02def
+  task_sha256: 97df20aeada14604e882d760040b56c1ece0ce7d3e93ddf365536cefd8e80e25
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: protonmail/webclients
+  declared_paths:
+  - /app
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S11
+  suite: swe-bench-pro-v2
+  task_id: instance_NodeBB__NodeBB-8168c6c40707478f71b8af60300830fe554c778c-vf2cf3cbd463b7ad942381f1c6d077626485a1e9e
+  title: NodeBB：用户/群组图片全生命周期清理
+  tier: hard
+  tier_basis: 群组、用户、socket入口、账号删除与本地文件；数据库字段与头像/封面文件一致；远程资源和ENOENT语义保留
+  memory_relevance: high_candidate
+  hypothesis: 需要跨入口追踪所有清理责任和路径规则
+  review_profile:
+    boundaries: 4
+    constraints: 3
+    lifecycle: 3
+    validation: 3
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_NodeBB__NodeBB-8168c6c40707478f71b8af60300830fe554c778c-vf2cf3cbd463b7ad942381f1c6d077626485a1e9e/instruction.md
+  instruction_sha256: 52de1203b5077923e832ebc37bd73e5a51bff564f027fd89bb4a6558540a5971
+  task_sha256: 2f7eaff3fa5a71e38d159928e7e809be6180bdc4d92fa2a4b8da71d15a1ce768
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: NodeBB/NodeBB
+  declared_paths:
+  - src/user/picture.js
+  - /app
+  - upload_path/files
+  - relative_path/assets/uploads/files/
+  - src/groups/cover.js
+  - src/socket.io/user/picture.js
+  - src/socket.io/user/profile.js
+  - src/user/delete.js
+  - upload_path/profile
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S12
+  suite: swe-bench-pro-v2
+  task_id: instance_ansible__ansible-d2f80991180337e2be23d6883064a67dcbaeb662-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5
+  title: Ansible：Collection清单构建策略
+  tier: hard
+  tier_basis: galaxy配置、旧walk、新Manifest路径与归档条目；兼容优先级、指令先后、内部链接和摘要；不安装被禁止的依赖
+  memory_relevance: high_candidate
+  hypothesis: 多阶段打包与兼容分支，避免只修一个样例
+  review_profile:
+    boundaries: 3
+    constraints: 3
+    lifecycle: 3
+    validation: 3
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_ansible__ansible-d2f80991180337e2be23d6883064a67dcbaeb662-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5/instruction.md
+  instruction_sha256: eab8bd923d5c2e4e8a62304568a2587654112adeb23447baf7aac59ed54a00e0
+  task_sha256: 15b812988ee78fab01bd4ecadc3f4f62e4f9765f8e236b68e17657ce23918603
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: ansible/ansible
+  declared_paths:
+  - lib/ansible/galaxy/collection/__init__.py
+  - /app
+  - include meta/*.yml
+  - global-exclude /.* /__pycache__
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S13
+  suite: swe-bench-pro-v2
+  task_id: instance_element-hq__element-web-4c6b0d35add7ae8d58f71ea1711587e31081444b-vnan
+  title: Element：分析组件隐私状态与异步跟踪
+  tier: hard
+  tier_basis: SDK配置、DNT、匿名等级、identify/capture及调用方；初始化/启用状态和匿名优先级统一；所有异步调用按约定完成
+  memory_relevance: high_candidate
+  hypothesis: 多策略交叉与调用链迁移，适合约束保持
+  review_profile:
+    boundaries: 3
+    constraints: 4
+    lifecycle: 3
+    validation: 3
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_element-hq__element-web-4c6b0d35add7ae8d58f71ea1711587e31081444b-vnan/instruction.md
+  instruction_sha256: 09e170a28db2f972b17cd92ded1b1ff7eb15781b7ef6680bbffb68328830e70a
+  task_sha256: 741fdd77c080623ea510b4ebd505783dda93bf0478b6c9060f21c9535e646efa
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: element-hq/element-web
+  declared_paths:
+  - src/PosthogAnalytics.ts
+  - /app
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S14
+  suite: swe-bench-pro-v2
+  task_id: instance_future-architect__vuls-e1fab805afcfc92a2a615371d0ec1e667503c254-v264a82e2f4818e30f5a25e4da53b27ba119f62b5
+  title: Vuls：仅保留运行中内核的软件包组
+  tier: hard
+  tier_basis: Debian/Ubuntu解析、源包归一化与CVE结果；保留按源名和版本的分组身份；查找重命名不能改输出身份
+  memory_relevance: high_candidate
+  hypothesis: 跨表示转换和全流程回归，避免局部过滤掩盖丢失
+  review_profile:
+    boundaries: 3
+    constraints: 4
+    lifecycle: 3
+    validation: 3
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_future-architect__vuls-e1fab805afcfc92a2a615371d0ec1e667503c254-v264a82e2f4818e30f5a25e4da53b27ba119f62b5/instruction.md
+  instruction_sha256: 3474a617e50efa037af5457ac534b647834c8c94cce87b34e4e7f5f1ff36ac3f
+  task_sha256: f921e373683312b59d0a4aee8cb955499cf553926badb5069c3885206c51e41b
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: future-architect/vuls
+  declared_paths:
+  - models/packages.go
+  - /app
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S15
+  suite: swe-bench-pro-v2
+  task_id: instance_gravitational__teleport-c1b1c6a1541c478d7777a48fca993cc8206c73b9
+  title: Teleport：旧会话录像回放兼容
+  tier: hard
+  tier_basis: AuditLog、LegacyHandler、磁盘索引与上传器；有旧解包记录时不下载；错误传播、正常下载和清空上传器后回放都要成立
+  memory_relevance: high_candidate
+  hypothesis: 故障恢复、兼容路径与多层验证
+  review_profile:
+    boundaries: 3
+    constraints: 3
+    lifecycle: 3
+    validation: 3
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_gravitational__teleport-c1b1c6a1541c478d7777a48fca993cc8206c73b9/instruction.md
+  instruction_sha256: dae928c4d821c451f076ba776967882326b8b7b1564e789a3b6bc97e04f267df
+  task_sha256: a7d4292fcf7e12fd07ce04a58f8bf83059816316ae8aa20d30987dc6a5a9d78b
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: gravitational/teleport
+  declared_paths:
+  - lib/events/auditlog.go
+  - lib/events/stream.go
+  - /app
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S16
+  suite: swe-bench-pro-v2
+  task_id: instance_gravitational__teleport-e6681abe6a7113cfd2da507f05581b7bdf398540-v626ec2a48416b10a88641359a169d99e935ff037
+  title: Teleport：慢审计扇出不阻塞活动会话
+  tier: hard
+  tier_basis: AuditWriter、AsyncEmitter、流恢复与取消上下文；背压/丢弃边界、已接受事件、恢复和关闭分别验证
+  memory_relevance: high_candidate
+  hypothesis: 跨异步阶段保留不变量，防止只消除一个卡顿
+  review_profile:
+    boundaries: 4
+    constraints: 3
+    lifecycle: 4
+    validation: 3
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_gravitational__teleport-e6681abe6a7113cfd2da507f05581b7bdf398540-v626ec2a48416b10a88641359a169d99e935ff037/instruction.md
+  instruction_sha256: f4ad22851aa6040d0b1c80ebe2481d7c8e2f4d97cf8f18758075609dbb5ebec1
+  task_sha256: fd9c78c5c726ae26756ee5ee8efebe034ca52328c31b33de7d8b6e47a9e8fc1c
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: gravitational/teleport
+  declared_paths:
+  - lib/events/emitter.go
+  - /app
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S17
+  suite: swe-bench-pro-v2
+  task_id: instance_internetarchive__openlibrary-7f6b722a10f822171501d027cad60afe53337732-ve8c8d62a2b60610a3c4631f5f23ed866bada9818
+  title: OpenLibrary：可复用搜索Scheme与查询安全
+  tier: hard
+  tier_basis: 公共Scheme、work/author/subject变换及Solr请求；别名、引号、布尔运算、ISBN和转义在多入口保持语义
+  memory_relevance: high_candidate
+  hypothesis: 跨查询阶段和多消费者重构；不只是修末尾连字符
+  review_profile:
+    boundaries: 4
+    constraints: 3
+    lifecycle: 2
+    validation: 3
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_internetarchive__openlibrary-7f6b722a10f822171501d027cad60afe53337732-ve8c8d62a2b60610a3c4631f5f23ed866bada9818/instruction.md
+  instruction_sha256: 70876fab5e11449d429a2c940dfadff40502a57d61a439b5c33fe05e71a7f2d7
+  task_sha256: 2918e8206b94f7eceaa4562202839e4654ba92ee35e71fac416f84fdd24bb063
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: internetarchive/openlibrary
+  declared_paths:
+  - openlibrary/plugins/worksearch/schemes/__init__.py
+  - openlibrary/plugins/worksearch/schemes/works.py
+  - openlibrary/plugins/worksearch/schemes/authors.py
+  - openlibrary/plugins/worksearch/schemes/subjects.py
+  - /app
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S18
+  suite: swe-bench-pro-v2
+  task_id: instance_navidrome__navidrome-d21932bd1b2379b0ebca2d19e5d8bae91040268a
+  title: Navidrome：播放列表持久化与查询重构
+  tier: hard
+  tier_basis: 轨道重写、聚合统计、仓储接口与SmartPlaylist查询；删除旧接口并迁移所有生产调用；过滤/排序/上限一致
+  memory_relevance: high_candidate
+  hypothesis: 跨仓储与查询契约，需完整编译和业务回归
+  review_profile:
+    boundaries: 3
+    constraints: 3
+    lifecycle: 3
+    validation: 3
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_navidrome__navidrome-d21932bd1b2379b0ebca2d19e5d8bae91040268a/instruction.md
+  instruction_sha256: 516ceeed1812299604152a4163b886c64fe36d3a78c85fd0e99dcab1ee4637e3
+  task_sha256: 7a522ae272e4249a0448df652de07df22fa2ef6c71f9bfe69128d9de471a85d7
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: navidrome/navidrome
+  declared_paths:
+  - persistence/sql_smartplaylist.go
+  - /app
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S19
+  suite: swe-bench-pro-v2
+  task_id: instance_protonmail__webclients-dfe5604193d63bfcb91ce60d62db2f805c43bf11
+  title: Proton Mail：提取移动邮件业务流程
+  tier: hard
+  tier_basis: 通知文案、权限拒绝、定时邮件和退订提示及原hook；消息/会话分支、不可撤销、记住偏好和异步持久化不能相互覆盖
+  memory_relevance: high_candidate
+  hypothesis: 调查旧行为后拆分接口，保留多条业务约束
+  review_profile:
+    boundaries: 3
+    constraints: 4
+    lifecycle: 3
+    validation: 3
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_protonmail__webclients-dfe5604193d63bfcb91ce60d62db2f805c43bf11/instruction.md
+  instruction_sha256: 757a524baff8864e45f4514076ea8e83aee414c2cc9c44bca05a5b0f257e400c
+  task_sha256: 260064060339ed769c386529664c41306fe597f4a7aa3ba12704e878abe99acd
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: protonmail/webclients
+  declared_paths:
+  - applications/mail/src/app/helpers/moveToFolder.ts
+  - /app
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S20
+  suite: swe-bench-pro-v2
+  task_id: instance_qutebrowser__qutebrowser-394bfaed6544c952c6b3463751abab3176ad4997-vafb3e8e01b31319c66c4e666b8a3b1d8ba55db24
+  title: Qutebrowser：版本表示与ELF失败边界
+  tier: hard
+  tier_basis: 版本值对象、库文件解析、后端报告与初始化开关；未知来源显示、32/64位结构和各种解析异常的统一边界
+  memory_relevance: high_candidate
+  hypothesis: 跨表示和错误路径验证；仍含二进制解析基础能力
+  review_profile:
+    boundaries: 3
+    constraints: 3
+    lifecycle: 2
+    validation: 3
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_qutebrowser__qutebrowser-394bfaed6544c952c6b3463751abab3176ad4997-vafb3e8e01b31319c66c4e666b8a3b1d8ba55db24/instruction.md
+  instruction_sha256: 84fdf3ab71eca1d39249d25940127d6763251ac68282dc037e5ddd6f4771d9d8
+  task_sha256: 56780cc62eacf3c2d877765dfcff0928aab80a50d352e86b75ae47fa088a1faa
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: qutebrowser/qutebrowser
+  declared_paths:
+  - qutebrowser/misc/elf.py
+  - qutebrowser/utils/version.py
+  - /app
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S21
+  suite: swe-bench-pro-v2
+  task_id: instance_NodeBB__NodeBB-f1a80d48cc45877fcbadf34c2345dd9709722c7f-v4fbcfae8b15e4ce5d132c408bca69ebb9cf146ed
+  title: NodeBB：权限类型贯穿数据/API/模板/复制
+  tier: extreme
+  tier_basis: 权限注册、插件默认、用户/群组载荷、模板及分类复制；前缀键、插入顺序、默认type与按类型复制全链一致
+  memory_relevance: high_candidate
+  hypothesis: 多层 schema 传播和兼容；较容易漏掉末端消费者
+  review_profile:
+    boundaries: 4
+    constraints: 4
+    lifecycle: 3
+    validation: 4
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_NodeBB__NodeBB-f1a80d48cc45877fcbadf34c2345dd9709722c7f-v4fbcfae8b15e4ce5d132c408bca69ebb9cf146ed/instruction.md
+  instruction_sha256: 32f7e6b3cc764edd1bf9580e70ab33bf27e155738f7d78bb5c8a27d528fa2ff2
+  task_sha256: 5718dd19c1291e18e5ae3dd4f0bca1847243a252501b2c7e05993f0c5d9a0acf
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: NodeBB/NodeBB
+  declared_paths:
+  - src/privileges/categories.js
+  - src/privileges/global.js
+  - /app
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S22
+  suite: swe-bench-pro-v2
+  task_id: instance_ansible__ansible-42355d181a11b51ebfc56f6f4b3d9c74e01cb13b-v1055803c3a812189a1133297f7f5468579283f86
+  title: Ansible：委派与循环只计算一次
+  tier: extreme
+  tier_basis: TaskExecutor、Worker、VariableManager与Task父层次；依赖构造、原对象合并、去旧缓存和弃用提示跨阶段对齐
+  memory_relevance: high_candidate
+  hypothesis: 核心执行路径迁移，局部通过不足以证明完成
+  review_profile:
+    boundaries: 4
+    constraints: 4
+    lifecycle: 4
+    validation: 4
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_ansible__ansible-42355d181a11b51ebfc56f6f4b3d9c74e01cb13b-v1055803c3a812189a1133297f7f5468579283f86/instruction.md
+  instruction_sha256: 1aca256f141a81af33b9cec728445b719f7fdce3497e6390e8084c1b93f6738a
+  task_sha256: ebd361498693b0bc7ccf29d4ef3e8ddbe8b0f0e51aead361bc618f278caa00ee
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: ansible/ansible
+  declared_paths:
+  - lib/ansible/playbook/task.py
+  - lib/ansible/vars/manager.py
+  - /app
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S23
+  suite: swe-bench-pro-v2
+  task_id: instance_ansible__ansible-d6d2251929c84c3aa883bad7db0f19cc9ff0339e-v30a923fb5c164d6cd18280c02422f75e611e8fb2
+  title: Ansible：迭代器与线性策略的阶段顺序
+  tier: extreme
+  tier_basis: PlayIterator、多host锁步、roles/blocks/rescue/always；清除伪noop但保留失败恢复和规范阶段顺序
+  memory_relevance: high_candidate
+  hypothesis: 多状态机联动，需要保留逐host历史与反例
+  review_profile:
+    boundaries: 4
+    constraints: 4
+    lifecycle: 4
+    validation: 4
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_ansible__ansible-d6d2251929c84c3aa883bad7db0f19cc9ff0339e-v30a923fb5c164d6cd18280c02422f75e611e8fb2/instruction.md
+  instruction_sha256: 91c82753328427856c5e4ed05bc24f3a9f48880005cae00be2820fec32f29ee8
+  task_sha256: e8153fdd3efa680025a8b70b82d7ca8bf753809189fb6ccfad5bb4a4a4b1991a
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: ansible/ansible
+  declared_paths:
+  - /app
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S24
+  suite: swe-bench-pro-v2
+  task_id: instance_element-hq__element-web-fe14847bb9bb07cab1b9c6c54335ff22ca5e516a-vnan
+  title: Element：广播状态贯穿事件/缓存/UI
+  tier: extreme
+  tier_basis: 状态事件确认、Recording模型、Store、视图与barrel导出；监听/卸载、默认状态、同步停止和UI响应全链一致
+  memory_relevance: high_candidate
+  hypothesis: 跨组件事件生命周期与回归责任，适合持续约束追踪
+  review_profile:
+    boundaries: 4
+    constraints: 4
+    lifecycle: 4
+    validation: 4
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_element-hq__element-web-fe14847bb9bb07cab1b9c6c54335ff22ca5e516a-vnan/instruction.md
+  instruction_sha256: dd706c74ee60b9b143bdb02fb76b75e796997e2ff9f10a52a32cb288e31899f4
+  task_sha256: 3234bcddb81c2ad60dc82444aec64c31109f91c16542b4bd909cdc1256bb8cf9
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: element-hq/element-web
+  declared_paths:
+  - src/voice-broadcast/models/VoiceBroadcastRecording.ts
+  - src/voice-broadcast/models/index.ts
+  - src/voice-broadcast/stores/VoiceBroadcastRecordingsStore.ts
+  - src/voice-broadcast/stores/index.ts
+  - src/voice-broadcast/utils/startNewVoiceBroadcastRecording.ts
+  - /app
+  - src/voice-broadcast/index.ts
+  - ./models
+  - ./stores
+  - ./utils
+  - src/voice-broadcast
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S25
+  suite: swe-bench-pro-v2
+  task_id: instance_flipt-io__flipt-e50808c03e4b9d25a6a78af9c61a3b1616ea356b
+  title: Flipt：审计配置到RPC/OTel/Sink全链
+  tier: extreme
+  tier_basis: 配置及默认值、事件编码、中间件、Exporter和所有Sink；成功变更恰有一条事件；默认值、字段名和非变更请求需兼容
+  memory_relevance: high_candidate
+  hypothesis: 多模块新增协议贯穿多条RPC业务路径
+  review_profile:
+    boundaries: 4
+    constraints: 4
+    lifecycle: 4
+    validation: 4
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_flipt-io__flipt-e50808c03e4b9d25a6a78af9c61a3b1616ea356b/instruction.md
+  instruction_sha256: bdce37478c4a8e3b250f345f27f340f1c7a0926dea8b990177bcc5e257d144f4
+  task_sha256: 3123fd1e1809179bd5c64d6bb3f3d98b8a400dc13c0033e67c07493e3455e63c
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: flipt-io/flipt
+  declared_paths:
+  - internal/server/audit/audit.go
+  - /app
+  - go.flipt.io/flipt/internal/server/audit
+  - internal/config/config.go
+  - internal/config/audit.go
+  - internal/server/middleware/grpc/middleware.go
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S26
+  suite: swe-bench-pro-v2
+  task_id: instance_flipt-io__flipt-f1bc91a1b999656dbdb2495ccb57bf2105b84920
+  title: Flipt：独立Evaluator并迁移服务调用
+  tier: extreme
+  tier_basis: 存储/规则接口、SQL读取、typed条件、分桶与Server；删除旧Evaluate职责、注入新接口并保持排序/边界/结构错误
+  memory_relevance: high_candidate
+  hypothesis: 跨架构边界迁移与功能回归，非单一哈希算法题
+  review_profile:
+    boundaries: 4
+    constraints: 4
+    lifecycle: 3
+    validation: 4
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_flipt-io__flipt-f1bc91a1b999656dbdb2495ccb57bf2105b84920/instruction.md
+  instruction_sha256: 3d4b002a26df5f126bd61449e7be9a09badb03657a6820a043573ff172284600
+  task_sha256: 41a1087ea03065fd222caf2079928622390eef272efd8c579a11154f5b0999a9
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: flipt-io/flipt
+  declared_paths:
+  - server/evaluator.go
+  - storage/evaluator.go
+  - /app
+  - server/server.go
+  - storage/rule.go
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S27
+  suite: swe-bench-pro-v2
+  task_id: instance_future-architect__vuls-ef2be3d6ea4c0a13674aaab08b182eca4e2b9a17-v264a82e2f4818e30f5a25e4da53b27ba119f62b5
+  title: Vuls：OVAL修复状态贯穿检测报告
+  tier: extreme
+  tier_basis: 匹配返回元组、模块流身份、多个发行版与gost退役；新增fix-state逐调用传播；旧族行为和依赖API必须兼容
+  memory_relevance: high_candidate
+  hypothesis: 数据协议迁移、条件矩阵和完整依赖回归并存
+  review_profile:
+    boundaries: 4
+    constraints: 4
+    lifecycle: 4
+    validation: 4
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_future-architect__vuls-ef2be3d6ea4c0a13674aaab08b182eca4e2b9a17-v264a82e2f4818e30f5a25e4da53b27ba119f62b5/instruction.md
+  instruction_sha256: 5fbfbd559759cfec906a12effd0ac06f9c249bffeeaffd8aa4fb4ce58296b27e
+  task_sha256: 0562f2c1a3141b2d58bd79ae0a6d8f3a08119c397145cf1c45476e4c99e939a5
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: future-architect/vuls
+  declared_paths:
+  - /app
+  - github.com/vulsio/goval-dictionary
+  - nodejs:20/nodejs
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S28
+  suite: swe-bench-pro-v2
+  task_id: instance_gravitational__teleport-005dcb16bacc6a5d5890c4cd302ccfd4298e275d-vee9b09fb20c43af7e520f57e9239bbcf46b7113d
+  title: Teleport：wal2json消息到后端事件
+  tier: extreme
+  tier_basis: SQL取流、列值类型、identity回退、动作到后端事件；缺列/NULL/空值不可混淆；改键必须先delete后put
+  memory_relevance: high_candidate
+  hypothesis: 多表示与事件语义集成；部分工作仍考验基础解析能力
+  review_profile:
+    boundaries: 3
+    constraints: 4
+    lifecycle: 3
+    validation: 4
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_gravitational__teleport-005dcb16bacc6a5d5890c4cd302ccfd4298e275d-vee9b09fb20c43af7e520f57e9239bbcf46b7113d/instruction.md
+  instruction_sha256: 9a94f881e56e95c077b3bfec9a301f40f6185afa6f8fbfc9c8fc877757ecc236
+  task_sha256: 0786ce569b3a53524e1602baa50ed7982136fd2750c526650430832b565cdebd
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: gravitational/teleport
+  declared_paths:
+  - /app
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S29
+  suite: swe-bench-pro-v2
+  task_id: instance_gravitational__teleport-bb562408da4adeae16e025be65e170959d1ec492-vee9b09fb20c43af7e520f57e9239bbcf46b7113d
+  title: Teleport：并发多游标扇出缓冲
+  tier: extreme
+  tier_basis: 固定环、慢游标积压、可取消读取、时钟和GC回收；每游标顺序、wait计数、宽限期和关闭/回收不可相互破坏
+  memory_relevance: high_candidate
+  hypothesis: 长调试链潜力较高，但并发算法能力仍是混杂因素
+  review_profile:
+    boundaries: 3
+    constraints: 4
+    lifecycle: 4
+    validation: 4
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_gravitational__teleport-bb562408da4adeae16e025be65e170959d1ec492-vee9b09fb20c43af7e520f57e9239bbcf46b7113d/instruction.md
+  instruction_sha256: e57424d67864cf9e1662bfd165e651875812f7f9ddf79b65df63981c0163f10f
+  task_sha256: b492efe874c57bcd669d90ff70860526fa18fa62873832bc759f20f978eefc19
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: gravitational/teleport
+  declared_paths:
+  - lib/utils/fanoutbuffer/buffer.go
+  - /app
+  - sync/atomic
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S30
+  suite: swe-bench-pro-v2
+  task_id: instance_internetarchive__openlibrary-322d7a46cdc965bfabbf9500e98fde098c9d95b2-v13642507b4fc1f8d234172bf8129942da2c2ca26
+  title: OpenLibrary：类型化增量索引与批次状态
+  tier: extreme
+  tier_basis: works/authors/books更新器、预加载、重定向与Solr提交；孤立版本、删除/重定向次序、状态隔离和错误回执一致
+  memory_relevance: high_candidate
+  hypothesis: 多条数据生命周期聚合与跨类型验证
+  review_profile:
+    boundaries: 4
+    constraints: 4
+    lifecycle: 4
+    validation: 4
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_internetarchive__openlibrary-322d7a46cdc965bfabbf9500e98fde098c9d95b2-v13642507b4fc1f8d234172bf8129942da2c2ca26/instruction.md
+  instruction_sha256: 3402f67717d1903b935bc0f07ca16bb9e066cb42af0bc0c6e273168985334df3
+  task_sha256: be87026420db0fe1f31146762d477ee2fcb0d0ac3d2db9edcf439d1cdb868f16
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: internetarchive/openlibrary
+  declared_paths:
+  - openlibrary/solr/update_work.py
+  - /app
+  - /works/
+  - /authors/
+  - /books/
+  - /type/delete
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S31
+  suite: swe-bench-pro-v2
+  task_id: instance_navidrome__navidrome-812dc2090f20ac4f8ac271b6ed95be5889d1a3ca
+  title: Navidrome：播放偏移贯穿所有流式调用
+  tier: extreme
+  tier_basis: API/MediaStreamer/FFmpeg接口、全部生产调用与命令模板；offset原样传递、零值兼容和参数位置；不修改官方维护的mock
+  memory_relevance: high_candidate
+  hypothesis: 跨生产接口迁移与编译/运行验证，须保持改动边界
+  review_profile:
+    boundaries: 4
+    constraints: 3
+    lifecycle: 3
+    validation: 4
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_navidrome__navidrome-812dc2090f20ac4f8ac271b6ed95be5889d1a3ca/instruction.md
+  instruction_sha256: b16f0dd3923b8cd4cd3d1cb19b1ee9c567d3bca35c3101941d9dd38893ef41ca
+  task_sha256: 61a057360256eadb775d35ce0e12368bd47af86540efa1a3a8540d1679905af4
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: navidrome/navidrome
+  declared_paths:
+  - /app
+  - core/ffmpeg/ffmpeg.go
+  - core/media_streamer.go
+  - createFFmpegCommand("ffmpeg -i %s -b:a %bk -ss %t mp3 -", "/music library/file.mp3", 123, 456)
+  - '[]string{"ffmpeg", "-i", "/music library/file.mp3", "-b:a", "123k", "-ss", "456", "mp3", "-"}'
+  - createFFmpegCommand("ffmpeg -i %s -b:a %bk mp3 -", "/music library/file.mp3", 123, 456)
+  - '[]string{"ffmpeg", "-i", "/music library/file.mp3", "-ss", "456", "-b:a", "123k", "mp3", "-"}'
+  - createFFmpegCommand("ffmpeg -i %s -b:a %bk mp3 -", "/music library/file.mp3", 123, 0)
+  - '[]string{"ffmpeg", "-i", "/music library/file.mp3", "-b:a", "123k", "mp3", "-"}'
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S32
+  suite: swe-bench-pro-v2
+  task_id: instance_protonmail__webclients-6e1873b06df6529a469599aa1d69d3b18f7d9d37
+  title: Proton Mail：外部加密与过期设置重构
+  tier: extreme
+  tier_basis: Composer状态、表单、菜单、保存往返、快捷键和FeatureFlag；28天与7天默认不串用；保存不丢密码，移除同步清过期
+  memory_relevance: high_candidate
+  hypothesis: 多UI/状态消费者联动与完整生命周期回归
+  review_profile:
+    boundaries: 4
+    constraints: 4
+    lifecycle: 4
+    validation: 4
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_protonmail__webclients-6e1873b06df6529a469599aa1d69d3b18f7d9d37/instruction.md
+  instruction_sha256: e3abec6066ea049d56ef2a2859fc1a4ef877cfb6b74d8c1e629029ed635b773c
+  task_sha256: 80355688c53e47d695d46b70d44b00cf1025a629df8a7bff715cff05ce3fcba5
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: protonmail/webclients
+  declared_paths:
+  - applications/mail/src/app/components/composer/actions/ComposerMoreActions.tsx
+  - applications/mail/src/app/components/composer/actions/ComposerPasswordActions.tsx
+  - applications/mail/src/app/components/composer/modals/PasswordInnerModalForm.tsx
+  - applications/mail/src/app/hooks/composer/useExternalExpiration.ts
+  - applications/mail/src/app/components/composer/actions/MoreActionsExtension.tsx
+  - /app
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S33
+  suite: swe-bench-pro-v2
+  task_id: instance_qutebrowser__qutebrowser-de4a1c1a2839b5b49c3d4ce21d39de48d24e2091-v2ef375ac784985212b1805e1d0431dc8f1b3c171
+  title: Qutebrowser：抽离Qt参数与环境初始化
+  tier: extreme
+  tier_basis: 配置载入、应用入口、Qt版本分支、argv和环境；参数有序、版本映射和环境变量必须在Qt启动前生效
+  memory_relevance: high_candidate
+  hypothesis: 跨启动阶段重构，需持续保持平台/版本分支契约
+  review_profile:
+    boundaries: 4
+    constraints: 4
+    lifecycle: 3
+    validation: 4
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_qutebrowser__qutebrowser-de4a1c1a2839b5b49c3d4ce21d39de48d24e2091-v2ef375ac784985212b1805e1d0431dc8f1b3c171/instruction.md
+  instruction_sha256: 6709df0857f7917c5cae607beadf4971772886fda46dd746f0c82a822d9af6aa
+  task_sha256: ade665dd3c881ee034eba9de2c9b46be6bf7627db850371f53ef64161f3e876c
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: qutebrowser/qutebrowser
+  declared_paths:
+  - qutebrowser/config/qtargs.py
+  - /app
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S34
+  suite: swe-bench-pro-v2
+  task_id: instance_tutao__tutanota-51818218c6ae33de00cbea3a4d30daac8c34142e-vc4e41fd0029957297843cb9dec4a25c7c756f029
+  title: Tutanota：桌面下载/打开与失败清理
+  tier: extreme
+  tier_basis: 网络Client、request/response/文件流、临时文件和Shell；监听/关闭/清理恰一次；可执行文件确认与错误传播保留
+  memory_relevance: high_candidate
+  hypothesis: 跨异步资源生命周期与接口移除；不能扩大允许的修复范围
+  review_profile:
+    boundaries: 4
+    constraints: 4
+    lifecycle: 4
+    validation: 4
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_tutao__tutanota-51818218c6ae33de00cbea3a4d30daac8c34142e-vc4e41fd0029957297843cb9dec4a25c7c756f029/instruction.md
+  instruction_sha256: d6768968d0f7c1bda1141e12a740b0c60ba0ae276e9321ef112ff72d11767633
+  task_sha256: b1963a312ff870e9f702bfba40aa9b5398991e6510235021f3dfe2b7e9b807af
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: tutao/tutanota
+  declared_paths:
+  - /app
+  - '"/tutanota/tmp/path/download/nativelyDownloadedFile"'
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: S35
+  suite: swe-bench-pro-v2
+  task_id: instance_tutao__tutanota-f3ffe17af6e8ab007e8d461355057ad237846d9d-vbc0d9ba8f0071fbe982809910959a6ff8884dbbf
+  title: Tutanota：集中熵管理并迁移Worker调用
+  tier: extreme
+  tier_basis: Facade/DI、Login、Collector、Worker启动与旧RPC移除；位数/时间双门槛、leader/登录条件、失败处理和全部消费者一致
+  memory_relevance: high_candidate
+  hypothesis: 跨线程/登录/收集生命周期的架构迁移，不研究新密码算法
+  review_profile:
+    boundaries: 4
+    constraints: 4
+    lifecycle: 4
+    validation: 4
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_tutao__tutanota-f3ffe17af6e8ab007e8d461355057ad237846d9d-vbc0d9ba8f0071fbe982809910959a6ff8884dbbf/instruction.md
+  instruction_sha256: e8bf735d7c2526f6507788642ec0f3c9bfe417ce65bce9b947ebe025a351c5f8
+  task_sha256: 2488fdb3b48d139f525fd13945b63672d805fc88d641edef138e23ab4f98f7bb
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: tutao/tutanota
+  declared_paths:
+  - src/api/worker/facades/EntropyFacade.ts
+  - /app
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: T01
+  suite: terminal-bench-4
+  task_id: embedding-drift-monitor
+  title: 漂移告警流水线修复
+  tier: simple
+  tier_basis: 统计/距离工具、窗口与告警去抖；校准正常场景、真实漂移和跨窗口告警状态
+  memory_relevance: control
+  hypothesis: 相对有界的多模块诊断对照；含统计基础能力
+  review_profile:
+    boundaries: 2
+    constraints: 2
+    lifecycle: 2
+    validation: 2
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/harbor-framework/terminal-bench/blob/452bf305c6daa62fc59061d22133a7cbc7c1572e/tasks/embedding-drift-monitor/instruction.md
+  instruction_sha256: 948fec73b3457300d42d258c2c17ece57052bde4d343063604dff3cb5bf5c5a9
+  task_sha256: 98eafa0164a0c7eff549c84c51de3783ed9b37689a27046c5bde52ecb6e49b7a
+  official_difficulty: null
+  resources:
+    cpus: 2
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  declared_paths:
+  - /app/drift_monitor/
+  - /app/data/
+  verifier_resources:
+    cpus: 2
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  upstream_task_verifier_mode: separate
+- display_id: T02
+  suite: terminal-bench-4
+  task_id: session-window-debug
+  title: 会话事件窗口修复
+  tier: simple
+  tier_basis: 会话合并、晚到事件、水位线与清理；按DESIGN保持全局最小水位线、已触发会话保留和晚到合并
+  memory_relevance: control
+  hypothesis: 小型事件系统对照；不是因为名称含window就断言测到记忆
+  review_profile:
+    boundaries: 2
+    constraints: 2
+    lifecycle: 2
+    validation: 2
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  - environment/app/DESIGN.md
+  source_url: https://github.com/harbor-framework/terminal-bench/blob/452bf305c6daa62fc59061d22133a7cbc7c1572e/tasks/session-window-debug/instruction.md
+  instruction_sha256: 65b05c866323a7b7195a5ab72ac9c4844d1d4e5f179ff24c15baf86a5a50e193
+  task_sha256: 6006bd1386fe06bc106a54924ac868771f77fb47cbdf837260d16d5f557b809f
+  official_difficulty: null
+  resources:
+    cpus: 2
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  additional_evidence_sha256:
+    environment/app/DESIGN.md: b6568e4d497b4cc80abb21f4dc079c28402869d799117c39ff41a1999dff0b2a
+  declared_paths:
+  - /app/app/
+  - /app/app/DESIGN.md
+  - /app/app/types.py
+  - /app/app/__init__.py
+  verifier_resources:
+    cpus: 2
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: separate
+- display_id: T03
+  suite: terminal-bench-4
+  task_id: cargo-flight-dispatch
+  title: 航运调度多模块修复
+  tier: medium
+  tier_basis: navigation、aircraft、dispatch与四类业务数据；统一角度/单位、燃油/载重/风限制和单环行程
+  memory_relevance: moderate
+  hypothesis: 多个明确子系统与整体验证；保留领域知识混杂说明
+  review_profile:
+    boundaries: 3
+    constraints: 3
+    lifecycle: 2
+    validation: 3
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/harbor-framework/terminal-bench/blob/452bf305c6daa62fc59061d22133a7cbc7c1572e/tasks/cargo-flight-dispatch/instruction.md
+  instruction_sha256: a7b0333a36ba08895d4858a6f216de7802b4e584566149acbb2ccb4420be165d
+  task_sha256: ad3980bb04639a5a480bfceeb48c98bd15819bbbb5a0b06746b69932bc9b40a7
+  official_difficulty: null
+  resources:
+    cpus: 2
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  declared_paths:
+  - /app/data/airports.json
+  - /app/data/aircraft.json
+  - /app/data/manifest.json
+  - /app/data/weather.json
+  - /app/navigation.py
+  - /app/aircraft.py
+  - /app/dispatch.py
+  - python /app/dispatch.py --output /output/flight_plan.json
+  - /app/requirements.txt
+  - /app/apt-packages.txt
+  verifier_resources:
+    cpus: 2
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  upstream_task_verifier_mode: separate
+- display_id: T04
+  suite: terminal-bench-4
+  task_id: bun-sourcemap-leak
+  title: 发布流水线与公开来源策略
+  tier: medium
+  tier_basis: 构建脚本、客户端/服务器产物、source map和manifest；保留运行行为与公开映射，同时移除私有来源和路径
+  memory_relevance: moderate
+  hypothesis: 多产物约束与发布验证，避免只删除全部映射
+  review_profile:
+    boundaries: 3
+    constraints: 3
+    lifecycle: 2
+    validation: 3
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/harbor-framework/terminal-bench/blob/452bf305c6daa62fc59061d22133a7cbc7c1572e/tasks/bun-sourcemap-leak/instruction.md
+  instruction_sha256: 665d8100ad29dd7fbf42e3ec5f00fbde8c04141183319deb30bd6722caf0f7a2
+  task_sha256: 72848d4074b37e3ee96fe9b5c68865637b794183e4606e0f345384a8333e5f4b
+  official_difficulty: null
+  resources:
+    cpus: 2
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  declared_paths:
+  - /app
+  - /app/dist
+  - /app/visibility.json
+  - /app/dist/client-entry.js
+  - /app/dist/server-entry.js
+  - /app/dist/client-entry.js.map
+  - src/client/render.ts
+  - /app/dist/release-manifest.json
+  verifier_resources:
+    cpus: 2
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: separate
+- display_id: T05
+  suite: terminal-bench-4
+  task_id: data-anonymization
+  title: 跨CSV一致且受内存约束的匿名化
+  tier: hard
+  tier_basis: policy、历史记录、有效期合并与跨租户链接；实体标识跨文件/传递合并一致；行列顺序、seed与64MB约束保留
+  memory_relevance: high_candidate
+  hypothesis: 跨表示实体身份和可重复流水线；不把数据量直接当上下文压力
+  review_profile:
+    boundaries: 3
+    constraints: 4
+    lifecycle: 3
+    validation: 3
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/harbor-framework/terminal-bench/blob/452bf305c6daa62fc59061d22133a7cbc7c1572e/tasks/data-anonymization/instruction.md
+  instruction_sha256: 2b1c2f0be6beb3ac6aea1a3c59325fc3e5d5c20ffcdb1ea4347afb8f004709c1
+  task_sha256: a604c6b319f6f306660c7d92580d5087c3f3f1c4a457dea69cb24dc82267f141
+  official_difficulty: null
+  resources:
+    cpus: 2
+    memory_mb: 8192
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  declared_paths:
+  - /app/anon.py
+  - /app/input
+  - /app/policy.yaml
+  - /app/output
+  verifier_resources:
+    cpus: 2
+    memory_mb: 8192
+    storage_mb: 10240
+    gpus: 0
+  upstream_task_verifier_mode: separate
+- display_id: T06
+  suite: terminal-bench-4
+  task_id: ontology-kg-querying
+  title: 多来源知识图谱及查询一致性
+  tier: hard
+  tier_basis: 三类本体、成员提交、统一图与两个SPARQL查询；来源三元组保留、最新冲突优先、实体去重和跨关系条件一致
+  memory_relevance: high_candidate
+  hypothesis: 分散材料溯源、跨文件集成和多输出验证
+  review_profile:
+    boundaries: 3
+    constraints: 4
+    lifecycle: 3
+    validation: 3
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/harbor-framework/terminal-bench/blob/452bf305c6daa62fc59061d22133a7cbc7c1572e/tasks/ontology-kg-querying/instruction.md
+  instruction_sha256: e20d406a83fdfb97a829e71ec1674d2bf2c662257b86c2f3be8755c77a142fab
+  task_sha256: cce99810822d905311f1f37c7453a70f725af715e200423f3c3e172e6cd043b6
+  official_difficulty: null
+  resources:
+    cpus: 2
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  declared_paths:
+  - /app
+  - /app/2024-q2/
+  - /app/2024-q1/
+  - /app/pipeline.py
+  - /app/cross_border_operational_points.rq
+  - /app/qualified_cross_border_points.rq
+  - /app/requirements.txt
+  - python /app/pipeline.py /app/2024-q2
+  verifier_resources:
+    cpus: 2
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  upstream_task_verifier_mode: separate
+- display_id: T07
+  suite: terminal-bench-4
+  task_id: pretrain-shard-corruption
+  title: 恢复训练数据链路
+  tier: hard
+  tier_basis: 数据分片/索引、训练入口、检查点与验证损失；恢复准确原始样本，不能换配方/删样本/改入口或伪造结果
+  memory_relevance: high_candidate
+  hypothesis: 故障调查和真实验证链较长；不使用纯训练耗时作为记忆证据
+  review_profile:
+    boundaries: 3
+    constraints: 3
+    lifecycle: 3
+    validation: 3
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/harbor-framework/terminal-bench/blob/452bf305c6daa62fc59061d22133a7cbc7c1572e/tasks/pretrain-shard-corruption/instruction.md
+  instruction_sha256: a9c0f8112fcad8afbaf5106062f390c528c61d536618e71e57fbad2651524fd5
+  task_sha256: 4d6081f1d3601629a165d3329f8dfeb6a72d8b978a8ebcd9bc3e30a9e2dc7080
+  official_difficulty: null
+  resources:
+    cpus: 4
+    memory_mb: 8192
+    storage_mb: 4096
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  declared_paths:
+  - /app
+  - bash /app/run_pretrain.sh
+  - /app/train_pretrain.py
+  - /app/run_pretrain.sh
+  - /app/data/train/index.json
+  verifier_resources:
+    cpus: 4
+    memory_mb: 8192
+    storage_mb: 4096
+    gpus: 0
+  upstream_task_verifier_mode: separate
+- display_id: T08
+  suite: terminal-bench-4
+  task_id: vllm-deepseek-streaming
+  title: 修复流式推理协议
+  tier: hard
+  tier_basis: vLLM源码中的响应分段及工具调用输出路径；修复错误分段与tool-call JSON损坏，具体触发路径需调查
+  memory_relevance: high_candidate
+  hypothesis: 需要侦察与协议回归；指令短不代表简单，分级置信度有限
+  review_profile:
+    boundaries: 3
+    constraints: 3
+    lifecycle: 3
+    validation: 3
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/harbor-framework/terminal-bench/blob/452bf305c6daa62fc59061d22133a7cbc7c1572e/tasks/vllm-deepseek-streaming/instruction.md
+  instruction_sha256: 90d13b042394c28a4e543d1257659a7218749089779112663d4638c90f9215ce
+  task_sha256: 7a044fca3d9ca71d7de59db778542281abd87837fd156754b81464b65bcbafab
+  official_difficulty: null
+  resources:
+    cpus: 2
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  declared_paths:
+  - /app/vllm
+  verifier_resources:
+    cpus: 2
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  upstream_task_verifier_mode: separate
+- display_id: T09
+  suite: terminal-bench-4
+  task_id: batched-eval-parity
+  title: 批量评测与逐样本语义保持
+  tier: extreme
+  tier_basis: 提示构造、fewshot、评分/校准、生成停止、packed缓存与指标；多输入布局、精确schema、顺序与性能路径同时成立
+  memory_relevance: high_candidate
+  hypothesis: 大量相互作用契约；仍包含模型评测实现基础知识
+  review_profile:
+    boundaries: 4
+    constraints: 4
+    lifecycle: 4
+    validation: 4
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/harbor-framework/terminal-bench/blob/452bf305c6daa62fc59061d22133a7cbc7c1572e/tasks/batched-eval-parity/instruction.md
+  instruction_sha256: 5da93cdf030a3d4a10bcb463fe313c8b317d99568dae74c52ebb493ab63308dc
+  task_sha256: f3912ee63b2550c193251c6b91c7d090c406e4696b883fb706845f94a20959bc
+  official_difficulty: null
+  resources:
+    cpus: 2
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  declared_paths:
+  - /app/evalbench/evaluate.py
+  - /app/model/
+  - /app/data/public_runtime.jsonl
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  upstream_task_verifier_mode: separate
+- display_id: T10
+  suite: terminal-bench-4
+  task_id: mvcc-lsm-compaction
+  title: 崩溃后数据可见性与压缩
+  tier: extreme
+  tier_basis: 事故报告、C++ MVCC/LSM、崩溃复现与新增回归；修复可见性且保留真实压缩，不能永久保留所有旧版本
+  memory_relevance: high_candidate
+  hypothesis: 调查—复现—修复—新增回归的完整工程链
+  review_profile:
+    boundaries: 3
+    constraints: 4
+    lifecycle: 4
+    validation: 4
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/harbor-framework/terminal-bench/blob/452bf305c6daa62fc59061d22133a7cbc7c1572e/tasks/mvcc-lsm-compaction/instruction.md
+  instruction_sha256: 76c595ed358032ab3c5af64292564e0f58346e629318c7d791b9b91f5ae1ca08
+  task_sha256: 0e98ca97d2d7e5b53b62871a887b3fc02bbd3287db15cd149a9d6600d36dea0d
+  official_difficulty: null
+  resources:
+    cpus: 2
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  declared_paths:
+  - /app/crash_report.txt
+  - /app
+  - /app/include/mvcc_lsm/
+  - /app/src/
+  - /app/tests/regression_test.cc
+  - make -C /app test
+  - make -C /app repro
+  verifier_resources:
+    cpus: 2
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  upstream_task_verifier_mode: separate
+- display_id: T11
+  suite: terminal-bench-4
+  task_id: react-lead-form
+  title: 统一提交与多账本原子更新
+  tier: extreme
+  tier_basis: React表单、submitLead、schema/policy/calendar及多个输出账本；不可变审计、去重/提升、时间和失败回滚同时成立
+  memory_relevance: high_candidate
+  hypothesis: 跨UI与业务流水线，多阶段状态和约束密集
+  review_profile:
+    boundaries: 4
+    constraints: 4
+    lifecycle: 4
+    validation: 4
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/harbor-framework/terminal-bench/blob/452bf305c6daa62fc59061d22133a7cbc7c1572e/tasks/react-lead-form/instruction.md
+  instruction_sha256: e1cc9571c8c9e69a2c12ace760ecad6ff2330bbc246b8ad025edd03a7eea9f9d
+  task_sha256: 5d4006d80b4ab0a6308c8b0bb10ec1e8920df987fa8cff8444db0e7a39c0f010
+  official_difficulty: null
+  resources:
+    cpus: 2
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  declared_paths:
+  - /app
+  - /app/src/data/lead_input.json
+  - /app/src/spec/lead_schema.json
+  - /app/src/spec/lead_policy.json
+  - /app/src/spec/business_calendar.json
+  - /app/src/lib/submitLead.ts
+  - /app/output/submission.json
+  - /app/output/crm_leads.json
+  - /app/output/lead_sources.json
+  - /app/output/reconciliation.json
+  verifier_resources:
+    cpus: 2
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  upstream_task_verifier_mode: separate
+- display_id: T12
+  suite: terminal-bench-4
+  task_id: risk-scorer-replay
+  title: 黑盒生产行为与审计重建
+  tier: extreme
+  tier_basis: 迁移说明、运营摘要、manifest选材、探针和CSV/JSON/SQLite；以探针确定行为后独立实现；最终不能依赖诊断二进制
+  memory_relevance: high_candidate
+  hypothesis: 多来源调查和可重复重放，利于记录假设、证据与反例
+  review_profile:
+    boundaries: 4
+    constraints: 4
+    lifecycle: 4
+    validation: 4
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/harbor-framework/terminal-bench/blob/452bf305c6daa62fc59061d22133a7cbc7c1572e/tasks/risk-scorer-replay/instruction.md
+  instruction_sha256: 78cfe68f132a464ccfbec5097314e607487f5d90a418580b8066b18868bf3c6e
+  task_sha256: 0ded459b9ee41fca393ee5e19cf33fd641c4ae82285cadf18dfd1e5d4c1d4d84
+  official_difficulty: null
+  resources:
+    cpus: 2
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  declared_paths:
+  - /app
+  - /app/rebuild_parity_report.sh
+  - /app/data/incidents/parity-2026-10
+  - /app/output/parity_scores.csv
+  - /app/output/parity_summary.json
+  - /app/output/scorer_audit.sqlite
+  - /app/parityctl
+  - /app/docs/migration_ticket.md
+  - /app/docs/review_ops_digest.md
+  - /tmp
+  verifier_resources:
+    cpus: 2
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  upstream_task_verifier_mode: separate
+- display_id: T13
+  suite: terminal-bench-4
+  task_id: vba-userform-port
+  title: VBA业务应用等价迁移
+  tier: extreme
+  tier_basis: 表单/代码/表数据/工作簿元数据到React/FastAPI/SQLite；保留校验、计算、增删保存和表单行为，满足启动合同
+  memory_relevance: high_candidate
+  hypothesis: 完整跨技术栈工程，需持续追踪旧行为与新系统对照
+  review_profile:
+    boundaries: 4
+    constraints: 4
+    lifecycle: 4
+    validation: 4
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/harbor-framework/terminal-bench/blob/452bf305c6daa62fc59061d22133a7cbc7c1572e/tasks/vba-userform-port/instruction.md
+  instruction_sha256: 33d576e87bef222748bbf86da9ad1eb9ceb7913b104deb517d15176e28bce01d
+  task_sha256: e3da6c5f21f63308c6893dc0e878695cfd84e33faf5c2d923277eb1688a076c8
+  official_difficulty: null
+  resources:
+    cpus: 2
+    memory_mb: 8192
+    storage_mb: 20480
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  declared_paths:
+  - /shared/legacy_app/
+  - /workspace/generated_app/
+  - /workspace/generated_app/run.sh
+  - /shared/legacy_app/README.md
+  - /workspace/generated_app/backend/requirements.txt
+  verifier_resources:
+    cpus: 2
+    memory_mb: 8192
+    storage_mb: 20480
+    gpus: 0
+  upstream_task_verifier_mode: separate
+- display_id: T14
+  suite: terminal-bench-4
+  task_id: wal-recovery-ordering
+  title: WAL并发提交和恢复次序
+  tier: extreme
+  tier_basis: 提交、segment持久化、crash snapshot、恢复与读取接口；全局持久前缀、去重/缺口、深拷贝和并发可见性同时成立
+  memory_relevance: high_candidate
+  hypothesis: 多阶段不变量与故障恢复；并发算法能力仍为混杂因素
+  review_profile:
+    boundaries: 3
+    constraints: 4
+    lifecycle: 4
+    validation: 4
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/harbor-framework/terminal-bench/blob/452bf305c6daa62fc59061d22133a7cbc7c1572e/tasks/wal-recovery-ordering/instruction.md
+  instruction_sha256: f8e44418b9cb1329b1ac226d88a03c8c9654c496e1a32950ce31d768139a4ad3
+  task_sha256: 7c3fd442768edbada48e7b658d5d6376df46e11005ad725595ee88c81679a61d
+  official_difficulty: null
+  resources:
+    cpus: 2
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  declared_paths:
+  - /app/
+  - /app/app.py
+  - /app/recovery.py
+  - /app/config.py
+  verifier_resources:
+    cpus: 2
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: separate
+reserves:
+- display_id: RS01
+  suite: swe-bench-pro-v2
+  task_id: instance_NodeBB__NodeBB-4327a09d76f10a79109da9d91c22120428d3bdb9-vnan
+  title: NodeBB：跨数据库字段投影
+  tier: simple
+  tier_basis: getObject/getObjects与Mongo/Postgres/Redis；空字段、缺失键和顺序跨后端一致
+  memory_relevance: control
+  hypothesis: 简单候补；后端跨度使实际工作量仍不确定
+  review_profile:
+    boundaries: 2
+    constraints: 2
+    lifecycle: 1
+    validation: 2
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_NodeBB__NodeBB-4327a09d76f10a79109da9d91c22120428d3bdb9-vnan/instruction.md
+  instruction_sha256: a37c3d256856d664446a7324c5965a96fa7c27dc94dc16ab1a48d17052b34ae2
+  task_sha256: eb0a1284971cc65a4e3b626863c2ad8f91372ab852c72e93026ebf0d7550eed1
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: NodeBB/NodeBB
+  replacement_order_in_tier: 1
+  declared_paths:
+  - /app
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: RS02
+  suite: swe-bench-pro-v2
+  task_id: instance_navidrome__navidrome-b65e76293a917ee2dfc5d4b373b1c62e054d0dca
+  title: Navidrome：SSE发送者与用户隔离
+  tier: medium
+  tier_basis: 请求context、broker、client与diode；同用户其他连接收到，发送者/其他用户不收，广播例外保留
+  memory_relevance: moderate
+  hypothesis: 中等候补；验证上下文传播和兼容接口迁移
+  review_profile:
+    boundaries: 3
+    constraints: 2
+    lifecycle: 2
+    validation: 3
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_navidrome__navidrome-b65e76293a917ee2dfc5d4b373b1c62e054d0dca/instruction.md
+  instruction_sha256: c0f8fbf359ccd9c9dcc6cdf7c6afc60338ee58c044d39c63cb7db47f30a63223
+  task_sha256: 3a0decaf0154184d04d887fecb978a43a2a4f350864e6f80e6357d4d53fbcc5b
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: navidrome/navidrome
+  replacement_order_in_tier: 1
+  declared_paths:
+  - model/request/request.go
+  - /app
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: RS03
+  suite: swe-bench-pro-v2
+  task_id: instance_ansible__ansible-8127abbc298cabf04aaa89a478fc5e5e3432a6fc-v30a923fb5c164d6cd18280c02422f75e611e8fb2
+  title: Ansible：Worker标准IO隔离
+  tier: hard
+  tier_basis: Worker、TaskExecutor、队列和连接构造；启动方式、CLI上下文、描述符和调用签名共同迁移
+  memory_relevance: high_candidate
+  hypothesis: 难档候补；进程隔离与多模块回归
+  review_profile:
+    boundaries: 4
+    constraints: 3
+    lifecycle: 3
+    validation: 3
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_ansible__ansible-8127abbc298cabf04aaa89a478fc5e5e3432a6fc-v30a923fb5c164d6cd18280c02422f75e611e8fb2/instruction.md
+  instruction_sha256: 732a10a111c591e96e1d378d951d74ea2bc5932e92c5cfe86cab84959d0f3edb
+  task_sha256: 0f04bbb7b173bbc66dfce9ae4bee10c1e6c2bb7b187ce31631eb5c11042b3c0f
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: ansible/ansible
+  replacement_order_in_tier: 1
+  declared_paths:
+  - /app
+  - lib/ansible/executor/worker.py
+  - lib/ansible/executor/process/worker.py
+  - init_plugin_loader(['/custom/path'])
+  - '''/custom/path'''
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: RS04
+  suite: swe-bench-pro-v2
+  task_id: instance_flipt-io__flipt-c188284ff0c094a4ee281afebebd849555ebee59
+  title: Flipt：OCI与ECR凭据延迟解析
+  tier: extreme
+  tier_basis: 配置、StoreOptions、凭据工厂、AWS客户端和错误映射；保留static兼容、匿名情况和可注入真实SDK接口
+  memory_relevance: high_candidate
+  hypothesis: 超难候补；云SDK知识混杂更明显，因此不列主集
+  review_profile:
+    boundaries: 4
+    constraints: 4
+    lifecycle: 3
+    validation: 4
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_flipt-io__flipt-c188284ff0c094a4ee281afebebd849555ebee59/instruction.md
+  instruction_sha256: 2118c192eb59efef24b7b009d85e34a0b5dc3ce7cc11222446901d0325dbe556
+  task_sha256: ce475409ad4ba81151e05c91b5cd5635fcea06dfddf90adb1ae61c0dac512b67
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: flipt-io/flipt
+  replacement_order_in_tier: 1
+  declared_paths:
+  - internal/oci/options.go
+  - internal/oci/ecr/ecr.go
+  - /app
+  - internal/config/testdata/storage/oci_provided_aws_ecr.yml
+  - internal/config/testdata/storage/oci_provided_no_auth.yml
+  - internal/config/testdata/storage/oci_provided_invalid_auth.yml
+  - some.target/repository/abundle:latest
+  - /tmp/bundles
+  - func(registry string) oras.land/oras-go/v2/registry/remote/auth.CredentialFunc
+  - internal/oci/ecr
+  - internal/oci/ecr/mock_client.go
+  - github.com/stretchr/testify/mock
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: RT01
+  suite: terminal-bench-4
+  task_id: sglang-qwen-burst
+  title: SGLang：投机解码的工具/文本顺序
+  tier: hard
+  tier_basis: 服务器调度、不同工具格式和流式事件顺序；保留baseline content/tool-call顺序与前导文本
+  memory_relevance: high_candidate
+  hypothesis: 难档候补；实际长程程度需要运行确认
+  review_profile:
+    boundaries: 3
+    constraints: 3
+    lifecycle: 3
+    validation: 3
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  source_url: https://github.com/harbor-framework/terminal-bench/blob/452bf305c6daa62fc59061d22133a7cbc7c1572e/tasks/sglang-qwen-burst/instruction.md
+  instruction_sha256: 36108a78dee57649577a348d8637a7d25b09b2bd2f023581707e6463aa00d2cc
+  task_sha256: f612cfd1ff9081dc99a9faf9c05785f59752a3478eb0bf3fa930945c597bd4b6
+  official_difficulty: null
+  resources:
+    cpus: 2
+    memory_mb: 8192
+    storage_mb: 18000
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  replacement_order_in_tier: 1
+  declared_paths:
+  - /app/sglang
+  verifier_resources:
+    cpus: 2
+    memory_mb: 8192
+    storage_mb: 18000
+    gpus: 0
+  upstream_task_verifier_mode: separate
+- display_id: RS05
+  suite: swe-bench-pro-v2
+  task_id: instance_flipt-io__flipt-9d25c18b79bc7829a6fb08ec9e8793d5d17e2868
+  title: Flipt：OFREP单旗标评估与结构化响应
+  tier: extreme
+  tier_basis: protobuf消息与生成表面、OFREP入口、evaluation bridge、namespace/context、布尔与variant值、五类错误映射及reason/metadata联动
+  memory_relevance: high_candidate
+  hypothesis: 跨层实现与错误合同密集；运行后再核验实际记忆压力
+  review_profile:
+    boundaries: 4
+    constraints: 4
+    lifecycle: 3
+    validation: 4
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  - task.toml
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_flipt-io__flipt-9d25c18b79bc7829a6fb08ec9e8793d5d17e2868/instruction.md
+  instruction_sha256: 6925fda342cd7d0bee051fa54cb799d2cd826766382b81029077f18c50a1aad9
+  task_sha256: 0dae1b585d9648df00d6fba54b6dae19f867a938568d47a2f18b008a8cfc00c0
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: flipt-io/flipt
+  replacement_order_in_tier: 2
+  declared_paths:
+  - /app
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: RS06
+  suite: swe-bench-pro-v2
+  task_id: instance_element-hq__element-web-ad26925bb6628260cfe0fcf90ec0a8cba381f4a4-vnan
+  title: Element：Pill组件与Permalink Hook重构
+  tier: extreme
+  tier_basis: 类组件到Hook、用户/房间/别名/Space/@room、头像/tooltip/点击行为、具名导出与下游消费者、DOM/CSS和URL原文约束共同保持
+  memory_relevance: high_candidate
+  hypothesis: 重构跨多个消费者且界面语义密集；预评级不等于已证明的窗口压力
+  review_profile:
+    boundaries: 4
+    constraints: 4
+    lifecycle: 3
+    validation: 4
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  - task.toml
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_element-hq__element-web-ad26925bb6628260cfe0fcf90ec0a8cba381f4a4-vnan/instruction.md
+  instruction_sha256: 10a67b424a12eb1d788d6988cbca1383085ff27f30e20189f7f5fae6512893f7
+  task_sha256: 6d772314e66907981d168d6831791032d4e435d36516185d5fdcddd8ca9c89ad
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: element-hq/element-web
+  replacement_order_in_tier: 3
+  declared_paths:
+  - /app
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+- display_id: RS07
+  suite: swe-bench-pro-v2
+  task_id: instance_internetarchive__openlibrary-630221ab686c64e75a2ce253c893c033e4814b2e-v93c53c13d5f9b383ebb411ee7750b49dcd1a34c6
+  title: OpenLibrary：Best Book Awards后端与读过校验
+  tier: extreme
+  tier_basis: API认证/请求默认值/响应、model/SQL与书架状态、读过和两类重复检查在数据库访问前完成、opaque work_id、关键字调用及作品视图消费一致
+  memory_relevance: high_candidate
+  hypothesis: 跨层数据和校验顺序密集；去重后的公开合同用于预评级，重复段落不计压力
+  review_profile:
+    boundaries: 4
+    constraints: 4
+    lifecycle: 3
+    validation: 4
+  confidence: provisional_structure_only
+  reviewed_evidence:
+  - instruction.md
+  - task.toml
+  source_url: https://github.com/scaleapi/SWE-bench_Pro-os/blob/66f92766bba642462d4bbe5479e83f91f9211862/v2/tasks/instance_internetarchive__openlibrary-630221ab686c64e75a2ce253c893c033e4814b2e-v93c53c13d5f9b383ebb411ee7750b49dcd1a34c6/instruction.md
+  instruction_sha256: d0b2c469892300c54bd636349a91cad587620c505ce6883e6502b4a9d6e5bad5
+  task_sha256: 59926c8820a0845003ccf5c3b7b4b09694c29f75a6e609ef9ba242542aebfb35
+  official_difficulty: medium
+  resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: 0
+  static_filter_pass: true
+  environment_admission: pending_controls_and_full_agent_preflight
+  prior_exposure: no_prior_local_run_identified
+  repository: internetarchive/openlibrary
+  replacement_order_in_tier: 4
+  declared_paths:
+  - /app
+  verifier_resources:
+    cpus: 1
+    memory_mb: 4096
+    storage_mb: 10240
+    gpus: null
+  upstream_task_verifier_mode: shared
+excluded_review_examples:
+- suite: swe-bench-pro-v2
+  task_id: instance_future-architect__vuls-36456cb151894964ba1683ce7da5c35ada789970
+  reason: 局部map查找helper，长程适配弱
+  instruction_sha256: f69a051f5e8c55d54e17cd232f80824f5e528d2ab320f11bee5777ae9245dcfd
+- suite: swe-bench-pro-v2
+  task_id: instance_protonmail__webclients-c8117f446c3d1d7e117adc6e0e46b0ece9b0b90e
+  reason: 标题涉及会话恢复，实际合同集中在编号读取工具函数
+  instruction_sha256: e3b0a36aff3aa01a5d83d4ce4be111e1042218f92740c66bcbf1abde78e76da0
+- suite: swe-bench-pro-v2
+  task_id: instance_navidrome__navidrome-29bc17acd71596ae92131aca728716baf5af9906
+  reason: 主要要求局部typed-cache接口，不能从愿景推断全库迁移已被要求
+  instruction_sha256: dac2c6d44dbaf1eb277a9e27cabec528e876f18c82662605184750e8e1c4fb6d
+- suite: swe-bench-pro-v2
+  task_id: instance_qutebrowser__qutebrowser-cf06f4e3708f886032d4d2a30108c2fddb042d81-v2ef375ac784985212b1805e1d0431dc8f1b3c171
+  reason: 公开指令对同一输出场景的消息数存在2/3歧义；未查看评分实现
+  instruction_sha256: c9b41950dc4e7750a6ac0a1d181999ef053cf07986303c73c16c59ce8d995ea5
+- suite: swe-bench-pro-v2
+  task_id: instance_protonmail__webclients-e65cc5f33719e02e1c378146fb981d27bc24bdf4
+  reason: 公开需求和接口描述对stale/in-flight状态解释不一致；未查看评分实现
+  instruction_sha256: 9fc5e6dacf38b7fb6c798afcc692151fb7136637e966f71ac56da295757456fb
+- suite: swe-bench-pro-v2
+  task_id: instance_element-hq__element-web-b007ea81b2ccd001b00f332bee65070aa7fc00f9-vnan
+  reason: 历史数组算法样本，保留旧结果但不进入长程主集
+  instruction_sha256: a87e4e0992b6a72e30322b643b1941f8ce0ce992ddc9e70e9713a48d1cb1101a
+- suite: terminal-bench-4
+  task_id: mp-checkpoint-consolidation
+  reason: 张量和权重重建为主要难点，不以原失败或耗时选择
+  instruction_sha256: df8f13f7faa837f07427d1b60cd32b5417a335099095e4ba55c0de8b2f22befe
+- suite: terminal-bench-4
+  task_id: music-harmony
+  reason: 专业音乐推断为主要难点
+  instruction_sha256: b553e6bff2f67e9e537e836b9a8146e7aa2ac87b17d5da45e1f04b83067c9122
+- suite: terminal-bench-4
+  task_id: production-planning
+  reason: 虽有资料追踪，组合优化仍是主要瓶颈；不以耗时当长记忆压力
+  instruction_sha256: 6e91894f336151c0bfd37dac384e45da6d80915e08c4f9e9ef90d1d172035d8e
+- suite: terminal-bench-4
+  task_id: roy-polymorph-cn
+  reason: 专业结构/颜色推断为主要难点
+  instruction_sha256: da944cb2cafd1183cc2b9c6356e8872214af45111f1bbc800d9304e6c4d180e1
+reserve_addendum:
+  frozen_at: '2026-10-29T04:36:43.463751+00:00'
+  parent_catalog_sha256: b32b5593058c21b74888fde3fe4d6a2447cd45242ce86ee12936cf2ad018ebad
+  approval: 'human reply: 采用这三项固定候补顺序（推荐）; 2026-10-29'
+  added_reserve_ids:
+  - RS05
+  - RS06
+  - RS07
+  scope: original v1 header describes historical initial selection only; this addendum freezes three new reserves
+    before their image preparation, controls or inference
+  new_reserve_model_calls: 0
+  new_reserve_images_built_or_pulled: false

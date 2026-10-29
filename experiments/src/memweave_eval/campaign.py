@@ -15,6 +15,7 @@ import sys
 import threading
 import time
 import uuid
+from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Literal
@@ -55,6 +56,43 @@ from .storage import atomic_json, check_private_evidence, contained, file_digest
 from .suites import resolve_suite, task_digest, task_info
 
 VARIANTS = ("pi-native", "pi-memweave")
+CATALOG_V1_SHA256 = "b32b5593058c21b74888fde3fe4d6a2447cd45242ce86ee12936cf2ad018ebad"
+CATALOG_V2_SHA256 = "749a781520017c0864d33ed720f879f4f60799cdfa9475eefb19b4981f28c865"
+
+
+def reviewed_catalog_addendum(catalog):
+    """Only the fixed human-approved append is compatible with the original selection."""
+    directory = REPOSITORY / "experiments/subsets/catalogs"
+    old_path = directory / "long-horizon-49-v1.yaml"
+    new_path = directory / "long-horizon-49-v2.yaml"
+    if (file_digest(old_path) != CATALOG_V1_SHA256
+            or file_digest(new_path) != CATALOG_V2_SHA256
+            or catalog != load_yaml(new_path)):
+        raise ValueError("reviewed catalog addendum checksum or content mismatch")
+    original = load_yaml(old_path)
+    check = deepcopy(catalog)
+    addendum = check.pop("reserve_addendum")
+    extra = check["reserves"][len(original["reserves"]):]
+    added = [r["display_id"] for r in extra]
+    if (added != ["RS05", "RS06", "RS07"]
+            or addendum["parent_catalog_sha256"] != CATALOG_V1_SHA256
+            or addendum["added_reserve_ids"] != added
+            or any((r["suite"], r["tier"]) != ("swe-bench-pro-v2", "extreme") for r in extra)):
+        raise ValueError("unapproved catalog addendum")
+    check["catalog_id"] = original["catalog_id"]
+    check["reserves"] = check["reserves"][:len(original["reserves"])]
+    if check != original:
+        raise ValueError("catalog addendum changed original selection or reserve prefix")
+    return added
+
+
+def catalog_transition(previous_sha256, current_sha256, catalog):
+    if previous_sha256 == current_sha256:
+        return None
+    if (previous_sha256, current_sha256) != (CATALOG_V1_SHA256, CATALOG_V2_SHA256):
+        raise ValueError("unapproved completed parent catalog transition")
+    return {"from_sha256": previous_sha256, "to_sha256": current_sha256,
+            "added_reserve_ids": reviewed_catalog_addendum(catalog)}
 
 
 class CampaignExecution(Execution):
@@ -124,7 +162,11 @@ def load_catalog(spec: Campaign) -> dict:
     if file_digest(spec.catalog) != spec.catalog_sha256:
         raise ValueError("frozen catalog checksum mismatch")
     catalog = load_yaml(spec.catalog)
-    if catalog.get("catalog_id") != "memweave-long-horizon-49-v1":
+    if catalog.get("catalog_id") == "memweave-long-horizon-49-v2":
+        if spec.catalog_sha256 != CATALOG_V2_SHA256:
+            raise ValueError("unapproved reviewed catalog addendum checksum")
+        reviewed_catalog_addendum(catalog)
+    elif catalog.get("catalog_id") != "memweave-long-horizon-49-v1":
         raise ValueError("unknown reviewed catalog")
     selected = catalog["selected"]
     if len(selected) != 49 or len({r["task_id"] for r in selected}) != 49:

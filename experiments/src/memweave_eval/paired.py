@@ -25,6 +25,7 @@ from .campaign import (
     _index,
     admit_group,
     campaign_plan,
+    catalog_transition,
     execute_job,
     load_catalog,
     mixed_job,
@@ -195,7 +196,8 @@ def completed_info(spec, catalog):
     if not state.get("finished_at") or lock.get("phase") != "full":
         raise ValueError("completed parent must be a closed full phase")
     config = spec.model_dump(mode="json")
-    for field in ("catalog_sha256", "subject", "runtime", "model", "variants", "execution"):
+    transition = catalog_transition(lock["config"]["catalog_sha256"], config["catalog_sha256"], catalog)
+    for field in ("subject", "runtime", "model", "variants", "execution"):
         if lock["config"][field] != config[field]:
             raise ValueError("completed parent identity mismatch: " + field)
     equivalence = verify_adapters(lock)
@@ -285,6 +287,7 @@ def completed_info(spec, catalog):
         blocks = {t: b for t, b in blocks.items() if t in replaced}
     return {
         "kind": "completed_pairs", "parent": str(parent), "known_cost_usd": cost,
+        **({"catalog_transition": transition} if transition else {}),
         "adapter_equivalence": equivalence,
         "included_keys": [list(k) for k in sorted(keys)], "blocked_admissions": blocks,
         "retained_interrupted_tasks": interrupted,
@@ -333,6 +336,37 @@ def audited_budget_end(parent, row):
     )
 
 
+AUDITED_RESOURCE_END = {
+    "result": "2661fc825844a0abba5bf649e3166e7e2218245f1e80012e2077b8311041b315",
+    "patch": "e346785b899e7718460a2549524e9d66c9269ad40119e9ed0714fe0351db2445",
+    "group": "bc1830b9d5ca49272446655259186b80b5b823400df971b28d460d15055e6af5",
+}
+
+
+def audited_resource_end(parent, row):
+    """One reviewed official memory-limit ending; keep its first zero and raw error."""
+    if (row.get("suite_id") != "swe-bench-pro-v2" or row.get("variant_id") != "pi-memweave"
+            or row.get("solve_status") != "agent_error" or row.get("success") is not False):
+        return False
+    path = Path(row["solve_source"])
+    path = path if path.is_absolute() else parent / path
+    files = {"result": path, "patch": path.parent / "agent/model.patch",
+             "group": path.parents[3] / "group.lock.json"}
+    if any(not p.is_file() or file_digest(p) != AUDITED_RESOURCE_END[k] for k, p in files.items()):
+        return False
+    raw = json.loads(path.read_text())
+    error = raw.get("exception_info") or {}
+    options = raw.get("config", {}).get("agent", {}).get("kwargs", {})
+    probe = path.parent / "agent/network-probe.json"
+    return bool(
+        error.get("exception_type") == "NonZeroAgentExitCodeError"
+        and error.get("exception_message", "").startswith(
+            "Command failed (exit 137): timeout -k 30 2940 bash -o pipefail -c ")
+        and options.get("variant") == "pi-memweave" and options.get("protocol") == "swe-pro-v2"
+        and probe.is_file() and json.loads(probe.read_text()).get("passed") is True
+    )
+
+
 def validate_started_row(parent, row, *, interrupted):
     allowed = {"completed_patch", "cancelled"}
     if row.get("suite_id") == "terminal-bench-4":
@@ -343,6 +377,7 @@ def validate_started_row(parent, row, *, interrupted):
                          and row.get("solve_status") == "verifier_error"
                          and audited_verifier_timeout(source))
     if ((row.get("solve_status") not in allowed and not audited_budget_end(parent, row)
+         and not audited_resource_end(parent, row)
          and not ungraded_artifacts)
             or not row.get("session_diagnostics", {}).get("model_responses_with_usage")):
         raise ValueError("completed pair has incomplete solve/primary score/model evidence")
