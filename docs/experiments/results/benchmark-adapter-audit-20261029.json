@@ -1,0 +1,235 @@
+{
+  "audit_date": "2026-10-29",
+  "base_commit": "0b75134",
+  "harbor_version": "0.24.0",
+  "scope": "read-only architecture audit and existing development regression; proposed adapter not implemented",
+  "source_files": [
+    {
+      "path": "experiments/src/memweave_eval/__init__.py",
+      "lines": 1,
+      "sha256": "44feb6bf5c5e3e00566682acb5da88c24cd54bc11af596764878c757b707815d",
+      "benchmark_literal_counts": {
+        "swe-bench-pro-v2": 0,
+        "swe-pro-v2": 0,
+        "tb4": 0,
+        "terminal-bench-4": 0
+      }
+    },
+    {
+      "path": "experiments/src/memweave_eval/artifact_replay.py",
+      "lines": 80,
+      "sha256": "7b6286211bbe07f0c169cebdfaf94ba302115dc9cead7c9f3fb2ee58d1deeec4",
+      "benchmark_literal_counts": {
+        "swe-bench-pro-v2": 0,
+        "swe-pro-v2": 0,
+        "tb4": 0,
+        "terminal-bench-4": 0
+      }
+    },
+    {
+      "path": "experiments/src/memweave_eval/campaign.py",
+      "lines": 957,
+      "sha256": "3bf4a7b0c5952eefe9109db3d6eadbba5adda8e765a09868e82234d16ce0c861",
+      "benchmark_literal_counts": {
+        "swe-bench-pro-v2": 1,
+        "swe-pro-v2": 5,
+        "tb4": 4,
+        "terminal-bench-4": 4
+      }
+    },
+    {
+      "path": "experiments/src/memweave_eval/campaign_report.py",
+      "lines": 421,
+      "sha256": "91f38d32131b0e612eecfaacb2cd83f6a5d87ea603587bd3e28d2664bc913d6e",
+      "benchmark_literal_counts": {
+        "swe-bench-pro-v2": 2,
+        "swe-pro-v2": 0,
+        "tb4": 0,
+        "terminal-bench-4": 0
+      }
+    },
+    {
+      "path": "experiments/src/memweave_eval/cli.py",
+      "lines": 97,
+      "sha256": "4e31ce76827cc63d62c74e3ee7ad32f570c078945d55725acd82a351107b4335",
+      "benchmark_literal_counts": {
+        "swe-bench-pro-v2": 0,
+        "swe-pro-v2": 0,
+        "tb4": 0,
+        "terminal-bench-4": 0
+      }
+    },
+    {
+      "path": "experiments/src/memweave_eval/controls.py",
+      "lines": 88,
+      "sha256": "684f37a9d50c663afdf9e8987472e5e7739b843531c8a2d36e69b18f37f79267",
+      "benchmark_literal_counts": {
+        "swe-bench-pro-v2": 0,
+        "swe-pro-v2": 0,
+        "tb4": 0,
+        "terminal-bench-4": 0
+      }
+    },
+    {
+      "path": "experiments/src/memweave_eval/harbor_job.py",
+      "lines": 43,
+      "sha256": "311d7b121469450bb82e99e5be1f2c382913ca24e1ff649d9a316ebafb02a2e6",
+      "benchmark_literal_counts": {
+        "swe-bench-pro-v2": 0,
+        "swe-pro-v2": 0,
+        "tb4": 0,
+        "terminal-bench-4": 0
+      }
+    },
+    {
+      "path": "experiments/src/memweave_eval/images.py",
+      "lines": 308,
+      "sha256": "09897b3a1695458476b424b1ef9d73fcae107eed90da6e9983929b33b4d7a90c",
+      "benchmark_literal_counts": {
+        "swe-bench-pro-v2": 0,
+        "swe-pro-v2": 0,
+        "tb4": 0,
+        "terminal-bench-4": 0
+      }
+    },
+    {
+      "path": "experiments/src/memweave_eval/live.py",
+      "lines": 153,
+      "sha256": "541f81eeeb37c046f0ccd63b937126527c53967610425365cff179a815d88bc3",
+      "benchmark_literal_counts": {
+        "swe-bench-pro-v2": 0,
+        "swe-pro-v2": 0,
+        "tb4": 0,
+        "terminal-bench-4": 0
+      }
+    },
+    {
+      "path": "experiments/src/memweave_eval/network_probe.py",
+      "lines": 91,
+      "sha256": "951263a2a9a7b424f1f833e20f097b286a35f0f033852cc9bf3a9b0fa707fe19",
+      "benchmark_literal_counts": {
+        "swe-bench-pro-v2": 0,
+        "swe-pro-v2": 0,
+        "tb4": 0,
+        "terminal-bench-4": 0
+      }
+    },
+    {
+      "path": "experiments/src/memweave_eval/paired.py",
+      "lines": 1234,
+      "sha256": "f441e21cc028834b05acb5e09728c7c4d10ccae4faa86f9bcf8e7063e22ae115",
+      "benchmark_literal_counts": {
+        "swe-bench-pro-v2": 4,
+        "swe-pro-v2": 5,
+        "tb4": 3,
+        "terminal-bench-4": 8
+      }
+    },
+    {
+      "path": "experiments/src/memweave_eval/pi_agent.py",
+      "lines": 373,
+      "sha256": "0f73c4d53efb6e63d9c80ebc32f47bbb850e63510094dd2fe9af444115b0bd45",
+      "benchmark_literal_counts": {
+        "swe-bench-pro-v2": 0,
+        "swe-pro-v2": 4,
+        "tb4": 1,
+        "terminal-bench-4": 0
+      }
+    },
+    {
+      "path": "experiments/src/memweave_eval/private_runtime.py",
+      "lines": 86,
+      "sha256": "fc68bb73a39aac027a7263958325e043e480c8222524c19a51f89abd833f1b39",
+      "benchmark_literal_counts": {
+        "swe-bench-pro-v2": 0,
+        "swe-pro-v2": 0,
+        "tb4": 0,
+        "terminal-bench-4": 0
+      }
+    },
+    {
+      "path": "experiments/src/memweave_eval/public_archive.py",
+      "lines": 77,
+      "sha256": "c9f479fb64c2aaf821c794113181cee395b2b5844f609d138d3e6a4521bf59be",
+      "benchmark_literal_counts": {
+        "swe-bench-pro-v2": 0,
+        "swe-pro-v2": 0,
+        "tb4": 0,
+        "terminal-bench-4": 0
+      }
+    },
+    {
+      "path": "experiments/src/memweave_eval/report.py",
+      "lines": 356,
+      "sha256": "ff09fe0a8d8d5ca73b313cba1722967e4b4ab9de8039e3fa513a8a0903b9e0c1",
+      "benchmark_literal_counts": {
+        "swe-bench-pro-v2": 0,
+        "swe-pro-v2": 2,
+        "tb4": 0,
+        "terminal-bench-4": 0
+      }
+    },
+    {
+      "path": "experiments/src/memweave_eval/runner.py",
+      "lines": 704,
+      "sha256": "5a753285ba1bbcd5a71002a68d6bbdbad12f6aa49c80d1931c25fa2f8ea2c58c",
+      "benchmark_literal_counts": {
+        "swe-bench-pro-v2": 0,
+        "swe-pro-v2": 3,
+        "tb4": 2,
+        "terminal-bench-4": 0
+      }
+    },
+    {
+      "path": "experiments/src/memweave_eval/runtime_cache.py",
+      "lines": 198,
+      "sha256": "836c83bec3c6babf70e9082027b0a9c8a1101b5cdc83c62a803f2f267450552a",
+      "benchmark_literal_counts": {
+        "swe-bench-pro-v2": 0,
+        "swe-pro-v2": 0,
+        "tb4": 0,
+        "terminal-bench-4": 0
+      }
+    },
+    {
+      "path": "experiments/src/memweave_eval/spec.py",
+      "lines": 178,
+      "sha256": "f9271056f69a2dcf38e34721559b38d3d0086f29efdd36e15ba9964da2a64be8",
+      "benchmark_literal_counts": {
+        "swe-bench-pro-v2": 2,
+        "swe-pro-v2": 3,
+        "tb4": 2,
+        "terminal-bench-4": 2
+      }
+    },
+    {
+      "path": "experiments/src/memweave_eval/storage.py",
+      "lines": 104,
+      "sha256": "a073dc6edd9ad2c607e4ce5dcfed81c338bf2ef0bc5ff72f1bbd625c714a5c44",
+      "benchmark_literal_counts": {
+        "swe-bench-pro-v2": 0,
+        "swe-pro-v2": 0,
+        "tb4": 0,
+        "terminal-bench-4": 0
+      }
+    },
+    {
+      "path": "experiments/src/memweave_eval/suites.py",
+      "lines": 141,
+      "sha256": "c94b48105f34f035eccf92f50e3ea1b95e8ee69ae97bea411ab51d6c801e0cdf",
+      "benchmark_literal_counts": {
+        "swe-bench-pro-v2": 1,
+        "swe-pro-v2": 0,
+        "tb4": 0,
+        "terminal-bench-4": 0
+      }
+    }
+  ],
+  "source_lines": 5690,
+  "existing_development_checks": 190,
+  "failures": 0,
+  "errors": 0,
+  "new_model_requests": 0,
+  "local_baseline_status": "design only; no experiment execution adapter found",
+  "new_design_status": "proposal; pending choices are explicit, existing contracts unchanged"
+}
