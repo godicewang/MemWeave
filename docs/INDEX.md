@@ -32,10 +32,12 @@
 | `GITHUB_PACKAGES_VALIDATION.md` | GitHub 0.1.0 镜像实际发布、原归档一致性与简版主页验收 |
 | `IMPLEMENTATION_PLAN.md` | 当前进度、阶段依赖、交付范围和进入条件 |
 | [experiments/IMPLEMENTATION_DESIGN.md](experiments/IMPLEMENTATION_DESIGN.md) | 2026-10-26 确认的公开基线实验设计：Terminal-Bench 4.0 与 SWE-bench Pro V2 子集的实际重跑、记录和比较；不含自进化，不改变产品运行时契约 |
-| [experiments/LONG_HORIZON_49_SELECTION.md](experiments/LONG_HORIZON_49_SELECTION.md) | 2026-10-28 用户确认的49题长程定向清单：SWE 35、TB 14，四档7/7/14/21；逐题结构审查、源哈希与候补，环境准入和执行接线待完成，本轮未运行 |
+| [experiments/LONG_HORIZON_49_SELECTION.md](experiments/LONG_HORIZON_49_SELECTION.md) | 冻结49题及批准追加候补：SWE35／TB14、四档7/7/14/21；实际S04→RS01、S08→RS02、S24→RS04，S34／S35原题完成，RS05～RS07未消费 |
 | [experiments/LONG_HORIZON_49_PROGRESS_REPORT_2026-10-28.md](experiments/LONG_HORIZON_49_PROGRESS_REPORT_2026-10-28.md) | 49题运行阶段报告：S01闭环、S06评分不稳定、S03中断补丁对照与探针修复；不是最终98行结果 |
-| [experiments/LONG_HORIZON_49_CONTINUATION_VALIDATION_2026-10-29.md](experiments/LONG_HORIZON_49_CONTINUATION_VALIDATION_2026-10-29.md) | 恢复与候补追加正式验收：190项开发检查、94主首分／10历史／费用继承通过，仅余S34／S35四次解题；47题闭合，保留资源结束及评分波动，不冒充最终49题结果 |
-| [experiments/LONG_HORIZON_49_PLUGIN_ANALYSIS_2026-10-29.md](experiments/LONG_HORIZON_49_PLUGIN_ANALYSIS_2026-10-29.md) | 49题运行中审计草稿：已完成46题的实际对照、三个插件独过、状态工具摩擦、确定业务缺陷、来源混淆与环境／评分限制；待98侧齐全后冻结 |
+| [experiments/LONG_HORIZON_49_CONTINUATION_VALIDATION_2026-10-29.md](experiments/LONG_HORIZON_49_CONTINUATION_VALIDATION_2026-10-29.md) | 190项开发检查及真实恢复验收；最终98主分／10历史／费用继承完整，资源结束、评分波动及同源bailout解析限制原样保留 |
+| [experiments/LONG_HORIZON_49_FINAL_REPORT_2026-10-29.md](experiments/LONG_HORIZON_49_FINAL_REPORT_2026-10-29.md) | 最终49题：原生27／49、插件25／49；完整逐题表、分集合／难度及时间／费用口径、108次真实尝试、实测峰值7和评分可信度限制 |
+| [experiments/LONG_HORIZON_49_PLUGIN_ANALYSIS_2026-10-29.md](experiments/LONG_HORIZON_49_PLUGIN_ANALYSIS_2026-10-29.md) | 最终机制审计：三个插件独过、224次记忆工具错误、来源／State／验证问题；仅两题Window移动，不能建立记忆因果收益 |
+| [experiments/LONG_HORIZON_49_BADCASE_REPORT_2026-10-29.md](experiments/LONG_HORIZON_49_BADCASE_REPORT_2026-10-29.md) | 覆盖插件全部24个官方0分槽位，并列S35假通过、S33验证证据和评分疑点；全部关联DIFFICULT_CASES记录，未优化生产插件 |
 | [experiments/LONG_HORIZON_49_ADDITIONAL_RESERVES_PROPOSAL.md](experiments/LONG_HORIZON_49_ADDITIONAL_RESERVES_PROPOSAL.md) | 已确认RS05→RS06→RS07，原阶段自然闭合后正式加入固定v2；只处理无法按原协议准入的槽位，原49项／旧候补／来源／配比和全部首分不变 |
 | [experiments/RUNTIME_CACHE_DESIGN.md](experiments/RUNTIME_CACHE_DESIGN.md) | 2026-10-28 用户确认的软件准备复用：官方任务镜像不变、固定资源缓存、全部变体模型前预检、每次试验独立配置/会话/记忆；不复用已解题容器 |
 | [experiments/VALIDATION.md](experiments/VALIDATION.md) | 实验 CLI、47 项开发检查、Pro V2 双变体/全新沙箱重评分、TB四题控制及最终执行；TB插件三题准备失败，有效评测不完整 |

@@ -8,7 +8,7 @@ MW-001至MW-003的首批来源：[多场景评估报告](PLUGIN_EFFECT_EVALUATIO
 
 2026-10-27 用户要求深入审计已经运行的公开实验，并在这里记录 bad case。新增来源为 [公开实验插件审计](experiments/PLUGIN_AUDIT_2026-10-27.md)、[审计汇总](experiments/results/plugin-audit-20261027.json)、[Element 事后诊断](experiments/results/element-posthoc-20261027.json) 和 [NodeBB 权限条件诊断](experiments/results/nodebb-posthoc-20261027.json)。正式 Pro V2 四题原生 4/4、插件 3/4，同一候选包 SHA256 为 `4d089821e9590380c8377afa8a44f3883b3a35b9f0696c0e99c2369ff2ab7c04`；正式296份、历史70/92份原件哈希复核通过。以下补充 MW-002、MW-005、MW-011，并新增效能观察 MW-012，不改变定稿协议。首次审计时Terminal尚无插件成绩；2026-10-28补核最终结果，Roy两边均有效0、插件另三题准备失败，见 [TB最终报告](experiments/TB4_BASELINE_2026-10-27.md)。准备失败不冒充插件能力零分。
 
-2026-10-29追加长程49题的实际运行记录，来源为[实时对照](experiments/LONG_HORIZON_49_LIVE_COMPARISON.md)和[持续观察](experiments/LONG_HORIZON_49_LIVE_OBSERVATIONS.md)。本批仍在执行；新增场景按官方原件及事后独立程序核对记录，保留首次成绩、费用和中断来源，不按成绩重跑正常题对。生产候选包仍为上述4d089821...，Pi1.4.0，问题记录不等于修改插件的授权。
+2026-10-29追加长程49题的实际运行记录，现已完成98个唯一主结果；原生27／49、插件25／49，见[最终对照](experiments/LONG_HORIZON_49_FINAL_REPORT_2026-10-29.md)、[badcase索引](experiments/LONG_HORIZON_49_BADCASE_REPORT_2026-10-29.md)和[持续观察](experiments/LONG_HORIZON_49_LIVE_OBSERVATIONS.md)。场景按官方原件及事后独立程序核对，原首分、费用、中断及早期重复尝试均保留；不能将历史整对恢复说成从未重跑，详见MW-013N。生产候选包仍为上述4d089821...，Pi1.4.0，问题记录不等于修改插件的授权。
 
 ## MW-001：理解业务受阻，但没有形成长期认知
 
@@ -440,6 +440,14 @@ S08原Element题在同阶段两侧实际有16／14次usage，后被公共故障�
 **MW-013场景O（S35官方解析器掩盖bailout，2026-10-29）：** 原阶段官方oracle首0，新阶段同原题重新准入oracle1／nop0；task源2488fdb3…、运行副本d26ba46f…、镜像9fbd2bdf…及parser字节均完全相同。新控制stderr仍两次“Illegal key length: 256 (expected: 128)”，stdout却为“All 8093 assertions passed … Bailed out 2 times”；原解析器只匹配“All N assertions passed”，随即把固定108个suite全标PASSED，未检查bailout或对应stderr。旧控制还有一条500ms时限断言失败，没有进入这一全通过分支，退回仅一个Build/Runtime Error。原解析器对两份原stdout／stderr的0模型重放精确复现0与1，因此不能将本轮准入通过称为AES问题修复，也不能把108个标签当108个独立suite已实际通过。
 
 本次在正式控制按官方条件通过后保留S35原题，四侧真实Pi已启动；进一步日志审计识别到上述问题，不事后换题／择优重跑模型或改官方任务与解析器。保留两次控制、全部正式首分及费用，S35模型成绩必须带这项可信度限制；是否某个正式失败确为业务错误还需结合原stderr、补丁与测试定位，不能一概归为插件能力不足或环境波动。新增RS05→RS06→RS07虽获准且已冻结，RS05仅预取公共图字节，未做控制或模型调用，不把它混入实际49题。证据s35-official-bailout-parser-audit-20261029.json含原件SHA、解析结果和同源／同图绑定；不修改生产候选或上游grader。
+
+正式评分后续（05:03 UTC）：双方正常解题、各补丁首个官方均1；原stdout却均“All 8092 assertions passed … Bailed out 3 times”。插件两个AES异常，原生一个AES异常及addEntropy之后验证put未调用，另各有EntropyCollector委托bailout。新测试以`new EntropyCollector({addEntropy:spy})`直接传facade；插件构造函数却接收包含entropyFacade的WorkerInterface投影，MainLocator也按这一形状传入，故测试中undefined.addEntropy；原生则接收WorkerClient后调getWorkerInterface，在此直接mock下同样无该方法。公开要求委托EntropyFacade、移除WorkerClient直接RPC，但未明确collector构造参数的精确形状，因此这部分应报告官方测试与实现接线形状不一致，不能据该mock路径断言两者真实MainLocator调用必然崩溃。原生put验证还受异步等待路径／crypto异常影响，不能在未隔离前断言唯一根因。现有原件已足以证明双方官方1不代表全部新测试无异常，无需重复付费解题；两份主评分及源码／stderr继续保留。
+
+**MW-011场景AC（S34下载事件时序和请求错误清理，2026-10-29）：** 双方正常完成，官方均3／4、首0；唯一必需失败相同：downloadNative,no error在立即读取WriteStream.mockedInstances[0].callbacks时对象不存在。两者都在response回调内再进入已兑现Promise的then创建stream，官方mock在回调返回后没有等待微任务就读取；原始候选方法／私有辅助方法、原图TypeScript4.5.4、宿主Node23.11及受控I/O桩的三次边界诊断各稳定复现“立即0个stream、下一轮1个”。这表明评分失败包含同步mock的时序假设，单凭它不能断言真实Node下载不可能工作；原生另有504ms／500ms的ConfigFileTest超时，但两边必需项失败不能全归为它。原公开文档对finish由response还是write stream发射有两种写法，不把这个歧义单独归为模型能力不足。
+
+同一原方法边界诊断还覆盖了独立、明确的公开要求：成功response已建立写流后再触发request级error，插件只reject，close／removeAllListeners／unlink均0，遗漏清理；原生创建第二个stream再清理它，旧stream没有关闭，createWriteStream从1变2，也违背只创建一次。三次结果相同，属于具体生命周期遗漏；该诊断不是完整应用或官方重评分，保留上述范围，不把边界桩结果填回正式分。首轮诊断程序漏载原生私有createPartialDownloadStream，所得TypeError为诊断接线错误；失败回执保留，补齐原类全部方法后才取得这里引用的六次结果，不将程序兼容性错误归为候选缺陷。业务源码和首分未改；完整SHA及官方失败在s34-complete-paired-audit-20261029.json，原方法／编译器／修正前后回执在s34-original-method-diagnostic-20261029。
+
+**MW-002最终49题统计（2026-10-29）：** 插件主尝试记忆工具224次错误，214长度拒绝、10 JSON／参数；state_append 272调用／188错误（69.1%），task_create 82／33（40.2%），modify_fact4／3，49次成功task_create对应49个独立任务。task_find1次、state_read／memory_read0次，不能把新任务中不必需的工具调用缺失本身当失败。仅T05／T07移出Window，原生均0次compaction。工具错误计数不是224个独立失败任务；新增S34三次、S35两次State拒绝均计入。最终汇总和原Session SHA见primary-mechanism-summary.json及primary-memory-error-audit.json；冻结产品未因本批修改。
 
 
 **MW-011AA完整T13对照补充（2026-10-29）：** 原生最终官方19／28、插件13／28，整题均0；共同通过10、原生独过9、插件独过3、共同失败6。插件独过003、010、019（金额／空数字整批保存、Invoiced状态冲突、明细替换），原生独过九条UI／明细PUT轨迹；不能把所有失败当插件独有，亦不能把分项更多说成任务通过。
