@@ -75,3 +75,12 @@ be3cc95ea7阶段全部真实Pi先自然结束，再只暂停控制父PID，最�
 证据在仓库外analysis/long49/vm-maintenance-20261029，含JUnit、SDK原件、roundtrip-receipt、服务备份／配置和时钟采样。另见maintenance-gate-20261029的OS父子检查／实际暂停／关闭回执。后续阶段尚需时钟验收、源码检查点与冻结，不把本节当49题最终报告。
 
 时钟最终验收（08:34 CST）：相同括号采样程序在ARM与amd64各运行600秒，同时独立2 CPU有限负载，负墙钟增量均0；完整样本数、残差与程序SHA见clock-acceptance.json。Lima失败校时日志明确operation not permitted，有效能力无SYS_TIME；chrony已选源，NTP频率／误差估计仍在收敛，不把零次回拨宣称为永远无抖动或绝对时间零误差。扩容前后64个不同官方／缓存镜像ID集合完全相同，未丢图。全部诊断0模型，随后才允许新付费阶段。
+
+
+## S32受限资源结束的隔离准备（02:27 UTC，正式应用待阶段关闭）
+
+按执行方案§34，在仓库外临时副本准备精确S32判定，当前工作树experiments/src未改、当前付费实现仍2ccb732。仅原result／patch／group三份固定SHA、Pro协议／插件变体、exit137且原timeout2940前缀、网络通过、真实usage和首次False同时满足才允许保留；继续保留agent_error原值，不进入pending或history、不产生新模型计划。未知137、未知成绩、改动原件、错误变体／协议／异常及无模型证据均拒绝。
+
+新14个用例先在旧副本取得1个行为失败／13通过，再实现后与原primary-continuation检查共21项通过，Ruff通过。首轮夹具因未允许挂入新常量而14项setup错误、pytest cache目录警告亦保留；修正测试入口／夹具后才获得上述行为红灯与绿灯，没有把格式失败当能力成绩。实际原S32 result哈希2661fc82…、原补丁及group／网络只读检查通过，保留False和agent_error，0模型。该项不是正式全套回归、不是新Pi验收，也未在未闭合父阶段上伪造完整续跑验证。
+
+证据analysis/long49/s32-continuation-offline-20261029含红／绿JUnit、原源SHA、待应用patch／14用例及receipt。正式应用仍须阶段自然关闭、原文件摘要相同、在本仓库完成全套实验开发检查和真实闭合父阶段验算后提交，再启动下一阶段。仓库外临时副本不是第二份维护源码。
