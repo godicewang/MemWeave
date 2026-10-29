@@ -32,7 +32,7 @@
 | `GITHUB_PACKAGES_VALIDATION.md` | GitHub 0.1.0 镜像实际发布、原归档一致性与简版主页验收 |
 | `IMPLEMENTATION_PLAN.md` | 当前进度、阶段依赖、交付范围和进入条件 |
 | [experiments/IMPLEMENTATION_DESIGN.md](experiments/IMPLEMENTATION_DESIGN.md) | 2026-10-26 确认的公开基线实验设计：Terminal-Bench 4.0 与 SWE-bench Pro V2 子集的实际重跑、记录和比较；不含自进化，不改变产品运行时契约 |
-| [experiments/BENCHMARK_ADAPTER_PROPOSAL.md](experiments/BENCHMARK_ADAPTER_PROPOSAL.md) | 新适配层提案：基于49题与当前代码审计，分离benchmark协议、Harbor／Docker平台及共享Pi运行时；含迁移、评分可信度和验收。尚未实施，容器边界与严重漏判策略待选 |
+| [experiments/BENCHMARK_ADAPTER_PROPOSAL.md](experiments/BENCHMARK_ADAPTER_PROPOSAL.md) | 新适配层方案：容器机制固定且保留官方镜像、严重评分漏判阻断主对照两项已确认；含49题审计、接口、迁移和验收。尚未实施，历史成绩不改 |
 | [experiments/LONG_HORIZON_49_SELECTION.md](experiments/LONG_HORIZON_49_SELECTION.md) | 冻结49题及批准追加候补：SWE35／TB14、四档7/7/14/21；实际S04→RS01、S08→RS02、S24→RS04，S34／S35原题完成，RS05～RS07未消费 |
 | [experiments/LONG_HORIZON_49_PROGRESS_REPORT_2026-10-28.md](experiments/LONG_HORIZON_49_PROGRESS_REPORT_2026-10-28.md) | 49题运行阶段报告：S01闭环、S06评分不稳定、S03中断补丁对照与探针修复；不是最终98行结果 |
 | [experiments/LONG_HORIZON_49_CONTINUATION_VALIDATION_2026-10-29.md](experiments/LONG_HORIZON_49_CONTINUATION_VALIDATION_2026-10-29.md) | 190项开发检查及真实恢复验收；最终98主分／10历史／费用继承完整，资源结束、评分波动及同源bailout解析限制原样保留 |

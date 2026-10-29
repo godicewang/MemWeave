@@ -231,5 +231,10 @@
   "errors": 0,
   "new_model_requests": 0,
   "local_baseline_status": "design only; no experiment execution adapter found",
-  "new_design_status": "proposal; pending choices are explicit, existing contracts unchanged"
+  "new_design_status": "proposal; two boundary decisions confirmed2026-10-29; not implemented",
+  "confirmed_decisions": {
+    "date": "2026-10-29",
+    "container_policy": "keep official task images and fresh instances; stable configurable runtime mechanism",
+    "severe_grading_misjudgment": "quarantine task from main capability comparison; retain official scores and evidence; preserve historical49 reports"
+  }
 }
