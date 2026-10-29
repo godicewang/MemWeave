@@ -4,6 +4,35 @@ from pathlib import Path
 import pytest
 
 
+def test_only_hash_bound_official_budget_end_keeps_first_score(tmp_path, monkeypatch):
+    import memweave_eval.paired as module
+    from memweave_eval.storage import atomic_json, file_digest
+
+    path = tmp_path / "groups/g14/harbor/solve/trial/result.json"
+    atomic_json(path, {"exception_info": {"exception_type": "NonZeroAgentExitCodeError",
+        "exception_message": "Command failed (exit 124): timeout -k 30 2939 bash -o pipefail -c original"},
+        "config": {"agent": {"kwargs": {"variant": "pi-native", "protocol": "swe-pro-v2"}}}})
+    patch = path.parent / "agent/model.patch"
+    patch.parent.mkdir()
+    patch.write_text("original partial patch")
+    atomic_json(path.parent / "agent/network-probe.json", {"passed": True})
+    group = path.parents[3] / "group.lock.json"
+    atomic_json(group, {"frozen": True})
+    monkeypatch.setattr(module, "AUDITED_BUDGET_END", {
+        "result": file_digest(path), "patch": file_digest(patch), "group": file_digest(group)})
+    row = {"task_id": "task", "variant_id": "pi-native", "suite_id": "swe-bench-pro-v2",
+           "solve_source": str(path), "solve_status": "agent_error", "success": False,
+           "session_diagnostics": {"model_responses_with_usage": 28}}
+    keep, pending, history = module.partition_primary_rows(tmp_path, [row])
+    assert len(keep) == 1 and keep[0]["success"] is False and not pending and not history
+    # An unknown grade or changed partial patch cannot authorize a model rerun.
+    with pytest.raises(ValueError, match="incomplete"):
+        module.partition_primary_rows(tmp_path, [dict(row, success=None)])
+    patch.write_text("tampered")
+    with pytest.raises(ValueError, match="incomplete"):
+        module.partition_primary_rows(tmp_path, [row])
+
+
 def test_resume_partitions_individual_sides_and_keeps_first_zero(tmp_path):
     from memweave_eval.paired import partition_primary_rows
     from memweave_eval.storage import atomic_json

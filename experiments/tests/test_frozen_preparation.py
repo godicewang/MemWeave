@@ -80,7 +80,7 @@ def test_only_reviewed_frozen_image_adapter_transition_is_allowed():
     base = 'experiments/src/memweave_eval/'
     files = {base+n: file_digest(REPOSITORY/(base+n)) for n in (
         'pi_agent.py', 'runtime_cache.py', 'runner.py', 'images.py',
-        'network_probe.py', 'public_archive.py', 'private_runtime.py')}
+        'network_probe.py', 'public_archive.py', 'private_runtime.py', 'artifact_replay.py')}
     files[base+'images.py'] = 'cd7e5ceecde76b5bd2b4df91f423ff72ff41d5b14117b54b520d9cf0bf90b3f5'
     assert verify_adapters({'implementation_files': files})['reason'] == 'approved exact frozen preparation reuse'
     files[base+'images.py'] = 'unreviewed'

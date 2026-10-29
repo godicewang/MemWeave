@@ -137,7 +137,7 @@ def test_bootstrap_import_keeps_cost_deadline_and_rejects_unknown_cost(tmp_path,
                 "experiments/src/memweave_eval/" + n: file_digest(
                     REPOSITORY / "experiments/src/memweave_eval" / n
                 )
-                for n in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py", "network_probe.py", "public_archive.py", "private_runtime.py")
+                for n in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py", "network_probe.py", "public_archive.py", "private_runtime.py", "artifact_replay.py")
             },
         },
     )
@@ -279,7 +279,7 @@ def test_completed_parent_keeps_all_started_pairs_and_first_zero_scores(tmp_path
         "implementation_files": {
             "experiments/src/memweave_eval/" + n: file_digest(
                 REPOSITORY / "experiments/src/memweave_eval" / n
-            ) for n in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py", "network_probe.py", "public_archive.py", "private_runtime.py")
+            ) for n in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py", "network_probe.py", "public_archive.py", "private_runtime.py", "artifact_replay.py")
         },
     })
     state = {
@@ -407,7 +407,7 @@ def test_only_approved_probe_adapter_change_can_cross_lineage(tmp_path):
 
     files = {"experiments/src/memweave_eval/" + n: file_digest(
         REPOSITORY / "experiments/src/memweave_eval" / n
-    ) for n in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py", "network_probe.py", "public_archive.py", "private_runtime.py")}
+    ) for n in ("pi_agent.py", "runtime_cache.py", "runner.py", "images.py", "network_probe.py", "public_archive.py", "private_runtime.py", "artifact_replay.py")}
     assert verify_adapters({"implementation_files": files}) is None
     files.pop("experiments/src/memweave_eval/private_runtime.py")
     files["experiments/src/memweave_eval/runtime_cache.py"] = "7cc13d6026e87cc44f5a2ac37d5d235cb63d547381025bca2b71eb6ae93910d2"

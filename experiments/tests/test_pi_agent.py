@@ -47,9 +47,11 @@ def test_private_file_rejects_unexpected_identity_before_upload(tmp_path, identi
                          node_version="24.22.0", variant="pi-native", package_path="/tmp/a",
                          package_sha256="a" * 64, auth_path="/tmp/auth", protocol="tb4")
     environment = SimpleNamespace(default_user=None, upload_file=AsyncMock())
-    with patch.object(agent, "exec_as_agent", AsyncMock(return_value=SimpleNamespace(stdout=identity))):
-        with pytest.raises(ValueError, match="identity"):
-            asyncio.run(agent.upload_private(environment, "private fixture", "/tmp/file"))
+    with (
+        patch.object(agent, "exec_as_agent", AsyncMock(return_value=SimpleNamespace(stdout=identity))),
+        pytest.raises(ValueError, match="identity"),
+    ):
+        asyncio.run(agent.upload_private(environment, "private fixture", "/tmp/file"))
     environment.upload_file.assert_not_called()
 
 
@@ -187,6 +189,8 @@ def test_warm_install_has_no_network_installer_or_auth_in_preparation(tmp_path):
             stdout = "/home/test\n/app\n" if "printf" in command else ""
             if "node --version" in command:
                 stdout = "v24.22.0\n1.4.0\n"
+            if "id -u && id -g" in command:
+                stdout = "1000\n1000\n"
             return SimpleNamespace(return_code=0, stdout=stdout, stderr="")
 
         async def upload_file(self, source, target):

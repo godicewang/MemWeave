@@ -44,16 +44,17 @@ class ExperimentPi(Pi):
         return "memweave-eval-pi"
 
     async def upload_private(self, environment, content: str, remote: str) -> None:
+        identity = await self.exec_as_agent(environment, "id -u && id -g")
+        ids = identity.stdout.strip().splitlines()
+        if len(ids) != 2 or any(not value.isascii() or not value.isdecimal() for value in ids):
+            raise ValueError("unexpected Agent numeric identity")
         with tempfile.TemporaryDirectory(prefix="memweave-auth-") as directory:
             local = Path(directory) / "private.json"
             local.write_text(content)
             local.chmod(0o600)
             await environment.upload_file(local, remote)
         target = shlex.quote(remote)
-        owner = getattr(environment, "default_user", None)
-        command = f"chmod 600 {target}"
-        if owner is not None:
-            command = f"chown {shlex.quote(str(owner))} {target} && " + command
+        command = f"chown {ids[0]}:{ids[1]} {target} && chmod 600 {target}"
         await self.exec_as_root(environment, command)
 
     def get_version_command(self) -> str:

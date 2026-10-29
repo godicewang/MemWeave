@@ -7,6 +7,7 @@ import json
 import re
 from pathlib import Path
 
+from .artifact_replay import artifact_digest, audited_verifier_timeout
 from .report import duration, normalize_trial, session_diagnostics, summarize
 from .storage import atomic_json, contained, file_digest
 
@@ -31,6 +32,12 @@ def retained_original(root, record):
     if not sessions or not session_diagnostics(sessions)["model_responses_with_usage"]:
         raise ValueError("retained primary lacks real Pi model evidence")
     required.extend((p, index.get(p.relative_to(source).as_posix())) for p in sessions)
+    if record.get("artifact_tree_sha256"):
+        directory = path.parent / "artifacts"
+        if artifact_digest(directory) != record["artifact_tree_sha256"]:
+            raise ValueError("retained artifact tree changed")
+        required.extend((p, index.get(p.relative_to(source).as_posix()))
+                        for p in directory.rglob("*") if p.is_file())
     for file, digest in required:
         if (file.resolve() != file or not file.is_file() or file_digest(file) != digest
                 or index.get(file.relative_to(source).as_posix()) != digest):
@@ -38,11 +45,33 @@ def retained_original(root, record):
     if json.loads(group_lock.read_text())["images"] != record["images"]:
         raise ValueError("retained primary image binding changed")
     raw = json.loads(path.read_text())
-    if (raw.get("exception_info") or raw.get("task_name", "").split("/")[-1]
+    if ((raw.get("exception_info") and not (
+            record.get("artifact_tree_sha256") and audited_verifier_timeout(path)))
+            or raw.get("task_name", "").split("/")[-1]
             != record.get("actual_task_id", record["task_id"])
             or raw.get("config", {}).get("agent", {}).get("kwargs", {}).get("variant") != record["variant_id"]):
         raise ValueError("retained primary has a failed or different task/variant")
     return path, raw
+
+
+def valid_artifact_replay(root, group, record, score, indexed):
+    original = Path(record["solve_source"])
+    agent = score.get("config", {}).get("agent", {})
+    expected = {"source_result": str(original), "result_sha256": record["result_sha256"],
+                "artifacts_sha256": record["artifact_tree_sha256"], "variant": record["variant_id"]}
+    lock = group / "group.lock.json"
+    if (score.get("exception_info") or agent.get("import_path") !=
+            "memweave_eval.artifact_replay:ArtifactReplayAgent" or agent.get("kwargs") != expected
+            or score.get("task_name", "").split("/")[-1] != record["actual_task_id"]
+            or lock.relative_to(root).as_posix() not in indexed
+            or json.loads(lock.read_text())["images"] != record["images"]):
+        return False
+    receipt = group / "harbor" / ("regrade-" + record["variant_id"]) / score["trial_name"] / "agent/artifact-replay.json"
+    if receipt.relative_to(root).as_posix() not in indexed or not receipt.is_file():
+        return False
+    value = json.loads(receipt.read_text())
+    return (value.get("model_requests") == 0
+            and all(value.get(k) == expected[k] for k in ("source_result", "result_sha256", "artifacts_sha256")))
 
 
 def valid_replay_binding(root, group, variant, actual_task, original_path, score, lock, indexed):
@@ -226,6 +255,24 @@ def generate_campaign_report(root: Path):
         else:
             row["score_status"] = row["execution_status"]
             row["score_source"] = row.get("solve_source")
+            if retained and retained[0].get("artifact_tree_sha256"):
+                scores = list((group / "harbor" / ("regrade-" + variant)).glob("*/result.json"))
+                if len(scores) > 1:
+                    raise ValueError("ambiguous artifact replay score")
+                if scores:
+                    path = scores[0]
+                    raw = json.loads(path.read_text())
+                    score = normalize_trial(raw, plan)
+                    if (path.relative_to(root).as_posix() in indexed and
+                            valid_artifact_replay(root, group, retained[0], raw, indexed)):
+                        row.update(success=score["success"], native_reward=score["native_reward"],
+                                   score_status=score["execution_status"],
+                                   score_source=path.relative_to(root).as_posix(),
+                                   grading_seconds=score["elapsed_seconds"],
+                                   grading_error_type=score["error_type"],
+                                   execution_status="scored" if score["success"] is not None else "verifier_error")
+                    else:
+                        row.update(success=None, score_status="invalid_artifact_replay_binding")
         if admission.get("status") == "blocked":
             row.update(execution_status="blocked", score_status="blocked", success=None)
         if invalid:

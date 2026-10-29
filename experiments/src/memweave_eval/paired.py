@@ -18,6 +18,7 @@ from pathlib import Path
 
 import yaml
 
+from .artifact_replay import artifact_digest, audited_verifier_timeout
 from .campaign import (
     VARIANTS,
     ObservationService,
@@ -51,11 +52,13 @@ from .suites import resolve_suite, task_digest, task_info
 
 
 class ResourcePool:
-    """FIFO host quota for whole task pairs, including their possible reserves."""
+    """First-fitting host quota and an independent whole-pair instance bound."""
 
-    def __init__(self, limits):
+    def __init__(self, limits, max_pairs=5):
         self.limits = list(limits)
         self.used = [0, 0, 0]
+        self.max_pairs = max_pairs
+        self.active_pairs = 0
         self.waiting = []
         self.condition = threading.Condition()
 
@@ -72,9 +75,10 @@ class ResourcePool:
                     fitting = next((t for t in self.waiting if all(
                         u + w <= cap
                         for u, w, cap in zip(self.used, t[1], self.limits, strict=True)
-                    )), None)
+                    )), None) if self.active_pairs < self.max_pairs else None
                     if fitting is ticket:
                         self.used = [u + w for u, w in zip(self.used, weight, strict=True)]
+                        self.active_pairs += 1
                         return
                     self.condition.wait(0.5)
             finally:
@@ -84,7 +88,8 @@ class ResourcePool:
     def release(self, weight):
         with self.condition:
             self.used = [u - w for u, w in zip(self.used, weight, strict=True)]
-            if any(x < 0 for x in self.used):
+            self.active_pairs -= 1
+            if self.active_pairs < 0 or any(x < 0 for x in self.used):
                 raise ValueError("unbalanced resource release")
             self.condition.notify_all()
 
@@ -298,11 +303,47 @@ def completed_info(spec, catalog):
 
 
 
+AUDITED_BUDGET_END = {
+    "result": "95094599366554b72254ccde61228d0fb83e478b5490220239cc555f172dd901",
+    "patch": "6198aebccb8450ff1893f7a4db30e7db777edf2424d261505fc01a14d4fbe184",
+    "group": "ae0bf5a822b14c0ea540f8cf485380d52c986d2bdfda54bf3f7563b0664c8a0b",
+}
+
+
+def audited_budget_end(parent, row):
+    """One reviewed original timeout, never a generic failed-agent retry rule."""
+    if (row.get("suite_id") != "swe-bench-pro-v2" or row.get("variant_id") != "pi-native"
+            or row.get("solve_status") != "agent_error" or row.get("success") is None):
+        return False
+    path = Path(row["solve_source"])
+    path = path if path.is_absolute() else parent / path
+    files = {"result": path, "patch": path.parent / "agent/model.patch",
+             "group": path.parents[3] / "group.lock.json"}
+    if any(not p.is_file() or file_digest(p) != AUDITED_BUDGET_END[k] for k, p in files.items()):
+        return False
+    raw = json.loads(path.read_text())
+    error = raw.get("exception_info") or {}
+    probe = path.parent / "agent/network-probe.json"
+    return bool(
+        error.get("exception_type") == "NonZeroAgentExitCodeError"
+        and error.get("exception_message", "").startswith(
+            "Command failed (exit 124): timeout -k 30 2939 bash -o pipefail -c ")
+        and raw.get("config", {}).get("agent", {}).get("kwargs", {}).get("variant") == "pi-native"
+        and probe.is_file() and json.loads(probe.read_text()).get("passed") is True
+    )
+
+
 def validate_started_row(parent, row, *, interrupted):
     allowed = {"completed_patch", "cancelled"}
     if row.get("suite_id") == "terminal-bench-4":
         allowed.add("scored")
-    if (row.get("solve_status") not in allowed
+    source = Path(row["solve_source"])
+    source = source if source.is_absolute() else parent / source
+    ungraded_artifacts = (row.get("suite_id") == "terminal-bench-4"
+                         and row.get("solve_status") == "verifier_error"
+                         and audited_verifier_timeout(source))
+    if ((row.get("solve_status") not in allowed and not audited_budget_end(parent, row)
+         and not ungraded_artifacts)
             or not row.get("session_diagnostics", {}).get("model_responses_with_usage")):
         raise ValueError("completed pair has incomplete solve/primary score/model evidence")
     if interrupted:
@@ -328,10 +369,13 @@ def primary_evidence(row):
     patch = path.parent / "agent/model.patch"
     if not path.is_absolute() or not group_lock.is_file():
         raise ValueError("retained primary needs its original frozen group")
-    return dict(row, result_sha256=file_digest(path),
+    record = dict(row, result_sha256=file_digest(path),
                 patch_sha256=file_digest(patch) if patch.is_file() else None,
                 group_lock_sha256=file_digest(group_lock),
                 images=json.loads(group_lock.read_text())["images"])
+    if row.get("suite_id") == "terminal-bench-4" and audited_verifier_timeout(path):
+        record["artifact_tree_sha256"] = artifact_digest(path.parent / "artifacts")
+    return record
 
 
 def validate_registered_solve(parent, group, actual_task):
@@ -361,6 +405,9 @@ def partition_primary_rows(parent, rows):
                        or row.get("retained_interrupted") or row.get("comparison_eligible") is False)
         if not interrupted and row.get("success") is not None:
             kept.append(record)
+        elif (not interrupted and row.get("suite_id") == "terminal-bench-4"
+              and audited_verifier_timeout(path)):
+            pending.append(primary_evidence(record))
         elif not interrupted and row.get("suite_id") == "swe-bench-pro-v2" and row.get("solve_status") == "completed_patch":
             patch = path.parent / "agent/model.patch"
             if not patch.is_file() or not path.is_file():
@@ -381,7 +428,10 @@ def partition_primary_rows(parent, rows):
 def pre_pi_failure(parent, row, adapter_sha):
     """Only audited adapters and exact pre-Pi evidence can prove zero inference."""
     legacy = adapter_sha == "67b9481b7e7b9cc08e00b91dfd1855e10ca6825df3ed60c131f85996d79f0192"
-    if not legacy and adapter_sha != "0680e465b92628bc7478be41b7cf04b8d5ff3024c6cf0fb2083cbf8bc82c8abf":
+    if not legacy and adapter_sha not in {
+        "0680e465b92628bc7478be41b7cf04b8d5ff3024c6cf0fb2083cbf8bc82c8abf",
+        "0f73c4d53efb6e63d9c80ebc32f47bbb850e63510094dd2fe9af444115b0bd45",
+    }:
         return False
     path = Path(row["solve_source"])
     path = path if path.is_absolute() else parent / path
@@ -415,17 +465,26 @@ def verify_adapters(lock):
     old = lock["implementation_files"]
     base = "experiments/src/memweave_eval/"
     pinned = {
-        "pi_agent.py": "0680e465b92628bc7478be41b7cf04b8d5ff3024c6cf0fb2083cbf8bc82c8abf",
+        "pi_agent.py": "0f73c4d53efb6e63d9c80ebc32f47bbb850e63510094dd2fe9af444115b0bd45",
         "runtime_cache.py": "836c83bec3c6babf70e9082027b0a9c8a1101b5cdc83c62a803f2f267450552a",
         "runner.py": "5a753285ba1bbcd5a71002a68d6bbdbad12f6aa49c80d1931c25fa2f8ea2c58c",
         "images.py": "09897b3a1695458476b424b1ef9d73fcae107eed90da6e9983929b33b4d7a90c",
         "network_probe.py": "951263a2a9a7b424f1f833e20f097b286a35f0f033852cc9bf3a9b0fa707fe19",
         "public_archive.py": "c9f479fb64c2aaf821c794113181cee395b2b5844f609d138d3e6a4521bf59be",
         "private_runtime.py": "fc68bb73a39aac027a7263958325e043e480c8222524c19a51f89abd833f1b39",
+        "artifact_replay.py": "7b6286211bbe07f0c169cebdfaf94ba302115dc9cead7c9f3fb2ee58d1deeec4",
     }
     current = {base+n: file_digest(REPOSITORY/(base+n)) for n in pinned}
     if all(old.get(path) == digest for path, digest in current.items()):
         return None
+    if (all(old.get(base+n) == current[base+n] for n in pinned
+            if n not in {"pi_agent.py", "artifact_replay.py"})
+            and old.get(base+"pi_agent.py") == "0680e465b92628bc7478be41b7cf04b8d5ff3024c6cf0fb2083cbf8bc82c8abf"
+            and old.get(base+"artifact_replay.py") is None
+            and all(current[base+n] == pinned[n] for n in ("pi_agent.py", "artifact_replay.py"))):
+        return {"reason": "approved private file ownership and artifact-only grading",
+                "approval": "user environment autonomy; run proposal sections 29-32",
+                "old": old.get(base+"pi_agent.py"), "current": current[base+"pi_agent.py"]}
     if (all(old.get(base+n) == current[base+n] for n in pinned if n != "images.py")
             and old.get(base+"images.py") == "cd7e5ceecde76b5bd2b4df91f423ff72ff41d5b14117b54b520d9cf0bf90b3f5"
             and current[base+"images.py"] == pinned["images.py"]):
@@ -440,6 +499,7 @@ def verify_adapters(lock):
                 "old": old.get(base+"network_probe.py"), "current": current[base+"network_probe.py"]}
     previous = {
         "pi_agent.py": {"67b9481b7e7b9cc08e00b91dfd1855e10ca6825df3ed60c131f85996d79f0192",
+                        "0680e465b92628bc7478be41b7cf04b8d5ff3024c6cf0fb2083cbf8bc82c8abf",
                         "2599b4fb16c93592eab936942c0ddd7e177ed13eb047d69fe40e745dd0954eed",
                         "551512dc149c519954a9cbf45394fdc72f6c979552006ad7f1bb7214e37442f6"},
         "runtime_cache.py": {"7cc13d6026e87cc44f5a2ac37d5d235cb63d547381025bca2b71eb6ae93910d2"},
@@ -448,6 +508,7 @@ def verify_adapters(lock):
         "network_probe.py": {None, "57a62831b10be9fc29ac7683a225b82f8c92e3585513355769fddc66a2b8aa4b", pinned["network_probe.py"]},
         "public_archive.py": {None, pinned["public_archive.py"]},
         "private_runtime.py": {None},
+        "artifact_replay.py": {None, pinned["artifact_replay.py"]},
     }
     approved = all(current[base+n] == digest for n, digest in pinned.items()) and all(
         old.get(base+n) in allowed for n, allowed in previous.items())
@@ -704,7 +765,8 @@ def run_pairs(spec):
             )
             capacity = docker_preflight(pair_spec, [infos[slots[0]["task_id"]]])
             pool = ResourcePool(
-                (capacity["cpus"], capacity["memory_mb"] - 512, capacity["available_disk_mb"] - 512)
+                (capacity["cpus"], capacity["memory_mb"] - 512, capacity["available_disk_mb"] - 512),
+                max_pairs=spec.execution.concurrency // 2,
             )
             rank = {}
             for slot in slots:
@@ -773,7 +835,9 @@ def run_pairs(spec):
                 finally:
                     pool.release(weight)
 
-            executor = ThreadPoolExecutor(max_workers=spec.execution.concurrency // 2)
+            # All finite remaining slots may wait for quota, so heavy waiting
+            # pairs cannot hide a later fitting pair outside the resource queue.
+            executor = ThreadPoolExecutor(max_workers=len(ordered))
             futures = {executor.submit(worker, row): row for row in ordered}
             try:
                 for future in as_completed(futures):
@@ -1113,6 +1177,22 @@ def _pair(
             execute(cfg, required=False)
         elif replays:
             execute(replays[0], required=False)
+    elif protocol == "tb4":
+        for record in inherited_primary:
+            if record.get("success") is not None:
+                continue
+            cfg = build_job_config(pair_spec, group, "regrade-" + record["variant_id"],
+                                   paths, protocol=protocol, control="nop")
+            cfg["agents"] = [{
+                "import_path": "memweave_eval.artifact_replay:ArtifactReplayAgent",
+                "model_name": "replay", "kwargs": {
+                    "source_result": record["solve_source"],
+                    "result_sha256": record["result_sha256"],
+                    "artifacts_sha256": record["artifact_tree_sha256"],
+                    "variant": record["variant_id"],
+                },
+            }]
+            execute(cfg, required=False)
     verify()
     mark("incomplete" if pre_pi_failed else "finished")
     if stopped:

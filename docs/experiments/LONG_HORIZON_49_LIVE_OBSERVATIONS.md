@@ -658,3 +658,5 @@
 - 2026-10-29 08:15:18 CST 维护派发闸门：逐个核验10个已派发solve Job全部变体均有agent-end、live在途0后，仅SIGSTOP控制PID4753；原Harbor子进程继续。父观察器从此停更，以下人工直接复核评分，不把旧live时间当当前采样。T14两侧原始官方reward均0；T11插件独立评分尚在原900秒限额内。阶段未关闭，未修改实验源码。
 
 - 2026-10-29 08:18 CST 人工直接观察：父PID仍T，T11插件官方npm test仍等待、当前0仅为test.sh预写值，尚无最终result，不能提前记能力0。T14两侧已自然评分结束，原生官方内部97／97与96／97混合，插件94／97；首reward均0。T12独立0模型诊断证明0600复制文件归属501:20、nobody不可读，chown65534:65534后可读。
+
+- 2026-10-29 08:28:54 CST 人工复核：T11:solving→finished；T14:solving→finished；S26:preparing→software_preflight；S27:未开始→preparing；模型返回1621，在途{}，峰值4，累计估算$6.266889，停止原因KeyboardInterrupt。

@@ -59,3 +59,17 @@ be3cc95ea7阶段继续冻结4561ba8执行代码与f393／4d089候选。截至34�
 | 一次干净页缓存释放 | VM Cached约36GiB降至0.3GiB、host swap6.5→5.6GiB；随后60秒仍6次回拨，最大252ms，所以没有通过时钟修复验收。文件／镜像／SDK／模型堆均未清 |
 
 来源为仓库外analysis/long49的t08-streaming-audit、t09-semantic-diagnostic、t10-future-publication-diagnostic、s24-negative-duration-parser-audit、clock-observation及clean-page-cache-pressure各20261029目录／JSON；其中保存原件／诊断源码SHA、资源与返回值。完整Session不复制进仓库。疑难记录见MW-011S/T/U及MW-013E/G。时钟修复仍待安全间隙验证，不能把有限内存缓解或上游draft当验收通过；也不能用此解释所有确定的纯数值／版本生命周期缺陷。
+
+
+## 36题后的受限维护与实际验收（08:30 CST前）
+
+be3cc95ea7阶段全部真实Pi先自然结束，再只暂停控制父PID，最后T11独立评分仍在原900秒内继续；其最终超时而无有效reward。所有已派发solve/regrade Trial均有原始最终result后才排队SIGINT／恢复父PID，正常关闭阶段。阶段原件索引完整、invalid_evidence为空，已完成36个完整题对，另有T11原生有效0、插件待首个有效评分。累计6.266888844美元、10条历史尝试全部继承；T14原生官方内部检查有97/97与96/97混合，首0不改。
+
+维护接线先增加失败测试再实现，完整实验开发测试160项通过，Ruff通过。验收覆盖实际UID/GID／0600／异常身份拒绝、第六题对即使硬件足够也不能取得实例额度、精确SHA绑定S14预算结束首分、T11仅原产物score_only与重放来源／回执／镜像／篡改拒绝。没有修改生产src／resources／包候选。真实无模型验收另列：
+
+- T12原始镜像复制0600文件归属501:20，对nobody不可读；chown65534:65534后可读。完整新SDK预检原生4工具／compaction=true，插件16工具／compaction=false、embedding384，均0模型。
+- ArtifactReplay只调用Harbor自身ArtifactHandler；在T11原主镜像实际上传、重新收集26份业务文件逐文件SHA完全一致，verifier关闭，此项不记官方评分或真实Pi能力。
+- completed_info对真实已关闭父阶段验算通过：保留73侧已有效评分、T11插件1侧仅评分，累计费用一致，10条历史尝试不丢；正常0不进入模型计划。此为只读恢复验算，不表示已启动后续付费阶段。
+- 专用VM数据盘240→280GiB，CPU12／内存42GiB保持；实测数据盘空闲112GiB。Lima guestagent有效能力已无SYS_TIME，chrony4.5配置无makestep／initstepslew且已选NTP源。ARM／amd64十分钟带负载时钟验收仍在进行，尚不宣布修复通过。
+
+证据在仓库外analysis/long49/vm-maintenance-20261029，含JUnit、SDK原件、roundtrip-receipt、服务备份／配置和时钟采样。另见maintenance-gate-20261029的OS父子检查／实际暂停／关闭回执。后续阶段尚需时钟验收、源码检查点与冻结，不把本节当49题最终报告。
