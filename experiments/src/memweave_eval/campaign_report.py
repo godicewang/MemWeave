@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .artifact_replay import artifact_digest, audited_verifier_timeout
 from .report import duration, normalize_trial, session_diagnostics, summarize
+from .state_metrics import metric_columns, metrics_markdown, task_state_metrics
 from .storage import atomic_json, contained, file_digest
 
 
@@ -32,6 +33,9 @@ def retained_original(root, record):
     if not sessions or not session_diagnostics(sessions)["model_responses_with_usage"]:
         raise ValueError("retained primary lacks real Pi model evidence")
     required.extend((p, index.get(p.relative_to(source).as_posix())) for p in sessions)
+    memory = path.parent / "agent/memory.tar.gz"
+    if memory.exists():
+        required.append((memory, index.get(memory.relative_to(source).as_posix())))
     if record.get("artifact_tree_sha256"):
         directory = path.parent / "artifacts"
         if artifact_digest(directory) != record["artifact_tree_sha256"]:
@@ -189,12 +193,24 @@ def generate_campaign_report(root: Path):
         row["actual_display_id"] = admission.get("actual_display_id", plan["display_id"])
         row["solve_status"] = row["execution_status"]
         row["admission"] = admission
+        row["state_metrics"] = task_state_metrics([], None, enabled=variant == "pi-memweave")
         if original_path:
             external = not original_path.is_relative_to(root)
             row["solve_source"] = str(original_path) if external else original_path.relative_to(root).as_posix()
             sessions = list((original_path.parent / "agent/pi/sessions").glob("*.jsonl"))
             row["session_diagnostics"] = session_diagnostics(sessions)
             row["session_sources"] = [str(p) if external else p.relative_to(root).as_posix() for p in sessions]
+            memory = original_path.parent / "agent/memory.tar.gz"
+            row["state_source"] = (str(memory) if external else memory.relative_to(root).as_posix()) if memory.is_file() else None
+            # External originals have been verified by retained_original above.
+            metric_evidence_ok = not invalid and (external or all(
+                p.relative_to(root).as_posix() in indexed for p in
+                [*sessions, *([memory] if memory.is_file() else [])]))
+            if metric_evidence_ok:
+                row["state_metrics"] = task_state_metrics(
+                    sessions, memory if memory.is_file() else None, enabled=variant == "pi-memweave")
+            else:
+                row["state_metrics"]["source_status"] = "invalid_evidence"
             usage = [live.get("sessions", {}).get(p.relative_to(root).as_posix()) for p in sessions] if not external else []
             row["peak_estimated_cost_usd"] = (
                 sum(u["estimated_cost_usd"] for u in usage)
@@ -315,6 +331,10 @@ def generate_campaign_report(root: Path):
         row.setdefault("origin_run_id", lock["run_id"])
         if invalid:
             row.update(execution_status="invalid_evidence", success=None)
+            row["state_metrics"] = task_state_metrics([], None, enabled=row["variant_id"] == "pi-memweave")
+            row["state_metrics"]["source_status"] = "invalid_evidence"
+        row.setdefault("state_metrics", task_state_metrics([], None, enabled=row["variant_id"] == "pi-memweave"))
+        row.update(metric_columns(row["state_metrics"]))
     summary = summarize(rows)
     blocked_attempt_rows = [
         dict(
@@ -377,11 +397,14 @@ def generate_campaign_report(root: Path):
         "elapsed_seconds",
         "solve_source",
         "score_source",
+        *metric_columns(task_state_metrics([], None)).keys(),
+        "state_metrics",
     ]
     with (root / "comparison.csv").open("w", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=columns, extrasaction="ignore")
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows({**r, "state_metrics": json.dumps(r["state_metrics"], ensure_ascii=False)}
+                         for r in rows)
     text = [
         "# 单题双变体闭环" if lock.get("phase") == "bootstrap" else "# 49题双变体实验",
         "",
@@ -417,5 +440,6 @@ def generate_campaign_report(root: Path):
             text.append(
                 f"| {failure['slot_task_id']} | {failure['task_id']} | {failure.get('phase')} |"
             )
+    text += metrics_markdown(rows)
     (root / "report.md").write_text("\n".join(text) + "\n")
     return summary

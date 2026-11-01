@@ -10,6 +10,7 @@ from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
 
+from .state_metrics import metric_columns, metrics_markdown, task_state_metrics
 from .storage import atomic_json, contained, file_digest
 
 
@@ -270,6 +271,7 @@ def generate_report(root: Path) -> dict:
                 row.update(execution_status="invalid_result", success=None)
         # Derive counts from the existing native original, never create a chat copy.
         sessions = []
+        memory_source = None
         if job.get("path") and not invalid:
             originals = []
             for item in evidence["files"]:
@@ -286,8 +288,19 @@ def generate_report(root: Path) -> dict:
                     if item["path"].startswith(originals[0] + "agent/pi/sessions/")
                     and item["path"].endswith(".jsonl")
                 ]
+                memory_source = next((item["path"] for item in evidence["files"]
+                                      if item["path"] == originals[0] + "agent/memory.tar.gz"), None)
         row["session_sources"] = sessions
         row["diagnostics"] = session_diagnostics([contained(root, path) for path in sessions])
+        row["state_source"] = memory_source
+        row["state_metrics"] = task_state_metrics(
+            [contained(root, path) for path in sessions],
+            contained(root, memory_source) if memory_source else None,
+            enabled=plan["variant_id"] == "pi-memweave",
+        )
+        if invalid:
+            row["state_metrics"]["source_status"] = "invalid_evidence"
+        row.update(metric_columns(row["state_metrics"]))
         row["memory_tool_calls"] = (
             {
                 k: v
@@ -352,5 +365,6 @@ def generate_report(root: Path) -> dict:
         f"阶段墙钟（秒）：`{json.dumps(summary['timing'], ensure_ascii=False)}`；准备 Job 包括软件构建/部署和无模型加载预检，解题 Job 包括环境/安装/解题及其评分，整体还包括官方构建与控制。并发 Trial 的时间不能相加作为 Job 墙钟。",
         "",
     ]
+    lines += metrics_markdown(rows)
     (output / "report.md").write_text("\n".join(lines))
     return summary

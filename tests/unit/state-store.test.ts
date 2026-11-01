@@ -53,7 +53,7 @@ test("State batch is atomic, prefix preserving, idempotent and code-point limite
     await assert.rejects(
       store.append(
         task,
-        [{ ...items[0]!, content: "😀".repeat(101) }],
+        [{ ...items[0]!, content: "😀".repeat(201) }],
         "next",
         100,
         new Set(["U1"]),
@@ -63,6 +63,36 @@ test("State batch is atomic, prefix preserving, idempotent and code-point limite
     const state = await store.read(task);
     assert.equal(state.facts[0]?.id, "F1");
     assert.equal(state.goal, "goal");
+  });
+});
+
+test("State 100-char target accepts 100/101/200 code points, rejects 201 atomically", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "memweave-state-margin-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const paths = memoryPaths(root), store = new StateStore(paths);
+  const task = { task_id: "task_margin", workspace: "--test--" };
+  await withLock(paths.taskLock(task), async () => {
+    await store.initialize(task, "goal", "create");
+    for (const length of [100, 101, 200]) {
+      const items = [{ type: "fact" as const, content: "😀".repeat(length), evidence: { U1: "user" } }];
+      const state = await store.append(task, items, `length-${length}`, 100, new Set(["U1"]));
+      assert.equal(state.facts.at(-1)?.content, items[0]!.content);
+      assert.equal((await store.append(task, items, `length-${length}`, 100, new Set())).version, state.version);
+    }
+    const before = await readFile(paths.state(task), "utf8");
+    await assert.rejects(store.append(task, [
+      { type: "decision", content: "valid first item", evidence: { U1: "user" } },
+      { type: "fact", content: "😀".repeat(201), evidence: { U1: "user" } },
+    ], "reject-batch", 100, new Set(["U1"])), /actual=201; max=200/);
+    assert.equal(await readFile(paths.state(task), "utf8"), before);
+    await store.updateGoal(task, { goal: "界".repeat(200), summary: "s", keywords: ["s"], evidence: { U1: "u" } }, "goal", 100, new Set(["U1"]));
+    const input = { archive: ["F1"], append_fact: { content: "😀".repeat(200), evidence: { U1: "u" } } };
+    const state = await store.modifyFact(task, input, "modify", 100, new Set(["U1"]));
+    assert.equal((await store.modifyFact(task, input, "modify", 100, new Set())).version, state.version);
+    const corrected = await readFile(paths.state(task), "utf8");
+    await assert.rejects(store.modifyFact(task, { ...input, archive: ["F2"], append_fact: { ...input.append_fact, content: "😀".repeat(201) } }, "bad-modify", 100, new Set(["U1"])), /actual=201; max=200/);
+    await assert.rejects(store.updateGoal(task, { goal: "a".repeat(201), summary: "s", keywords: ["s"], evidence: { U1: "u" } }, "bad-goal", 100, new Set(["U1"])), /actual=201; max=200/);
+    assert.equal(await readFile(paths.state(task), "utf8"), corrected);
   });
 });
 

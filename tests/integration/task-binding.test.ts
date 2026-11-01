@@ -121,7 +121,7 @@ test("simple answers and search never gate; a failed create gates business execu
   assert.equal(bindingReceipts(h.manager.getBranch()).length, 0);
   assert.equal((await h.tasks.index.read()).length, 0);
   h.faux.setResponses([
-    answer([call("task_create", { ...create, goal: "长".repeat(101) })]),
+    answer([call("task_create", { ...create, goal: "长".repeat(201) })]),
     answer([call("probe", {})]),
     answer([call("task_create", create)]),
     answer([call("probe", {})]),
