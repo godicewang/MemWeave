@@ -86,6 +86,18 @@ def test_failure_retry_and_duplicate_originals_do_not_inflate_events(tmp_path):
     assert partial["write_model_positions"] == [2]
 
 
+def test_error_receipt_can_correspond_to_a_real_committed_batch(tmp_path):
+    path,archive,entries,_=originals(tmp_path,writes={5:(2,False)})
+    for entry in entries:
+        if entry.get('message',{}).get('role')=='toolResult':
+            entry['message']['isError']=True
+    path.write_text(''.join(json.dumps(e)+'\n' for e in entries))
+    metrics=task_state_metrics([path],archive)
+    assert metrics['fd_events_added']==2
+    assert metrics['writes']['state_append']['failures']==1
+    assert metrics['fd_write_receipt_commit_matrix']['error_committed']==1
+
+
 @pytest.mark.parametrize("positions,intervals,cv", [([10, 25, 40], [15, 15], 0),
                                                   ([1, 2, 40], [1, 38], 37 / 39)])
 def test_uniformity_is_batch_spacing_and_edges_are_separate(tmp_path, positions, intervals, cv):

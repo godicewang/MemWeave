@@ -55,7 +55,7 @@ def evidence_index(root: Path) -> list[dict]:
                   for p in (root / name).rglob("*")]
     if (root / "admission.json").exists():
         candidates.append(root / "admission.json")
-    for name in ("runtime-assets.json", "runtime-assets.lock.json"):
+    for name in ("runtime-assets.json", "runtime-assets.lock.json", "case-gold.json", "control/quota.json"):
         if (root / name).exists():
             candidates.append(root / name)
     for p in sorted(candidates):

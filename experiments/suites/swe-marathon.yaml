@@ -1,0 +1,6 @@
+schema_version: 1
+id: swe-marathon
+repository: https://github.com/abundant-ai/swe-marathon.git
+revision: dd4d2bbc8d2ec8bb22fc4a4261d3b0c827faa2a4
+tasks_dir: tasks
+protocol: swe-marathon

@@ -12,6 +12,7 @@ import sys
 import tarfile
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
@@ -152,6 +153,12 @@ def build_job_config(
                 "runtime_plan": str(runtime_plan) if runtime_plan else None,
                 "runtime_plan_sha256": file_digest(runtime_plan) if runtime_plan else None,
                 "prepare_only": prepare_only,
+                **({'evaluation_deadline': datetime.fromisoformat(
+                    spec.evaluation.deadline_utc).timestamp()-1500,
+                    'evaluation_output_tokens':spec.evaluation.output_tokens,
+                    'evaluation_progress_after_returns':spec.evaluation.progress_after_returns}
+                   if getattr(spec, 'evaluation', None) else {}),
+                **({'evaluation_run_id':run_root.name} if getattr(spec,'evaluation',None) else {}),
             },
         }
     cfg = {
@@ -468,7 +475,8 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
     ).strip()
     code_files = {
         p.relative_to(REPOSITORY).as_posix(): file_digest(p)
-        for p in sorted((REPOSITORY / "experiments/src").rglob("*.py"))
+        for p in sorted((REPOSITORY / "experiments/src").rglob("*"))
+        if p.is_file() and p.suffix in ('.py','.mjs','.ts')
     }
     spec.root.mkdir(parents=True, exist_ok=True, mode=0o700)
     with (spec.root / ".run.lock").open("a") as lease:
@@ -478,6 +486,9 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
             raise ValueError("another experiment is active under this root") from exc
         started = time.monotonic()
         deadline = started + spec.limits.max_elapsed_seconds
+        if spec.evaluation:
+            deadline = min(deadline, started + datetime.fromisoformat(
+                spec.evaluation.deadline_utc).timestamp() - time.time()-120)
         run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ-") + uuid.uuid4().hex[:10]
         root = spec.root / "runs" / run_id
         root.mkdir(parents=True, mode=0o700)
@@ -513,7 +524,8 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
             # Explicit platform on the single main service, without task/resource changes.
             platform_overlay = root / "platform.yaml"
             platform_overlay.write_text(
-                yaml.safe_dump({"services": {"main": {"platform": spec.execution.platform}}})
+                yaml.safe_dump({"services": {"main": {"platform": spec.execution.platform,
+                    'labels':{'org.memweave.eval.run':run_id}}}})
             )
 
             def execute(cfg, *, required=True):
@@ -526,7 +538,7 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                 return code
 
             preparations = {}
-            if suite.protocol == "tb4":
+            if suite.protocol in ("tb4", "swe-marathon"):
                 selected, paths, preparations = admit_tb_tasks(
                     spec, subset, selection["selected"] + selection["reserves"],
                     upstream / suite.tasks_dir, root, state, env, deadline, execute)
@@ -564,6 +576,26 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                 for variant in spec.variants
                 for task in selected
             ]
+            if spec.evaluation:
+                from .budget_guard import initialize
+                control = spec.root/'budgets'/spec.evaluation.budget_id
+                control.mkdir(parents=True,exist_ok=True,mode=0o700)
+                quota_deadline=datetime.fromisoformat(spec.evaluation.deadline_utc).timestamp()-1500
+                arm_limits={variant.id:spec.evaluation.arm_budget_usd for variant in spec.variants}
+                if not (control/'quota.json').exists():
+                    initialize(control/'quota.json', spec.evaluation.admission_budget_usd,
+                               quota_deadline,arm_limits=arm_limits)
+                else:
+                    previous=json.loads((control/'quota.json').read_text())
+                    if (previous['maximum_usd']!=spec.evaluation.admission_budget_usd
+                            or previous['deadline']!=quota_deadline or previous.get('arm_limits')!=arm_limits):
+                        raise ValueError('shared task budget settings cannot change or reset')
+                atomic_json(root/'case-gold.json',json.loads(spec.evaluation.gold.read_text()),immutable=True)
+                platform_overlay.write_text(yaml.safe_dump({'services':{'main':{
+                    'platform':spec.execution.platform,
+                    'labels':{'org.memweave.eval.run':run_id},
+                    'volumes':[str(control)+':/opt/memweave-eval-control:rw'],
+                }}}))
             lock = {
                 "schema_version": 1,
                 "experiment_id": spec.experiment_id,
@@ -577,7 +609,10 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                 "implementation_files": code_files,
                 "pricing": {
                     "source": "https://api-docs.deepseek.com/quick_start/pricing/",
-                    "checked_at": "2026-10-27T00:33:05+08:00",
+                    "checked_at": "2026-11-01T12:49:00Z" if spec.evaluation else "2026-10-27T00:33:05+08:00",
+                    "requested_model_id": spec.model.id,
+                    "catalog_model_version": "DeepSeek-V4.1-Flash-1017" if spec.evaluation and spec.model.id=='deepseek-flash' else None,
+                    "settlement_basis": "peak cache-miss input and all completion tokens (including reasoning); conservative ceiling, not account bill" if spec.evaluation else None,
                     "currency": "USD",
                     "basis": "Pi 1.4.0 native usage; peak reference rates, estimated not billed",
                     "per_million_tokens": {
@@ -596,13 +631,26 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                 if suite.protocol == "swe-pro-v2"
                 else {},
                 "plan": plan,
+                "evaluation_gold_sha256": file_digest(root/'case-gold.json') if spec.evaluation else None,
             }
             atomic_json(root / "experiment.lock.json", lock, immutable=True)
             lock_written = True
             env = tool_environment(spec, upstream, inference=True)
+            if spec.evaluation:
+                watchdog_log=(root/'watchdog-console.log').open('wb')
+                subprocess.Popen([sys.executable,'-m','memweave_eval.deadline_watchdog',str(root),run_id,
+                                  str(quota_deadline),str(quota_deadline+1380)],env=env,
+                                 stdin=subprocess.DEVNULL,stdout=watchdog_log,stderr=subprocess.STDOUT,
+                                 start_new_session=True)
+                watchdog_log.close()
             credential = json.loads(auth_file().read_text())["deepseek"]["key"].encode()
 
             def verify_inputs():
+                actual_code={p.relative_to(REPOSITORY).as_posix():file_digest(p)
+                    for p in (REPOSITORY/'experiments/src').rglob('*')
+                    if p.is_file() and p.suffix in ('.py','.mjs','.ts')}
+                if actual_code!=code_files:
+                    raise ValueError('frozen experiment implementation changed')
                 plan_path = root / "runtime-assets.json"
                 if (file_digest(plan_path) != runtimes["plan_sha256"]
                         or snapshot(json.loads(plan_path.read_text())) != runtimes["objects"]):
@@ -615,6 +663,25 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
 
             for rep in range(1, spec.execution.repetitions + 1):
                 order = spec.variants if rep % 2 else list(reversed(spec.variants))
+                if spec.execution.paired_concurrent:
+                    if suite.protocol != 'swe-marathon' or docker['effective_concurrency'] != 2:
+                        raise ValueError('concurrent Marathon pair requires capacity for both official instances')
+                    verify_inputs()
+                    configs=[]
+                    for variant in order:
+                        name=f'{variant.id}-r{rep}'
+                        state['jobs'][name]={'path':f'harbor/{name}','purpose':'solve'}
+                        cfg=build_job_config(spec,root,name,paths,variant=variant.id,
+                            auth_path=auth_file(),protocol=suite.protocol,runtime_plan=root/'runtime-assets.json')
+                        cfg['n_concurrent_trials']=1
+                        configs.append(cfg)
+                    atomic_json(root/'run.json',state)
+                    with ThreadPoolExecutor(max_workers=2) as pool:
+                        outcomes=list(pool.map(execute,configs))
+                    verify_inputs()
+                    if any(outcomes) or image_snapshot(paths)!=images:
+                        raise ValueError('concurrent pair failed or task images changed')
+                    continue
                 for variant in order:
                     if any(
                         file_digest(REPOSITORY / path) != digest
@@ -681,8 +748,27 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
             )
             raise
         finally:
+            if spec.evaluation:
+                cleanup={'confirmed_stopped':False}
+                try:
+                    query=['docker','ps','--filter','label=org.memweave.eval.run='+run_id,'--format','{{.ID}}']
+                    ids=subprocess.check_output(query,text=True,timeout=10).split()
+                    cleanup['killed']={identity:subprocess.run(['docker','kill',identity],
+                        capture_output=True,check=False,timeout=10).returncode for identity in ids}
+                    cleanup['confirmed_stopped']=not subprocess.check_output(query,text=True,timeout=10).split()
+                except (OSError,subprocess.SubprocessError):
+                    cleanup['reason']='Docker cleanup could not be confirmed; independent watchdog remains active'
+                atomic_json(root/'harbor/container-cleanup.json',cleanup)
+                if cleanup['confirmed_stopped']:
+                    (root/'.watchdog-stop').touch()
+                else:
+                    state.update(complete=False,stop_reason=cleanup.get('reason','container cleanup unconfirmed'))
             state["finished_at"] = datetime.now(UTC).isoformat()
             state["estimated_known_cost_usd"] = observed_cost(root)
+            if spec.evaluation:
+                quota=spec.root/'budgets'/spec.evaluation.budget_id/'quota.json'
+                if quota.is_file():
+                    atomic_json(root/'control/quota.json',json.loads(quota.read_text()))
             atomic_json(root / "run.json", state)
             if credential is not None:
                 try:

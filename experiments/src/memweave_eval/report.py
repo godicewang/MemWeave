@@ -10,6 +10,7 @@ from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
 
+from .engineering_metrics import task_engineering_metrics
 from .state_metrics import metric_columns, metrics_markdown, task_state_metrics
 from .storage import atomic_json, contained, file_digest
 
@@ -272,6 +273,7 @@ def generate_report(root: Path) -> dict:
         # Derive counts from the existing native original, never create a chat copy.
         sessions = []
         memory_source = None
+        originals = []
         if job.get("path") and not invalid:
             originals = []
             for item in evidence["files"]:
@@ -310,6 +312,16 @@ def generate_report(root: Path) -> dict:
             if row["diagnostics"] is not None and plan["variant_id"] == "pi-memweave"
             else None
         )
+        if len(originals)==1 and not invalid:
+            agent=contained(root,originals[0]+'agent')
+            row['engineering_metrics']=task_engineering_metrics(agent)
+            if lock['suite']['protocol']=='swe-marathon':
+                from .wasm_metrics import wasm_metrics
+                gold_path=root/'case-gold.json'
+                if file_digest(gold_path)!=lock.get('evaluation_gold_sha256'):
+                    raise ValueError('frozen case gold changed')
+                row['behavior_metrics']=wasm_metrics(agent,json.loads(gold_path.read_text()),
+                                                    enabled=plan['variant_id']=='pi-memweave')
         rows.append(row)
     summary = summarize(rows)
     summary["complete"] = (
@@ -366,5 +378,15 @@ def generate_report(root: Path) -> dict:
         "",
     ]
     lines += metrics_markdown(rows)
+    for row in rows:
+        if row.get('engineering_metrics'):
+            lines+=['',f"## {row['variant_id']} 工程统计",'',
+                    '```json',json.dumps(row['engineering_metrics'],ensure_ascii=False,indent=2),'```']
+        if row.get('behavior_metrics'):
+            lines+=['',f"## {row['variant_id']} 固定行为检查点",'',
+                    '| 案例 | 0/1 | 状态 | 原因 |','|---|---:|---|---|']
+            for case in row['behavior_metrics']['cases']:
+                lines.append(f"| {case['case_id']} | {case['value']} | {case['status']} | {case.get('reason') or ''} |")
+            lines+=['','记忆项仅在实际证据驱逐后判定；State 交付、引用保全和后续业务成功均不单独证明因果采用。']
     (output / "report.md").write_text("\n".join(lines))
     return summary

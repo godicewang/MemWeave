@@ -1,0 +1,6 @@
+count: 1
+seed: memweave-marathon-20261101
+max_cpus: 4
+max_memory_mb: 16384
+max_storage_mb: 20480
+task_ids: [wasm-simd]

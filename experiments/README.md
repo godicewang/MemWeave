@@ -49,6 +49,10 @@ docker buildx version
 
 ## 三个入口
 
+2026-11-01 增量：SWE-Marathon 单题并发受控实验与两类程序指标见 [接线设计](../docs/experiments/MARATHON_METRICS_DESIGN.md)，固定配置为 `configs/marathon-wasm.yaml`。此配置采用两个并发 Harbor Job、跨 run 共享准入账本及相等 arm 子限额；原 schema1/49题历史运行不回写。价格估算、保守准入上限与账户账单分开报告。
+
+离线行为案例沿同一实验 CLI 评分：`memweave-eval score-cases GOLD.json EVIDENCE.json`。金标使用受控、审计后的字段与固定检查点；不将任意自由文本 State 自动转换成语义真值。正式报告在原始 Trial 行增加 `engineering_metrics` 和 `behavior_metrics`，保留官方 reward 和分类统计。指标范围与未触发/未知处理见 [有价值指标](有价值指标.md)。
+
 ```sh
 uv run --locked memweave-eval validate /absolute/path/to/experiment.yaml
 uv run --locked memweave-eval run /absolute/path/to/experiment.yaml

@@ -18,8 +18,16 @@ def main(argv=None) -> int:
     for name in ("validate", "run"):
         sub.add_parser(name).add_argument("config", type=Path)
     sub.add_parser("report").add_argument("run_dir", type=Path)
+    cases=sub.add_parser('score-cases',help='Score frozen offline cases with deterministic predicates')
+    cases.add_argument('gold',type=Path)
+    cases.add_argument('evidence',type=Path)
     args = parser.parse_args(argv)
     try:
+        if args.command=='score-cases':
+            from .case_oracles import score_case_suite
+            result=score_case_suite(json.loads(args.gold.read_text()),json.loads(args.evidence.read_text()))
+            print(json.dumps(result,ensure_ascii=False,indent=2))
+            return 0
         if args.command == "report":
             summary = generate_report(args.run_dir.resolve())
             print(json.dumps(summary, ensure_ascii=False, indent=2))

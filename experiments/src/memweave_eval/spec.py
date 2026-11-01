@@ -57,11 +57,32 @@ class Execution(StrictModel):
     concurrency: Annotated[int, Field(strict=True, ge=1, le=2)] = 2
     repetitions: PositiveInt = 1
     automatic_trial_retries: Literal[0] = 0
+    paired_concurrent: StrictBool = False
 
 
 class Limits(StrictModel):
     max_cost_usd: Annotated[float, Field(strict=True, gt=0)]
     max_elapsed_seconds: PositiveInt
+
+
+class Evaluation(StrictModel):
+    gold: Path
+    deadline_utc: str
+    admission_budget_usd: Annotated[float, Field(strict=True, gt=0, le=29)]
+    output_tokens: Annotated[int, Field(strict=True, gt=0, le=384000)] = 16384
+    budget_id: Identifier
+    arm_budget_usd: Annotated[float, Field(strict=True, gt=0)] = 12.0
+    progress_after_returns: Annotated[int, Field(strict=True, gt=0)] = 80
+
+    @model_validator(mode="after")
+    def deadline(self):
+        from datetime import datetime
+        value = datetime.fromisoformat(self.deadline_utc)
+        if value.tzinfo is None or value.utcoffset().total_seconds() != 0:
+            raise ValueError('evaluation deadline must be explicit UTC')
+        if 2*self.arm_budget_usd > self.admission_budget_usd:
+            raise ValueError('equal arm budgets must fit the global admission budget')
+        return self
 
 
 def outside_repository(path: Path) -> Path:
@@ -87,6 +108,7 @@ class Experiment(StrictModel):
     variants: list[Variant]
     execution: Execution
     limits: Limits
+    evaluation: Evaluation | None = None
     root: Path = Field(default_factory=lambda: Path.home() / ".local/share/memweave-experiments")
 
     @model_validator(mode="after")
@@ -94,16 +116,18 @@ class Experiment(StrictModel):
         if sorted(v.id for v in self.variants) != ["pi-memweave", "pi-native"]:
             raise ValueError("exactly the native and MemWeave variants are required")
         self.root = outside_repository(self.root)
+        if self.evaluation and self.evaluation.admission_budget_usd >= self.limits.max_cost_usd:
+            raise ValueError('admission limit must leave a safety reserve')
         return self
 
 
 class Suite(StrictModel):
     schema_version: Literal[1] = 1
-    id: Literal["terminal-bench-4", "swe-bench-pro-v2"]
+    id: Literal["terminal-bench-4", "swe-bench-pro-v2", "swe-marathon"]
     repository: str
     revision: Commit
     tasks_dir: str
-    protocol: Literal["tb4", "swe-pro-v2"]
+    protocol: Literal["tb4", "swe-pro-v2", "swe-marathon"]
 
     @model_validator(mode="after")
     def official_source(self):
@@ -118,6 +142,9 @@ class Suite(StrictModel):
                 "v2/tasks",
                 "swe-pro-v2",
             ),
+            "swe-marathon": (
+                "https://github.com/abundant-ai/swe-marathon.git", "tasks", "swe-marathon",
+            ),
         }[self.id]
         if (self.repository, self.tasks_dir, self.protocol) != expected:
             raise ValueError("suite must retain its official source, task root and protocol")
@@ -130,6 +157,13 @@ class Subset(StrictModel):
     max_cpus: PositiveInt
     max_memory_mb: PositiveInt
     max_storage_mb: PositiveInt
+    task_ids: list[Identifier] | None = None
+
+    @model_validator(mode='after')
+    def fixed_tasks(self):
+        if self.task_ids is not None and (len(self.task_ids) != self.count or len(set(self.task_ids)) != self.count):
+            raise ValueError('fixed task IDs must match count without duplicates')
+        return self
 
 
 class UniqueLoader(yaml.SafeLoader):
@@ -171,8 +205,14 @@ def load_experiment(path: Path) -> tuple[Experiment, Suite, Subset]:
     for name in ("suite", "subset"):
         setattr(spec, name, (path.parent / getattr(spec, name)).resolve())
     spec.subject.package = (path.parent / spec.subject.package.expanduser()).resolve()
+    if spec.evaluation:
+        spec.evaluation.gold = (path.parent / spec.evaluation.gold).resolve()
     suite = Suite.model_validate(load_yaml(spec.suite))
     subset = Subset.model_validate(load_yaml(spec.subset))
     if suite.protocol == "swe-pro-v2" and spec.execution.platform != "linux/amd64":
         raise ValueError("Pro V2 requires its official linux/amd64 images")
+    if suite.protocol == 'swe-marathon' and (
+        not spec.evaluation or not spec.execution.paired_concurrent or not subset.task_ids
+    ):
+        raise ValueError('Marathon requires fixed cases, request admission and concurrent pairs')
     return spec, suite, subset

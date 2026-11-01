@@ -81,6 +81,8 @@ def select_tasks(root: Path, suite_id: str, options: dict) -> dict:
         if p.is_symlink():
             raise ValueError("symlink task root")
         info = task_info(p, suite_id, options)
+        if options.get('task_ids') is not None and p.name not in options['task_ids']:
+            info['reason'] = 'outside preregistered task IDs'
         (excluded if info["reason"] else candidates).append(info)
     groups = defaultdict(list)
     for info in candidates:

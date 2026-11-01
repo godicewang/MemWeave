@@ -400,7 +400,7 @@ def test_shared_model_stop_allows_observed_grading_but_not_observer_failure(tmp_
         service.check_grading()
 
 
-def test_only_approved_probe_adapter_change_can_cross_lineage(tmp_path):
+def test_new_experiment_adapter_cannot_cross_historical_lineage(tmp_path):
     from memweave_eval.paired import verify_adapters
     from memweave_eval.spec import REPOSITORY
     from memweave_eval.storage import file_digest
@@ -417,7 +417,10 @@ def test_only_approved_probe_adapter_change_can_cross_lineage(tmp_path):
     files["experiments/src/memweave_eval/pi_agent.py"] = (
         "67b9481b7e7b9cc08e00b91dfd1855e10ca6825df3ed60c131f85996d79f0192"
     )
-    assert verify_adapters({"implementation_files": files})["reason"] == "approved preparation, Node probe and private musl runtime"
+    # Marathon instrumentation changes the current adapter. Historical approvals
+    # remain pinned; do not silently permit old paid trials to resume under it.
+    with pytest.raises(ValueError, match="adapter changed"):
+        verify_adapters({"implementation_files": files})
     files["experiments/src/memweave_eval/pi_agent.py"] = "0" * 64
     with pytest.raises(ValueError, match="adapter changed"):
         verify_adapters({"implementation_files": files})

@@ -27,7 +27,12 @@ class PiExperimentOptions(PiOptions):
     package_path: str
     package_sha256: str
     auth_path: str
-    protocol: Literal["tb4", "swe-pro-v2"]
+    protocol: Literal["tb4", "swe-pro-v2", "swe-marathon"]
+    evaluation_deadline: float | None = None
+    evaluation_output_tokens: int = 16384
+    evaluation_run_id: str | None = None
+    evaluation_progress_after_returns: int = 80
+    smoke_barrier: str | None = None
     runtime_plan: str | None = None
     runtime_plan_sha256: str | None = None
     prepare_only: bool = False
@@ -232,6 +237,16 @@ class ExperimentPi(Pi):
             self.options.extension = self._asset_root + "/package/src/extension/index.ts"
 
         await self.exec_as_agent(environment, f"mkdir -p {shlex.quote(profile)}")
+        if self.options.evaluation_deadline:
+            evaluator = self._asset_root + '/evaluation'
+            await self.exec_as_agent(environment, f'mkdir -p {shlex.quote(evaluator)}')
+            for filename in ('fetch_guard.mjs', 'preload.mjs', 'budget_guard.py', 'container_deadline.py', 'checkpoint_observer.ts'):
+                await environment.upload_file(Path(__file__).with_name(filename), evaluator+'/'+filename)
+            if self.options.prepare_only:
+                await environment.upload_file(Path(__file__).with_name('probe_request.mjs'),evaluator+'/probe_request.mjs')
+            await self.upload_private(environment,json.dumps({'providers':{'deepseek':{
+                'modelOverrides':{'deepseek-flash':{'samplingParams':{
+                    'max_tokens':self.options.evaluation_output_tokens}}}}}}),profile+'/models.json')
         # No credential file is read or uploaded by preparation Jobs.
         if not self.options.prepare_only:
             auth = json.loads(Path(self.options.auth_path).read_text())
@@ -270,10 +285,13 @@ class ExperimentPi(Pi):
             f"const agentDir={json.dumps(self._experiment_home + '/.pi/agent')};"
             "const settings=sdk.SettingsManager.create(process.cwd(),agentDir);"
             "const loader=new sdk.DefaultResourceLoader({cwd:process.cwd(),agentDir,settingsManager:settings,"
-            f"additionalExtensionPaths:{json.dumps([self.options.extension] if self.options.extension else [])}}});"
+            f"additionalExtensionPaths:{json.dumps(([self.options.extension] if self.options.extension else []) + ([self._asset_root+'/evaluation/checkpoint_observer.ts'] if self.options.evaluation_deadline else []))}}});"
             "await loader.reload();const runtime=await sdk.ModelRuntime.create({"
             "authPath:agentDir+'/auth.json',modelsPath:agentDir+'/models.json',"
             "allowModelNetwork:false,refreshOnCreate:false});"
+            f"const selectedModel={('runtime.getModel(\"deepseek\",\"deepseek-flash\")' if self.options.evaluation_deadline else 'null')};"
+            f"if({json.dumps(bool(self.options.evaluation_deadline))} && !selectedModel)throw Error('Frozen model missing');"
+            f"if(selectedModel && selectedModel.samplingParams?.max_tokens!=={self.options.evaluation_output_tokens})throw Error('Wrong frozen output override');"
             "const {session,extensionsResult}=await sdk.createAgentSession({agentDir,resourceLoader:loader,"
             "settingsManager:settings,modelRuntime:runtime});"
             "try{const errors=[];await session.bindExtensions({onError:e=>errors.push(String(e.message||e))});"
@@ -295,15 +313,25 @@ class ExperimentPi(Pi):
             )
         script += (
             "await fs.writeFile('/logs/agent/runtime-preflight.json',JSON.stringify({"
-            "model_requests:0,tools,embedding_dimensions:embedding,"
+            "model_requests:0,tools,embedding_dimensions:embedding,selected_model:selectedModel,"
             "session_id:session.sessionId,"
             "compaction:session.autoCompactionEnabled,system_prompt_sha256:"
             "createHash('sha256').update(session.systemPrompt).digest('hex')}));"
             "}finally{session.dispose();}"
         )
         await self.exec_as_agent(
-            environment, "node --input-type=module -e " + shlex.quote(script), timeout_sec=180
+            environment, "node --input-type=module -e " + shlex.quote(script), timeout_sec=180,
+            env={'MEMWEAVE_EVAL_TRACE':'/logs/agent/preflight-observer.jsonl',
+                 'MEMWEAVE_EVAL_PROGRESS_AFTER':str(self.options.evaluation_progress_after_returns)}
         )
+        if self.options.evaluation_deadline:
+            await check_network(environment,self._asset_root+'/node/bin/node',self.logs_dir)
+            args=[self._asset_root+'/evaluation/probe_request.mjs',sdk,
+                  self._experiment_home+'/.pi/agent',self.options.extension or '-',self.options.variant,
+                  str(self.options.evaluation_output_tokens),self.options.smoke_barrier or '-']
+            await self.exec_as_agent(environment,'node '+' '.join(shlex.quote(arg) for arg in args),
+                timeout_sec=180,env={'MEMWEAVE_EVAL_TRACE':'/logs/agent/mock-request-trace.jsonl',
+                                    'MEMWEAVE_EVAL_PROGRESS_AFTER':str(self.options.evaluation_progress_after_returns)})
 
     async def exec_as_agent(self, environment, command: str, **kwargs):
         is_pi = "pi --print --mode json" in command
@@ -324,6 +352,21 @@ class ExperimentPi(Pi):
                     kwargs.get("env") or {},
                     PI_CODING_AGENT_DIR=self._experiment_home + "/.pi/agent",
                 )
+            if self.options.evaluation_deadline:
+                evaluator = self._asset_root + '/evaluation'
+                command = command.replace('pi --print --mode json', 'pi --print --mode json --extension '
+                                          +shlex.quote(evaluator+'/checkpoint_observer.ts'))
+                kwargs['env'].update(
+                    NODE_OPTIONS='--import '+evaluator+'/preload.mjs',
+                    MEMWEAVE_EVAL_LEDGER='/opt/memweave-eval-control/quota.json',
+                    MEMWEAVE_EVAL_TRACE='/logs/agent/request-trace.jsonl',
+                    MEMWEAVE_EVAL_DEADLINE=str(self.options.evaluation_deadline),
+                    MEMWEAVE_EVAL_VARIANT=self.options.variant,
+                    MEMWEAVE_EVAL_MAX_OUTPUT=str(self.options.evaluation_output_tokens),
+                    MEMWEAVE_EVAL_RUN_ID=self.options.evaluation_run_id or 'unknown',
+                    MEMWEAVE_EVAL_PROGRESS_AFTER=str(self.options.evaluation_progress_after_returns),
+                    MEMWEAVE_EVAL_INSTRUCTION_PATH=evaluator+'/instruction.md',
+                )
         result = await super().exec_as_agent(environment, command, **kwargs)
         if not is_pi:
             setup_log = self.logs_dir / "setup/experiment-install.log"
@@ -343,7 +386,12 @@ class ExperimentPi(Pi):
             return
         self._agent_started = time.monotonic()
         try:
-            if self.options.protocol == "swe-pro-v2":
+            if self.options.evaluation_deadline:
+                with tempfile.TemporaryDirectory(prefix='memweave-eval-instruction-') as directory:
+                    local=Path(directory)/'instruction.md'
+                    local.write_text(instruction)
+                    await environment.upload_file(local,self._asset_root+'/evaluation/instruction.md')
+            if self.options.protocol in ("swe-pro-v2", "swe-marathon"):
                 await check_network(environment, self._asset_root + "/node/bin/node", self.logs_dir)
             await super().run(instruction, environment, context)
         finally:

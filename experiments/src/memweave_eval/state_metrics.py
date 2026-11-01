@@ -217,6 +217,30 @@ def task_state_metrics(paths: list[Path], archive: Path | None, *, enabled=True)
                 located.update(committed)
                 positions.append(call["position"])
     positions.sort()
+    matrix={name:0 for name in ('success_committed','success_not_committed',
+        'error_committed','error_not_committed','partial_commit','unknown')}
+    for key,call in calls.items():
+        if call['name'] not in ('state_append','modify_fact'):
+            continue
+        receipt=results.get(key)
+        if operations is None or type(receipt) is not bool or not all(
+            isinstance(call[k],str) for k in ('session','assistant','call')):
+            matrix['unknown']+=1
+            continue
+        items=(call.get('arguments') or {}).get('items') if isinstance(call.get('arguments'),dict) else None
+        if call['name']=='state_append' and not isinstance(items,list):
+            matrix['unknown']+=1
+            continue
+        committed_count=0
+        expected=len(items) if call['name']=='state_append' else 1
+        for task in tasks:
+            operation=stable_id(task,call['session'],call['assistant'],call['call'])
+            keys=[(task,stable_id(operation,i)) for i in range(expected)] if call['name']=='state_append' else [(task,operation)]
+            committed_count+=sum(k in operations for k in keys)
+        if 0<committed_count<expected:
+            matrix['partial_commit']+=1
+        else:
+            matrix[('error' if receipt else 'success')+('_committed' if committed_count else '_not_committed')]+=1
     known = bool(paths) and not errors and not missing_usage
     ratio_known = known and added is not None
     ratio = added / responses if ratio_known and responses else None
@@ -233,12 +257,16 @@ def task_state_metrics(paths: list[Path], archive: Path | None, *, enabled=True)
         "writes": writes if paths and not errors else None,
         "fd_events_added": added, "fd_events_active": active,
         "fd_events_located": len(located) if operations is not None else None,
+        "fd_write_receipt_commit_matrix": matrix if enabled else None,
+        "receipt_commit_scope": 'state_append/modify_fact only; actual journal operations, not tool success or input guesses',
         "state_task_ids": tasks,
         "event_model_ratio": ratio,
         "ratio_status": ratio_status,
         "warnings": ["state_event_ratio_" + ratio_status] if ratio_status in ("too_sparse", "too_dense") else [],
         "write_model_positions": positions if known and added == len(located) else None,
         "uniformity": _uniformity(positions, responses if paths else None,
+                                  known and added is not None and added == len(located)),
+        "uniformity_distinct_return_positions": _uniformity(sorted(set(positions)), responses if paths else None,
                                   known and added is not None and added == len(located)),
         "source_status": "invalid_session" if errors else "missing_session" if not paths
         else "not_applicable" if not enabled else "missing_or_invalid_state" if operations is None

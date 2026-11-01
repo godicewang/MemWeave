@@ -1,0 +1,86 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import fs from 'node:fs';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {nativeSession} from '../../tests/fixtures/native-session.ts';
+import {installGuard,protectedConstraint,requestSummary} from '../src/memweave_eval/fetch_guard.mjs';
+
+test('full native Pi requests, provider retry and native compaction share admission',async t=>{
+  const h=await nativeSession(t,[],true,512,[],undefined,true);
+  const ledger=path.join(h.root,'quota.json'),trace=path.join(h.root,'trace.jsonl');
+  const deadline=Date.now()/1000+60;
+  fs.writeFileSync(ledger,JSON.stringify({schema_version:1,maximum_usd:29,deadline,exposure_usd:0,requests:{}}));
+  const bodies: any[]=[];
+  const previous=globalThis.fetch;
+  globalThis.fetch=installGuard({ledger,trace,deadline,variant:'native',
+    quotaScript:fileURLToPath(new URL('../src/memweave_eval/budget_guard.py',import.meta.url)),
+    fetchImpl:async (_url: any,init: any)=>{
+      if(init?.method!=='POST')throw Error('Unexpected network request in fixture');
+      bodies.push(JSON.parse(init.body));
+      if(bodies.length===1)return new Response(JSON.stringify({error:{message:'fixture retry'}}),{
+        status:503,headers:{'content-type':'application/json','retry-after':'0'}});
+      const output='data: '+JSON.stringify({id:'fixture',model:'deepseek-flash',choices:[{
+        index:0,delta:{role:'assistant',content:'Fixture summary and completed action.'},finish_reason:null}]})+'\n\n'+
+        'data: '+JSON.stringify({id:'fixture',choices:[{index:0,delta:{},finish_reason:'stop'}],
+        usage:{prompt_tokens:100,completion_tokens:20}})+'\n\n'+'data: [DONE]\n\n';
+      return new Response(new ReadableStream({start(c){c.enqueue(new TextEncoder().encode(output));}}),{
+        headers:{'content-type':'text/event-stream'}});
+    }});
+  t.after(()=>{globalThis.fetch=previous;});
+  h.runtime.registerProvider('guard-fixture',{baseUrl:'https://api.deepseek.com',apiKey:'fixture-only',
+    api:'openai-completions',models:[{id:'deepseek-flash',name:'fixture',reasoning:false,input:['text'],
+      contextWindow:1_000_000,maxTokens:1000,cost:{input:0,output:0,cacheRead:0,cacheWrite:0}}]});
+  h.settings.applyOverrides({retry:{enabled:false,provider:{maxRetries:1}}});
+  await h.session.setModel(h.runtime.getModel('guard-fixture','deepseek-flash')!);
+  await h.session.prompt('Complete this controlled fixture. '+ 'context '.repeat(200));
+  const before=bodies.length;
+  assert.equal(before,2);
+  assert.ok(h.session.getActiveToolNames().includes('bash'));
+  assert.ok(!h.session.getActiveToolNames().includes('task_create'));
+  await h.session.prompt('Second controlled turn. '+ 'context '.repeat(200));
+  await h.session.prompt('Third controlled turn. '+ 'context '.repeat(200));
+  const beforeCompaction=bodies.length;
+  await h.session.compact();
+  assert.ok(bodies.length>beforeCompaction,'native compaction made a captured model request');
+  const records=fs.readFileSync(trace,'utf8').trim().split('\n').map(line=>JSON.parse(line));
+  assert.equal(records.filter(e=>e.event==='http_attempt').length,bodies.length);
+  const quota=JSON.parse(fs.readFileSync(ledger,'utf8'));
+  assert.equal(Object.values(quota.requests).filter((r: any)=>r.status==='settled').length,bodies.length-1);
+});
+
+test('request boundary distinguishes original source, State delivery and contradictory active entries',()=>{
+  const state='# Symbolic State\nF1 Do not modify spec.rs or main.rs';
+  assert.equal(protectedConstraint(state),true);
+  assert.equal(protectedConstraint(state+'\nF2 You may modify spec.rs or main.rs'),false);
+  assert.equal(protectedConstraint('F1 spec.rs and main.rs exist'),null);
+  const payload={messages:[{role:'user',content:'prefix ORIGINAL INSTRUCTION'},
+    {role:'user',content:[{type:'text',text:state}]}]};
+  assert.equal(requestSummary(payload,'ORIGINAL INSTRUCTION').original_instruction_visible,true);
+  assert.equal(requestSummary(payload,'ORIGINAL INSTRUCTION').state_protected_constraint,true);
+  payload.messages.shift();
+  assert.equal(requestSummary(payload,'ORIGINAL INSTRUCTION').original_instruction_visible,false);
+});
+
+test('common progress input uses public Pi steering exactly once and adds no memory tools',async t=>{
+  const previousTrace=process.env.MEMWEAVE_EVAL_TRACE,previousAfter=process.env.MEMWEAVE_EVAL_PROGRESS_AFTER;
+  const {mkdtempSync}=fs;
+  const root=mkdtempSync('/tmp/memweave-progress-fixture-');
+  process.env.MEMWEAVE_EVAL_TRACE=path.join(root,'trace.jsonl');
+  process.env.MEMWEAVE_EVAL_PROGRESS_AFTER='3';
+  t.after(()=>{
+    if(previousTrace===undefined)delete process.env.MEMWEAVE_EVAL_TRACE;else process.env.MEMWEAVE_EVAL_TRACE=previousTrace;
+    if(previousAfter===undefined)delete process.env.MEMWEAVE_EVAL_PROGRESS_AFTER;else process.env.MEMWEAVE_EVAL_PROGRESS_AFTER=previousAfter;
+    fs.rmSync(root,{recursive:true,force:true});
+  });
+  const observer=fileURLToPath(new URL('../src/memweave_eval/checkpoint_observer.ts',import.meta.url));
+  const h=await nativeSession(t,[],false,512,[observer],undefined,true);
+  const {fauxAssistantMessage}=await import('@earendil-works/pi-ai/providers/faux');
+  h.faux.setResponses(Array.from({length:6},()=>fauxAssistantMessage('Controlled continuation.')));
+  for(let i=0;i<3;i++)await h.session.prompt('Continue controlled task '+i);
+  const users=h.manager.getEntries().filter((e:any)=>e.type==='message' &&e.message.role==='user');
+  assert.equal(users.filter((e:any)=>JSON.stringify(e.message.content).includes('请简短汇报进度')).length,1);
+  const trace=fs.readFileSync(process.env.MEMWEAVE_EVAL_TRACE,'utf8');
+  assert.equal(trace.split('"event":"case_input"').length-1,1);
+  assert.ok(!h.session.getActiveToolNames().includes('task_create'));
+});
