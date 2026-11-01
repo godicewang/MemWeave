@@ -1,0 +1,6 @@
+count: 2
+seed: memweave-marathon-next-20261101
+max_cpus: 4
+max_memory_mb: 16384
+max_storage_mb: 20480
+task_ids: [zstd-decoder, rust-c-compiler]

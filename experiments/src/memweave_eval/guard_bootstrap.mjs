@@ -11,7 +11,8 @@ export function attachGuard() {
     trace:process.env.MEMWEAVE_EVAL_TRACE,deadline:Number(process.env.MEMWEAVE_EVAL_DEADLINE),
     variant:process.env.MEMWEAVE_EVAL_VARIANT,
     credentialFile:process.env.MEMWEAVE_EVAL_CREDENTIAL_FILE,
-    quotaScript:path.join(path.dirname(fileURLToPath(import.meta.url)),'budget_guard.py')});
+    quotaScript:path.join(path.dirname(fileURLToPath(import.meta.url)),
+      process.env.MEMWEAVE_EVAL_QUOTA_BACKEND==='node'?'budget_guard.mjs':'budget_guard.py')});
   globalThis.fetch=guarded;
   globalThis[marker]={fetch:guarded,pid:process.pid};
   fs.appendFileSync(process.env.MEMWEAVE_EVAL_TRACE,JSON.stringify({event:'guard_attached',

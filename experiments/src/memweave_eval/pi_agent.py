@@ -30,6 +30,11 @@ class PiExperimentOptions(PiOptions):
     protocol: Literal["tb4", "swe-pro-v2", "swe-marathon"]
     evaluation_deadline: float | None = None
     evaluation_output_tokens: int = 16384
+    evaluation_quota_backend: Literal["python", "node"] = "python"
+    evaluation_per_task_arms: bool = False
+    evaluation_task_ids: list[str] = []
+    evaluation_task_configs: dict = {}
+    evaluation_sealed_tasks: list[str] = []
     evaluation_run_id: str | None = None
     evaluation_progress_after_returns: int = 80
     smoke_barrier: str | None = None
@@ -105,6 +110,12 @@ class ExperimentPi(Pi):
 
     async def install(self, environment) -> None:
         started = time.monotonic()
+        matches=[t for t in self.options.evaluation_task_ids if any(part.startswith(t+'__') for part in self.logs_dir.parts)]
+        if self.options.evaluation_per_task_arms and len(matches)!=1:
+            raise ValueError('Cannot identify trusted task-arm from Harbor trial directory')
+        self._evaluation_task_id=matches[0] if len(matches)==1 else None
+        self._evaluation_task_config=self.options.evaluation_task_configs.get(self._evaluation_task_id,{})
+        self._evaluation_sealed=self._evaluation_task_id in self.options.evaluation_sealed_tasks
         if not self.options.runtime_plan or not self.options.runtime_plan_sha256:
             raise ValueError("a frozen software cache plan is required")
         plan_path = Path(self.options.runtime_plan)
@@ -243,7 +254,7 @@ class ExperimentPi(Pi):
         if self.options.evaluation_deadline:
             evaluator = self._asset_root + '/evaluation'
             await self.exec_as_agent(environment, f'mkdir -p {shlex.quote(evaluator)}')
-            for filename in ('fetch_guard.mjs', 'guard_bootstrap.mjs', 'preload.mjs', 'budget_guard.py', 'container_deadline.py', 'checkpoint_observer.ts'):
+            for filename in ('fetch_guard.mjs', 'guard_bootstrap.mjs', 'preload.mjs', 'budget_guard.py', 'container_deadline.py', 'budget_guard.mjs', 'container_deadline.mjs', 'sealed_runtime.mjs', 'request_boundary.ts', 'checkpoint_observer.ts'):
                 await environment.upload_file(Path(__file__).with_name(filename), evaluator+'/'+filename)
             if self.options.prepare_only:
                 await environment.upload_file(Path(__file__).with_name('probe_request.mjs'),evaluator+'/probe_request.mjs')
@@ -296,7 +307,7 @@ class ExperimentPi(Pi):
             f"const agentDir={json.dumps(self._experiment_home + '/.pi/agent')};"
             "const settings=sdk.SettingsManager.create(process.cwd(),agentDir);"
             "const loader=new sdk.DefaultResourceLoader({cwd:process.cwd(),agentDir,settingsManager:settings,"
-            f"additionalExtensionPaths:{json.dumps(([self.options.extension] if self.options.extension else []) + ([self._asset_root+'/evaluation/checkpoint_observer.ts'] if self.options.evaluation_deadline else []))}}});"
+            f"additionalExtensionPaths:{json.dumps(([self._asset_root+'/evaluation/checkpoint_observer.ts'] if self.options.evaluation_deadline else []) + ([self.options.extension] if self.options.extension else []))}}});"
             "await loader.reload();const runtime=await sdk.ModelRuntime.create({"
             "authPath:agentDir+'/auth.json',modelsPath:agentDir+'/models.json',"
             "allowModelNetwork:false,refreshOnCreate:false});"
@@ -342,7 +353,8 @@ class ExperimentPi(Pi):
                   str(self.options.evaluation_output_tokens),self.options.smoke_barrier or '-']
             await self.exec_as_agent(environment,'node '+' '.join(shlex.quote(arg) for arg in args),
                 timeout_sec=180,env={'MEMWEAVE_EVAL_TRACE':'/logs/agent/mock-request-trace.jsonl',
-                                    'MEMWEAVE_EVAL_PROGRESS_AFTER':str(self.options.evaluation_progress_after_returns)})
+                                    'MEMWEAVE_EVAL_PROGRESS_AFTER':str(self.options.evaluation_progress_after_returns),
+                                    'MEMWEAVE_EVAL_QUOTA_BACKEND':self.options.evaluation_quota_backend})
             await self.cli_transport_preflight(environment)
 
     async def cli_transport_preflight(self,environment):
@@ -421,6 +433,10 @@ positive:true,lost_guard_upstream_requests:0,actual_cli_pid_deadline:true}));
                     MEMWEAVE_EVAL_TRACE='/logs/agent/cli-request-trace.jsonl' if self.options.prepare_only else '/logs/agent/request-trace.jsonl',
                     MEMWEAVE_EVAL_DEADLINE=str(self.options.evaluation_deadline),
                     MEMWEAVE_EVAL_VARIANT=self.options.variant,
+                    MEMWEAVE_EVAL_QUOTA_BACKEND=self.options.evaluation_quota_backend,
+                    MEMWEAVE_EVAL_BUDGET_ARM=(self._evaluation_task_id+':'+self.options.variant) if self.options.evaluation_per_task_arms else self.options.variant,
+                    MEMWEAVE_EVAL_SEALED='1' if self._evaluation_sealed else '0',
+                    MEMWEAVE_EVAL_WORKSPACE=json.dumps(self._evaluation_task_config.get('workspace',{})),
                     MEMWEAVE_EVAL_MAX_OUTPUT=str(self.options.evaluation_output_tokens),
                     MEMWEAVE_EVAL_RUN_ID=self.options.evaluation_run_id or 'unknown',
                     MEMWEAVE_EVAL_PROGRESS_AFTER=str(self.options.evaluation_progress_after_returns),
@@ -461,6 +477,12 @@ positive:true,lost_guard_upstream_requests:0,actual_cli_pid_deadline:true}));
                 await check_network(environment, self._asset_root + "/node/bin/node", self.logs_dir)
             await super().run(instruction, environment, context)
         finally:
+            if getattr(self,'_evaluation_sealed',False):
+                capture="tar -czf /logs/agent/model-source-original.tar.gz -C /app src"
+                result=await environment.exec(command=capture,user='root',timeout_sec=120)
+                if result.return_code: raise RuntimeError('Sealed source evidence archive failed')
+                await self.exec_as_agent(environment,'node '+shlex.quote(self._asset_root+'/evaluation/sealed_runtime.mjs')+
+                    ' /app/src /logs/agent/sealed-handoff.json',timeout_sec=120)
             if self.options.protocol == "swe-pro-v2":
                 # Match the pinned official locked-agent capture: include untracked files,
                 # preserve the original task cwd, and leave the index reset afterwards.

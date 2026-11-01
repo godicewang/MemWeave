@@ -8,6 +8,7 @@ import re
 from pathlib import Path
 
 from .artifact_replay import artifact_digest, audited_verifier_timeout
+from .finance_metrics import FINANCE_COLUMNS, attach_finance, attach_pair_columns, context_from_lock, finance_markdown, finance_summary
 from .report import duration, normalize_trial, session_diagnostics, summarize
 from .state_metrics import metric_columns, metrics_markdown, task_state_metrics
 from .storage import atomic_json, contained, file_digest
@@ -335,7 +336,16 @@ def generate_campaign_report(root: Path):
             row["state_metrics"]["source_status"] = "invalid_evidence"
         row.setdefault("state_metrics", task_state_metrics([], None, enabled=row["variant_id"] == "pi-memweave"))
         row.update(metric_columns(row["state_metrics"]))
+    for row in rows:
+        sources=row.get('session_sources')or[]
+        agent=None
+        if sources and not invalid:
+            path=Path(sources[0]);path=path if path.is_absolute()else contained(root,sources[0])
+            agent=path.parent.parent.parent
+        attach_finance(row,context_from_lock(lock),agent)
     summary = summarize(rows)
+    summary['finance']=finance_summary(rows)
+    attach_pair_columns(rows,summary['finance'])
     blocked_attempt_rows = [
         dict(
             failure,
@@ -399,6 +409,7 @@ def generate_campaign_report(root: Path):
         "score_source",
         *metric_columns(task_state_metrics([], None)).keys(),
         "state_metrics",
+        *FINANCE_COLUMNS,
     ]
     with (root / "comparison.csv").open("w", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=columns, extrasaction="ignore")
@@ -441,5 +452,6 @@ def generate_campaign_report(root: Path):
                 f"| {failure['slot_task_id']} | {failure['task_id']} | {failure.get('phase')} |"
             )
     text += metrics_markdown(rows)
+    text += finance_markdown(rows,summary['finance'])
     (root / "report.md").write_text("\n".join(text) + "\n")
     return summary

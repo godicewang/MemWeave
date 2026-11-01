@@ -12,6 +12,7 @@ from .contract_metrics import (
     logical_operation_metrics,
     reference_integrity,
     state_freshness,
+    provider_projection_integrity,
     summarize,
     window_integrity,
 )
@@ -164,6 +165,7 @@ def task_contract_metrics(agent: Path, *, enabled, contracts=None):
         'state_latest_at_prepare': strict,
         'state_confirmed_receipt_lower_bound': causal_state_minimum(requests, receipts, enabled=enabled),
         'reference_integrity': reference_integrity(contracts.get('reference_gold', []), references),
+        'provider_delivery_integrity':provider_projection_integrity(requests),
         'window_integrity': window_integrity(contracts.get('window_gold', []), windows),
         'interpretation': 'Causal State minimum is not global latest; mechanical fidelity is not semantic adoption',
     }

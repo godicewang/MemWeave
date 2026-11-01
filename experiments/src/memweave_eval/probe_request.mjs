@@ -12,7 +12,7 @@ await fs.writeFile(ledger,JSON.stringify({schema_version:1,maximum_usd:1,
   deadline:Date.now()/1000+120,exposure_usd:0,requests:{},arm_limits:{}}));
 const bodies=[];
 globalThis.fetch=installGuard({ledger,trace,deadline:Date.now()/1000+120,variant,
-  quotaScript:path.join(path.dirname(new URL(import.meta.url).pathname),'budget_guard.py'),
+  quotaScript:path.join(path.dirname(new URL(import.meta.url).pathname),process.env.MEMWEAVE_EVAL_QUOTA_BACKEND==='node'?'budget_guard.mjs':'budget_guard.py'),
   fetchImpl:async (url,init)=>{
     if(new URL(typeof url==='string'||url instanceof URL?url:url.url).hostname!=='api.deepseek.com')throw Error('Unexpected probe endpoint');
     if((init?.method??'GET').toUpperCase()==='GET')return Response.json({data:[{
@@ -36,7 +36,7 @@ globalThis.fetch=installGuard({ledger,trace,deadline:Date.now()/1000+120,variant
   }});
 const settings=sdk.SettingsManager.create(process.cwd(),agentDir);
 const loader=new sdk.DefaultResourceLoader({cwd:process.cwd(),agentDir,settingsManager:settings,
-  additionalExtensionPaths:[...(enabled?[entry]:[]),path.join(path.dirname(new URL(import.meta.url).pathname),'checkpoint_observer.ts')]});
+  additionalExtensionPaths:[path.join(path.dirname(new URL(import.meta.url).pathname),'checkpoint_observer.ts'),...(enabled?[entry]:[])]});
 await loader.reload();
 const runtime=await sdk.ModelRuntime.create({authPath:agentDir+'/auth.json',modelsPath:agentDir+'/models.json',
   allowModelNetwork:false,refreshOnCreate:false});
@@ -69,6 +69,9 @@ try {
   assert.equal(ready.at(-1).tool_names.includes('task_create'),enabled);
   assert.equal(Boolean(ready.at(-1).state_blocks.length),enabled);
   assert.ok(ready.every(e=>e.max_output===cap));
+  assert.ok(ready.every(e=>e.prepared_messages_sha256&&Array.isArray(e.prepared_messages)));
+  if(enabled){assert.equal(ready.at(-1).expected_version_at_prepare,ready.at(-1).state_blocks[0].version);
+    assert.equal(ready.at(-1).expected_task_id,ready.at(-1).state_blocks[0].task_id);}
   await fs.writeFile('/logs/agent/mock-request-result.json',JSON.stringify({
     mock:true,real_model_requests:0,transport_attempts:bodies.length,
     rule_block_count:ready.at(-1).rule_block_count,state_blocks:ready.at(-1).state_blocks,

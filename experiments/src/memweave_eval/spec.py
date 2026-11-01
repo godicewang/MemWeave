@@ -54,10 +54,16 @@ class Variant(StrictModel):
 class Execution(StrictModel):
     environment: Literal["docker"] = "docker"
     platform: Literal["linux/amd64", "linux/arm64"]
-    concurrency: Annotated[int, Field(strict=True, ge=1, le=2)] = 2
+    concurrency: Annotated[int, Field(strict=True, ge=1, le=4)] = 2
     repetitions: PositiveInt = 1
     automatic_trial_retries: Literal[0] = 0
     paired_concurrent: StrictBool = False
+
+    @model_validator(mode='after')
+    def capacity(self):
+        if type(self) is Execution and self.concurrency>2 and (not self.paired_concurrent or self.concurrency!=4):
+            raise ValueError('four instances require paired concurrent admission')
+        return self
 
 
 class Limits(StrictModel):
@@ -75,6 +81,13 @@ class Evaluation(StrictModel):
     progress_after_returns: Annotated[int, Field(strict=True, gt=0)] = 80
     episode_budget_usd: Annotated[float,Field(strict=True,gt=0)] | None = None
     frozen_preparation: Path | None = None
+    quota_backend: Literal['python','node'] = 'python'
+    per_task_arm_caps: StrictBool = False
+    resources: dict[str, Annotated[int, Field(strict=True,gt=0)]] | None = None
+    sealed_tasks: list[Identifier] = Field(default_factory=list)
+    finalization_reserve_seconds: Annotated[int,Field(strict=True,ge=1500)] = 1500
+    control_expectations: dict = Field(default_factory=dict)
+    canary_preflight: StrictBool = False
 
     @model_validator(mode="after")
     def deadline(self):
@@ -84,6 +97,8 @@ class Evaluation(StrictModel):
             raise ValueError('evaluation deadline must be explicit UTC')
         if 2*self.arm_budget_usd > self.admission_budget_usd:
             raise ValueError('equal arm budgets must fit the global admission budget')
+        if self.resources and (set(self.resources)-{'cpus','memory_mb','storage_mb'}):
+            raise ValueError('unknown resource adaptation')
         return self
 
 
@@ -219,4 +234,7 @@ def load_experiment(path: Path) -> tuple[Experiment, Suite, Subset]:
         not spec.evaluation or not spec.execution.paired_concurrent or not subset.task_ids
     ):
         raise ValueError('Marathon requires fixed cases, request admission and concurrent pairs')
+    if spec.evaluation and spec.evaluation.per_task_arm_caps:
+        if subset.count*len(spec.variants)*spec.evaluation.arm_budget_usd>spec.evaluation.admission_budget_usd:
+            raise ValueError('all task-arm allocations must fit the new shared budget')
     return spec, suite, subset

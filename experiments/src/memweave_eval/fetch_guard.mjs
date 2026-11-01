@@ -28,6 +28,7 @@ export function protectedConstraint(content) {
 
 export function requestSummary(payload, originalInstruction) {
   const messages = payload.messages ?? [];
+  let config={};try{config=JSON.parse(process.env.MEMWEAVE_EVAL_WORKSPACE??'{}');}catch{}
   const states = messages.filter(m => contentText(m.content).startsWith('# Symbolic State'));
   return {
     payload_sha256: hash(JSON.stringify(payload)),
@@ -37,7 +38,7 @@ export function requestSummary(payload, originalInstruction) {
     max_output: payload.max_tokens ?? payload.max_completion_tokens ?? null,
     message_count: messages.length,
     messages: messages.map(m => ({role:m.role, sha256:hash(JSON.stringify(m)),
-      bytes:Buffer.byteLength(JSON.stringify(m)), tool_call_id:m.tool_call_id ?? null})),
+      bytes:Buffer.byteLength(JSON.stringify(m)), tool_call_id:m.tool_call_id ?? null, tool_calls:(m.tool_calls??[]).map(t=>t.id)})),
     tool_names:(payload.tools ?? []).map(t => t.function?.name).filter(Boolean),
     request_kind:(payload.tools ?? []).some(t=>t.function?.name==='bash') ? 'agent' : 'auxiliary_or_unknown',
     system_hashes:messages.filter(m => m.role === 'system').map(m => hash(text(m.content))),
@@ -45,6 +46,10 @@ export function requestSummary(payload, originalInstruction) {
     state_blocks:states.map(m => ({sha256:hash(contentText(m.content)),
       task_id:contentText(m.content).match(/task_id: (\S+)/)?.[1] ?? null,
       version:Number(contentText(m.content).match(/state_version: (\d+)/)?.[1]) || null})),
+    state_constraint_bits:Object.fromEntries(Object.entries(config.state_constraints??{}).map(([key,pattern])=>{
+      const body=states.map(m=>contentText(m.content)).join('\n');
+      return [key,body && new RegExp(pattern,'i').test(body)?true:null];
+    })),
     state_protected_constraint:states.length ? protectedConstraint(states.map(m=>contentText(m.content)).join('\n')) : null,
     original_instruction_visible:originalInstruction ? messages.some(m=>
       !contentText(m.content).startsWith('# Symbolic State') && contentText(m.content).includes(originalInstruction)) : null,
@@ -55,8 +60,10 @@ export function requestSummary(payload, originalInstruction) {
 }
 
 export function workspaceSummary(root='/app/interpreter') {
+  let config={};try{config=JSON.parse(process.env.MEMWEAVE_EVAL_WORKSPACE??'{}');}catch{}
+  root=config.root??root;
   const files={};
-  for (const name of ['src/spec.rs','src/main.rs','src/runtime.rs','src/decode.rs','src/types.rs','Cargo.toml']) {
+  for (const name of (config.files??['src/spec.rs','src/main.rs','src/runtime.rs','src/decode.rs','src/types.rs','Cargo.toml'])) {
     try { files[name]=hash(fs.readFileSync(path.join(root,name))); }
     catch { files[name]=null; }
   }
@@ -72,7 +79,11 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,credenti
   const originalInstruction=process.env.MEMWEAVE_EVAL_INSTRUCTION_PATH
     ? fs.readFileSync(process.env.MEMWEAVE_EVAL_INSTRUCTION_PATH,'utf8') : undefined;
   const quota = operation => {
-    const result=spawnSync('python3',[quotaScript,ledger],{input:JSON.stringify(operation),encoding:'utf8',timeout:4000});
+    const node=quotaScript.endsWith('.mjs');
+    const executable=node?'flock':'python3';
+    const args=node?['-w','2',ledger.replace(/\.[^/.]+$/,'.lock'),process.execPath,quotaScript,ledger,'--lock-held']:[quotaScript,ledger];
+    const result=spawnSync(executable,args,{input:JSON.stringify(operation),encoding:'utf8',timeout:4000,
+      env:{...process.env,NODE_OPTIONS:''}});
     if (result.status !== 0) throw Error('Evaluation quota admission/settlement rejected');
     return JSON.parse(result.stdout);
   };
@@ -99,17 +110,21 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,credenti
     const raw=typeof init?.body === 'string' ? init.body : await input.clone().text();
     const payload=JSON.parse(raw);
     if (payload.model !== 'deepseek-flash' || payload.stream !== true) throw Error('Unbounded provider request');
-    const id=(process.env.MEMWEAVE_EVAL_RUN_ID ?? 'fixture')+':'+variant+':'+randomUUID();
+    const arm=process.env.MEMWEAVE_EVAL_BUDGET_ARM??variant;
+    const id=(process.env.MEMWEAVE_EVAL_RUN_ID ?? 'fixture')+':'+arm+':'+randomUUID();
     const maxOutput=payload.max_tokens ?? payload.max_completion_tokens;
     const configured=Number(process.env.MEMWEAVE_EVAL_MAX_OUTPUT ?? 384000);
     if (maxOutput>configured) throw Error('Output exceeds frozen experiment setting');
-    try { const reserved=quota({action:'reserve',id,arm:variant,max_output:maxOutput,
+    try { const reserved=quota({action:'reserve',id,arm,max_output:maxOutput,
       episode:process.env.MEMWEAVE_EVAL_RUN_ID ?? 'fixture',
       episode_budget:Number(process.env.MEMWEAVE_EVAL_EPISODE_BUDGET)||null,
       max_requests:Number(process.env.MEMWEAVE_EVAL_REQUEST_LIMIT)||null});
       record({event:'budget_reserved',request_id:id,charge_usd:reserved.charge_usd}); }
     catch (error) { record({event:'request_denied',request_id:id,reason:'quota_or_deadline'}); throw error; }
-    record({event:'request_ready',request_id:id,...requestSummary(payload,originalInstruction),workspace:workspaceSummary()});
+    const boundary=globalThis[Symbol.for('memweave.eval.requestBoundary')];
+    const matched=boundary?.prepared_messages_sha256===hash(JSON.stringify(payload.messages??[]));
+    record({event:'request_ready',request_id:id,...requestSummary(payload,originalInstruction),
+      ...(matched?boundary:{boundary_error:'no_matching_provider_preparation'}),workspace:workspaceSummary()});
     const controller=new AbortController();
     const remaining=deadline*1000-Date.now();
     if (remaining<=0) {record({event:'request_expired',request_id:id});throw Error('Evaluation deadline');}

@@ -159,7 +159,7 @@ def protocol_view(path: Path) -> dict:
 
 def prepare_task(
     source: Path, root: Path, platform: str, deadline: float, env: dict, limits: dict,
-    *, frozen: dict | None = None,
+    *, frozen: dict | None = None, resources: dict | None = None, sealed: bool = False,
 ) -> dict:
     source, root = source.resolve(), root.resolve()
     if time.monotonic() >= deadline:
@@ -249,11 +249,26 @@ def prepare_task(
             section["environment"]["docker_image"] = reference
     runtime = root / "runtime-tasks" / source.name
     shutil.copytree(source, runtime)
+    if resources:
+        changed['environment'].update(resources)
+    if sealed:
+        changed.setdefault('verifier',{})['environment_mode']='separate'
+        changed['artifacts']=[*changed.get('artifacts',[]),
+                              {'source':'/app/src','destination':'src','exclude':['*.o']}]
     rewritten = toml.dumps(changed)
     if tomllib.loads(rewritten) != changed:
         raise ValueError("TOML serialization changed official task values")
     (runtime / "task.toml").write_text(rewritten)
-    if protocol_view(source) != protocol_view(runtime):
+    actual_view=protocol_view(runtime)
+    expected_view=protocol_view(source)
+    if resources or sealed:
+        expected_view['environment'].update(resources or {})
+        if sealed:
+            expected_view['verifier']['environment_mode']='separate'
+            expected_view['verifier']['environment']=dict(expected_view['environment'])
+            expected_view['resolved_verifier']={'directory':'environment','bundled_tests':False}
+            expected_view['artifacts']=actual_view['artifacts']
+    if expected_view != actual_view:
         raise ValueError("runtime task changed the official resolved protocol")
     for p in source.rglob("*"):
         if (
@@ -284,7 +299,8 @@ def prepare_task(
         "platform": platform,
         "images": built,
         "config_diff": diff.relative_to(root).as_posix(),
-        "protocol_equivalent": True,
+        "protocol_equivalent": not (resources or sealed),
+        "declared_adaptation": {'resources':resources,'sealed_separate_verifier':sealed},
         "verifier_resources": {
             k: getattr(verifier.config, k) for k in ("cpus", "memory_mb", "storage_mb")
         }

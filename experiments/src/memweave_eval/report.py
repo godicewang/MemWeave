@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .engineering_metrics import task_engineering_metrics
+from .finance_metrics import attach_finance, attach_pair_columns, context_from_lock, finance_markdown, finance_summary
 from .state_metrics import metric_columns, metrics_markdown, task_state_metrics
 from .storage import atomic_json, contained, file_digest
 
@@ -316,14 +317,19 @@ def generate_report(root: Path) -> dict:
             agent=contained(root,originals[0]+'agent')
             row['engineering_metrics']=task_engineering_metrics(agent)
             if lock['suite']['protocol']=='swe-marathon':
-                from .wasm_metrics import wasm_metrics
+                from .marathon_metrics import marathon_metrics
+                from .contract_evidence import task_contract_metrics
                 gold_path=root/'case-gold.json'
                 if file_digest(gold_path)!=lock.get('evaluation_gold_sha256'):
                     raise ValueError('frozen case gold changed')
-                row['behavior_metrics']=wasm_metrics(agent,json.loads(gold_path.read_text()),
+                row['behavior_metrics']=marathon_metrics(agent,json.loads(gold_path.read_text()),task_id=plan['task_id'],
                                                     enabled=plan['variant_id']=='pi-memweave')
+                row['contract_metrics']=task_contract_metrics(agent,enabled=plan['variant_id']=='pi-memweave')
+        attach_finance(row,context_from_lock(lock),contained(root,originals[0]+'agent') if len(originals)==1 and not invalid else None)
         rows.append(row)
     summary = summarize(rows)
+    summary['finance']=finance_summary(rows)
+    attach_pair_columns(rows,summary['finance'])
     summary["complete"] = (
         not invalid and not state.get("stop_reason") and all(r["success"] is not None for r in rows)
     )
@@ -388,5 +394,6 @@ def generate_report(root: Path) -> dict:
             for case in row['behavior_metrics']['cases']:
                 lines.append(f"| {case['case_id']} | {case['value']} | {case['status']} | {case.get('reason') or ''} |")
             lines+=['','记忆项仅在实际证据驱逐后判定；State 交付、引用保全和后续业务成功均不单独证明因果采用。']
+    lines += finance_markdown(rows,summary['finance'])
     (output / "report.md").write_text("\n".join(lines))
     return summary

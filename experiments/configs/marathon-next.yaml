@@ -1,0 +1,65 @@
+schema_version: 1
+experiment_id: marathon-next-20261101
+suite: ../suites/swe-marathon.yaml
+subset: ../subsets/marathon-next.yaml
+subject:
+  commit: 207d746babd80b2381f04688d8d576c73429af30
+  package: /Users/godice/.local/share/memweave-experiments/artifacts/marathon-20261101/godice-memweave-0.1.0.tgz
+  sha256: 5ed61de2eb9d8096cf063fb519c4b54c8f63b09cd518c00e4d228d1bed92f022
+runtime:
+  harbor_version: 0.24.0
+  pi_version: 1.4.0
+  node_version: 24.22.0
+model:
+  provider: deepseek
+  id: deepseek-flash
+  api: openai-completions
+  auth_profile: memweave-dev
+  thinking: 'off'
+variants:
+- id: pi-native
+  memweave: false
+- id: pi-memweave
+  memweave: true
+execution:
+  environment: docker
+  platform: linux/amd64
+  concurrency: 4
+  paired_concurrent: true
+  repetitions: 1
+  automatic_trial_retries: 0
+limits:
+  max_cost_usd: 20.0
+  max_elapsed_seconds: 43200
+evaluation:
+  gold: ../cases/marathon-two-tasks-v1.json
+  deadline_utc: '2026-11-02T05:50:13Z'
+  admission_budget_usd: 19.0
+  arm_budget_usd: 4.0
+  budget_id: marathon-next-20261101
+  output_tokens: 16384
+  progress_after_returns: 80
+  frozen_preparation: /Users/godice/.local/share/memweave-experiments/preflights/marathon-next-20261101-source-images/prepared.json
+  quota_backend: node
+  per_task_arm_caps: true
+  resources:
+    cpus: 2
+    memory_mb: 8192
+    storage_mb: 20480
+  sealed_tasks:
+  - zstd-decoder
+  finalization_reserve_seconds: 3000
+  canary_preflight: true
+  control_expectations:
+    rust-c-compiler:
+      oracle:
+        reward: 0
+        metrics:
+          new_passed: 893
+          new_total: 894
+        stdout_fail_lines:
+        - 'FAIL (rc): chapter_15_valid_declarators_big_array'
+      nop: 0
+      known_good_receipt: /Users/godice/.local/share/memweave-experiments/preflights/marathon-next-20261101-compiler-known-good-v2/harbor/known-good-reference/rust-c-compiler__P5FW9hM/result.json
+      known_good_sha256: d55e0cdaddf7f5ff477e1f0a16b59b0fda3f8296e9c0db51e39574e781facb4f
+root: /Users/godice/.local/share/memweave-experiments

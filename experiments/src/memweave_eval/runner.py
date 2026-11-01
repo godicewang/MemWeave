@@ -154,13 +154,19 @@ def build_job_config(
                 "runtime_plan_sha256": file_digest(runtime_plan) if runtime_plan else None,
                 "prepare_only": prepare_only,
                 **({'evaluation_deadline': datetime.fromisoformat(
-                    spec.evaluation.deadline_utc).timestamp()-1500,
+                    spec.evaluation.deadline_utc).timestamp()-spec.evaluation.finalization_reserve_seconds,
                     'evaluation_output_tokens':spec.evaluation.output_tokens,
                     'evaluation_progress_after_returns':spec.evaluation.progress_after_returns}
                    if getattr(spec, 'evaluation', None) else {}),
                 **({'evaluation_episode_budget':spec.evaluation.episode_budget_usd}
                    if getattr(spec,'evaluation',None) else {}),
                 **({'evaluation_run_id':run_root.name} if getattr(spec,'evaluation',None) else {}),
+                **({'evaluation_quota_backend':spec.evaluation.quota_backend,
+                    'evaluation_per_task_arms':spec.evaluation.per_task_arm_caps,
+                    'evaluation_task_ids':[p.name for p in tasks],
+                    'evaluation_task_configs':json.loads(spec.evaluation.gold.read_text()).get('tasks',{}),
+                    'evaluation_sealed_tasks':spec.evaluation.sealed_tasks}
+                   if getattr(spec,'evaluation',None) else {}),
             },
         }
     cfg = {
@@ -284,6 +290,8 @@ def execute_harbor(config: dict, root: Path, env: dict, deadline: float, budget:
 
 def docker_preflight(spec: Experiment, selected: list[dict], preparations=None) -> dict:
     requirements = list(selected)
+    if spec.evaluation and spec.evaluation.resources:
+        requirements=[dict(t,resources=dict(t['resources'],**spec.evaluation.resources))for t in requirements]
     for record in (preparations or {}).values():
         if record.get("verifier_resources"):
             requirements.append({"resources": record["verifier_resources"]})
@@ -360,10 +368,18 @@ def control_ok(job: Path, task_id: str, expected: int) -> bool:
     if not item:
         return False
     raw = item[1]
-    return (
-        not raw.get("exception_info")
-        and (raw.get("verifier_result") or {}).get("rewards", {}).get("reward") == expected
-    )
+    wanted=expected.get('reward') if isinstance(expected,dict) else expected
+    matched=not raw.get('exception_info') and (raw.get('verifier_result')or{}).get('rewards',{}).get('reward')==wanted
+    if isinstance(expected,dict) and expected.get('metrics'):
+        path=item[0].parent/'verifier/metrics.json'
+        if not path.is_file():return False
+        metrics=json.loads(path.read_text())
+        matched &= all(metrics.get(k)==v for k,v in expected['metrics'].items())
+    if isinstance(expected,dict) and 'stdout_fail_lines' in expected:
+        path=item[0].parent/'verifier/test-stdout.txt'
+        if not path.is_file():return False
+        matched &= [line for line in path.read_text().splitlines()if line.startswith('FAIL ')]==expected['stdout_fail_lines']
+    return bool(matched)
 
 
 def admit_tb_tasks(spec, subset, candidates, task_root, root, state, env, deadline, execute):
@@ -389,11 +405,14 @@ def admit_tb_tasks(spec, subset, candidates, task_root, root, state, env, deadli
                 frozen=None
                 if getattr(spec,'evaluation',None) and spec.evaluation.frozen_preparation:
                     previous=json.loads(spec.evaluation.frozen_preparation.read_text())
-                    frozen=previous.get('preparations',{}).get(task_id) if 'preparations' in previous else previous
+                    frozen=(previous.get('preparations',{}).get(task_id) if 'preparations' in previous
+                            else previous.get(task_id,previous))
                     if not frozen:
                         raise ValueError('frozen original image preparation missing')
                 record = prepare_task(task_root / task_id, root, spec.execution.platform,
-                                      deadline, env, subset.model_dump(),frozen=frozen)
+                                      deadline, env, subset.model_dump(),frozen=frozen,
+                                      resources=spec.evaluation.resources if spec.evaluation else None,
+                                      sealed=bool(spec.evaluation and task_id in spec.evaluation.sealed_tasks))
             except TaskPreparationError as exc:
                 attempt.update(status="preparation_failed", reason=str(exc))
                 atomic_json(root / "admission.json", admission)
@@ -409,6 +428,19 @@ def admit_tb_tasks(spec, subset, candidates, task_root, root, state, env, deadli
         capacity = docker_preflight(spec, [t for t, _, _ in batch], batch_records)
         frozen_images = image_snapshot(batch_paths)
         controls, control_codes = {}, {}
+        def expectation(task_id, control):
+            override=spec.evaluation.control_expectations.get(task_id,{}) if spec.evaluation else {}
+            return override.get(control, int(control=='oracle'))
+        if spec.evaluation:
+            for task,_,_ in batch:
+                override=spec.evaluation.control_expectations.get(task['task_id'],{})
+                if override:
+                    receipt=Path(override['known_good_receipt'])
+                    if file_digest(receipt)!=override['known_good_sha256']:
+                        raise ValueError('isolated known-good control receipt changed')
+                    data=json.loads(receipt.read_text())
+                    if data.get('exception_info') or (data.get('verifier_result')or{}).get('rewards',{}).get('reward')!=1:
+                        raise ValueError('isolated known-good control is not passing')
         for control in ("oracle", "nop"):
             name = f"control-{control}-a{batch_number:03d}"
             controls[control] = name
@@ -419,7 +451,7 @@ def admit_tb_tasks(spec, subset, candidates, task_root, root, state, env, deadli
             code = execute(cfg, required=False)
             control_codes[control] = code
             if code < 0 or (code and all(control_ok(root / "harbor" / name,
-                           t["task_id"], int(control == "oracle")) for t, _, _ in batch)):
+                           t["task_id"], expectation(t["task_id"], control)) for t, _, _ in batch)):
                 raise RuntimeError("official control Job failed outside its task results")
         if image_snapshot(batch_paths) != frozen_images:
             raise ValueError("task image changed during official controls")
@@ -428,7 +460,7 @@ def admit_tb_tasks(spec, subset, candidates, task_root, root, state, env, deadli
             verify_prepared_task(root, record)
             attempt["controls"] = {k: "harbor/" + v for k, v in controls.items()}
             attempt["control_exit_codes"] = control_codes
-            failed = [control for control, expected in (("oracle", 1), ("nop", 0))
+            failed = [control for control, expected in ((c,expectation(task_id,c)) for c in ("oracle","nop"))
                       if not control_ok(root / "harbor" / controls[control], task_id, expected)]
             if failed:
                 attempt.update(status="control_failed", reason="official " + ", ".join(failed))
@@ -464,6 +496,22 @@ def prepare_runtimes(spec, root, paths, images, state, execute, deadline) -> dic
             output = item[0].parent / "agent/runtime-preflight.json"
             if not output.is_file() or json.loads(output.read_text()).get("model_requests") != 0:
                 raise ValueError("runtime preflight evidence missing; no model started")
+    if spec.evaluation and spec.execution.paired_concurrent and len(paths)>1:
+        configs=[]
+        for variant in spec.variants:
+            name='runtime-concurrent-'+variant.id
+            state['jobs'][name]={'path':'harbor/'+name,'purpose':'software_preflight'}
+            cfg=build_job_config(spec,root,name,paths,variant=variant.id,runtime_plan=plan_path,prepare_only=True)
+            cfg['n_concurrent_trials']=min(len(paths),spec.execution.concurrency//2)
+            configs.append(cfg)
+        atomic_json(root/'run.json',state)
+        with ThreadPoolExecutor(max_workers=2)as pool:list(pool.map(execute,configs))
+        for cfg in configs:
+            results=trial_results(root/'harbor'/cfg['job_name'])
+            for task in paths:
+                item=results.get(task.name)
+                if not item or item[1].get('exception_info'):
+                    raise ValueError('concurrent real CLI preflight failed')
     record = {"plan_sha256": file_digest(plan_path), "objects": snapshot(plan)}
     atomic_json(root / "runtime-assets.lock.json", record, immutable=True)
     return record
@@ -588,8 +636,11 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                 from .budget_guard import initialize
                 control = spec.root/'budgets'/spec.evaluation.budget_id
                 control.mkdir(parents=True,exist_ok=True,mode=0o700)
-                quota_deadline=datetime.fromisoformat(spec.evaluation.deadline_utc).timestamp()-1500
-                arm_limits={variant.id:spec.evaluation.arm_budget_usd for variant in spec.variants}
+                quota_deadline=datetime.fromisoformat(spec.evaluation.deadline_utc).timestamp()-spec.evaluation.finalization_reserve_seconds
+                arms=[f"{t['task_id']}:{v.id}"for t in selected for v in spec.variants] if spec.evaluation.per_task_arm_caps else [v.id for v in spec.variants]
+                arm_limits={arm:spec.evaluation.arm_budget_usd for arm in arms}
+                if sum(arm_limits.values())>spec.evaluation.admission_budget_usd:
+                    raise ValueError('all task-arm caps must fit shared budget')
                 if not (control/'quota.json').exists():
                     initialize(control/'quota.json', spec.evaluation.admission_budget_usd,
                                quota_deadline,arm_limits=arm_limits)
@@ -598,9 +649,42 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                     if (previous['maximum_usd']!=spec.evaluation.admission_budget_usd
                             or previous['deadline']!=quota_deadline or previous.get('arm_limits')!=arm_limits):
                         raise ValueError('shared task budget settings cannot change or reset')
+                platform_overlay.write_text(yaml.safe_dump({'services':{'main':{
+                    'platform':spec.execution.platform,'labels':{'org.memweave.eval.run':run_id},
+                    'volumes':[str(control)+':/opt/memweave-eval-control:rw']}}}))
+                if spec.evaluation.canary_preflight:
+                    configs=[]
+                    for variant in spec.variants:
+                        name='canary-'+variant.id
+                        state['jobs'][name]={'path':'harbor/'+name,'purpose':'paid_canary'}
+                        cfg=build_job_config(spec,root,name,paths,variant=variant.id,auth_path=auth_file(),
+                            protocol=suite.protocol,runtime_plan=root/'runtime-assets.json')
+                        cfg['n_concurrent_trials']=min(len(paths),spec.execution.concurrency//2)
+                        cfg['agents'][0]['override_timeout_sec']=120
+                        cfg['agents'][0]['kwargs'].update(evaluation_canary=True,evaluation_request_limit=1,
+                            evaluation_output_tokens=128,evaluation_run_id=run_id+':canary')
+                        configs.append(cfg)
+                    atomic_json(root/'run.json',state)
+                    with ThreadPoolExecutor(max_workers=2)as pool:list(pool.map(execute,configs))
+                    ledger=json.loads((control/'quota.json').read_text())
+                    for cfg in configs:
+                        results=trial_results(root/'harbor'/cfg['job_name'])
+                        for task in paths:
+                            item=results.get(task.name)
+                            if not item or item[1].get('exception_info'):raise ValueError('paid CLI canary failed')
+                            from .engineering_metrics import read_events
+                            events,_=read_events(item[0].parent/'agent/request-trace.jsonl')
+                            attempts=[e for e in events if e.get('event')=='http_attempt']
+                            ready=[e for e in events if e.get('event')=='request_ready']
+                            settled=[e for e in events if e.get('event')=='budget_settled']
+                            ids={e['request_id']for e in attempts}
+                            if len(ids)!=1 or ids!={e['request_id']for e in ready} or ids!={e['request_id']for e in settled} or any(ledger['requests'].get(i,{}).get('status')!='settled'for i in ids):
+                                raise ValueError('paid canary guard/ledger mismatch')
+                    atomic_json(root/'canary-gate.json',{'passed':True,'requests':4,'output_tokens':128,
+                        'ledger_sha256_after_canaries':file_digest(control/'quota.json')},immutable=True)
                 ledger=json.loads((control/'quota.json').read_text())
                 remaining=min(spec.evaluation.arm_budget_usd-sum(r['charge_usd'] for r in ledger['requests'].values()
-                    if r.get('arm')==variant.id) for variant in spec.variants)
+                    if r.get('arm')==arm) for arm in arms)
                 if remaining<=.32:
                     raise ValueError('insufficient equal remaining arm budget')
                 spec=spec.model_copy(update={'evaluation':spec.evaluation.model_copy(update={
@@ -654,7 +738,7 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
             if spec.evaluation:
                 watchdog_log=(root/'watchdog-console.log').open('wb')
                 subprocess.Popen([sys.executable,'-m','memweave_eval.deadline_watchdog',str(root),run_id,
-                                  str(quota_deadline),str(quota_deadline+1380)],env=env,
+                                  str(quota_deadline),str(datetime.fromisoformat(spec.evaluation.deadline_utc).timestamp()-120)],env=env,
                                  stdin=subprocess.DEVNULL,stdout=watchdog_log,stderr=subprocess.STDOUT,
                                  start_new_session=True)
                 watchdog_log.close()
@@ -679,7 +763,8 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
             for rep in range(1, spec.execution.repetitions + 1):
                 order = spec.variants if rep % 2 else list(reversed(spec.variants))
                 if spec.execution.paired_concurrent:
-                    if suite.protocol != 'swe-marathon' or docker['effective_concurrency'] != 2:
+                    parallel_tasks=min(len(paths),docker['effective_concurrency']//2)
+                    if suite.protocol != 'swe-marathon' or parallel_tasks<1:
                         raise ValueError('concurrent Marathon pair requires capacity for both official instances')
                     verify_inputs()
                     configs=[]
@@ -688,7 +773,7 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                         state['jobs'][name]={'path':f'harbor/{name}','purpose':'solve'}
                         cfg=build_job_config(spec,root,name,paths,variant=variant.id,
                             auth_path=auth_file(),protocol=suite.protocol,runtime_plan=root/'runtime-assets.json')
-                        cfg['n_concurrent_trials']=1
+                        cfg['n_concurrent_trials']=parallel_tasks
                         configs.append(cfg)
                     atomic_json(root/'run.json',state)
                     with ThreadPoolExecutor(max_workers=2) as pool:

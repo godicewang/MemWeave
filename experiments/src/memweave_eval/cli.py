@@ -22,11 +22,18 @@ def main(argv=None) -> int:
     report.add_argument("--metrics-version", choices=("1", "2"), default="1")
     report.add_argument("--output", type=Path)
     report.add_argument("--contracts", type=Path)
+    finance=sub.add_parser('finance-report',help='Write a new financial supplement without changing frozen reports')
+    finance.add_argument('run_dir',type=Path)
+    finance.add_argument('--output',type=Path,required=True)
     cases=sub.add_parser('score-cases',help='Score frozen offline cases with deterministic predicates')
     cases.add_argument('gold',type=Path)
     cases.add_argument('evidence',type=Path)
     args = parser.parse_args(argv)
     try:
+        if args.command=='finance-report':
+            from .finance_report import generate_finance_supplement
+            print(json.dumps(generate_finance_supplement(args.run_dir,args.output),ensure_ascii=False,indent=2))
+            return 0
         if args.command=='score-cases':
             from .case_oracles import score_case_suite
             result=score_case_suite(json.loads(args.gold.read_text()),json.loads(args.evidence.read_text()))

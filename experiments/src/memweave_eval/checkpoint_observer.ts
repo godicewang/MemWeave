@@ -1,11 +1,14 @@
 // Common evaluation-only extension: observes public tool events, adds no tools/prompts.
 import fs from 'node:fs';
+import {createHash} from 'node:crypto';
 import {workspaceSummary} from './fetch_guard.mjs';
+import {attachBoundaries} from './request_boundary.ts';
 import {attachGuard,guardReady} from './guard_bootstrap.mjs';
 
 export default function observe(pi: any) {
   const trace=process.env.MEMWEAVE_EVAL_TRACE;
   if (!trace) throw Error('Missing evaluation trace');
+  attachBoundaries(pi);
   if(process.env.MEMWEAVE_EVAL_LEDGER) {
     // CLI dispatcher initialization precedes extension factories and can replace preloads.
     attachGuard();
@@ -21,6 +24,15 @@ export default function observe(pi: any) {
       timestamp:new Date().toISOString(),variant:process.env.MEMWEAVE_EVAL_VARIANT,
       workspace:workspaceSummary()})+'\n');
   }
+  if(process.env.MEMWEAVE_EVAL_SEALED==='1')pi.on('tool_call',(event:any)=>{
+    const args=event.input??{};
+    const forbidden=event.toolName==='bash' && /(?:^|[\s;&|/])(?:node|nodejs|python[0-9.]*|perl|ruby|lua|npm|npx|bun|deno)(?:[\s;&|]|$)/.test(args.command??'');
+    const privatePath=['read','write','edit'].includes(event.toolName) && /memweave-eval|\.pi\/agent/.test(args.path??'');
+    if(forbidden||privatePath){
+      fs.appendFileSync(trace!,JSON.stringify({event:'sealed_tool_rejected',tool:event.toolName,call_id:event.toolCallId,timestamp:new Date().toISOString()})+'\n');
+      return {block:true,reason:'Sealed task permits C99 tools, not evaluation/controller runtimes or private assets.'};
+    }
+  });
   pi.on('agent_start',()=>record('agent_start'));
   let returns=0,sent=false;
   const after=Number(process.env.MEMWEAVE_EVAL_PROGRESS_AFTER ?? 80);
@@ -29,12 +41,24 @@ export default function observe(pi: any) {
     returns++;
     if(!sent && returns>=after) {
       sent=true;
-      fs.appendFileSync(trace!,JSON.stringify({event:'case_input',case_id:'wasm-progress-detour',
+      fs.appendFileSync(trace!,JSON.stringify({event:'case_input',case_id:'marathon-progress-detour',
         after_assistant_returns:returns,timestamp:new Date().toISOString(),
         variant:process.env.MEMWEAVE_EVAL_VARIANT})+'\n');
       pi.sendUserMessage('请简短汇报进度，然后继续完成刚才的任务。',{deliverAs:'steer'});
     }
   });
-  pi.on('tool_execution_end',(event: any)=>record('tool_end',event.toolCallId));
+  pi.on('tool_execution_end',(event:any)=>{
+    record('tool_end',event.toolCallId);
+    if(!['memory_read','state_read'].includes(event.toolName))return;
+    const text=(event.result?.content??[]).filter((p:any)=>p.type==='text').map((p:any)=>p.text).join('\n');
+    let value:any;try{value=JSON.parse(text);}catch{}
+    fs.appendFileSync(trace!,JSON.stringify({event:'reference_delivery',call_id:event.toolCallId,
+      tool:event.toolName,is_error:typeof event.isError==='boolean'?event.isError:null,
+      state_version:value?.state_version??(Number(text.match(/state_version: (\d+)/)?.[1])||null),
+      task_id:value?.task_id??text.match(/task_id: (\S+)/)?.[1]??null,
+      projection_sha256:createHash('sha256').update(text).digest('hex'),
+      ranges:event.result?.details?.memweave_read?.ranges??null,
+      expected_projection_source:'not_independently_resolved',timestamp:new Date().toISOString()})+'\n');
+  });
   pi.on('agent_end',()=>record('agent_end'));
 }

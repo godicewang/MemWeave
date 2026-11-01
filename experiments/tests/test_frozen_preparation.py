@@ -72,7 +72,7 @@ def test_changed_frozen_preparation_fails_before_any_tag(tmp_path, builder, monk
     assert not builder
 
 
-def test_only_reviewed_frozen_image_adapter_transition_is_allowed():
+def test_only_reviewed_frozen_image_adapter_transition_is_allowed(monkeypatch):
     from memweave_eval.paired import verify_adapters
     from memweave_eval.spec import REPOSITORY
     from memweave_eval.storage import file_digest
@@ -82,6 +82,13 @@ def test_only_reviewed_frozen_image_adapter_transition_is_allowed():
         'pi_agent.py', 'runtime_cache.py', 'runner.py', 'images.py',
         'network_probe.py', 'public_archive.py', 'private_runtime.py', 'artifact_replay.py')}
     files[base+'images.py'] = 'cd7e5ceecde76b5bd2b4df91f423ff72ff41d5b14117b54b520d9cf0bf90b3f5'
+    # This is the historical reviewed transition, not permission to resume old
+    # experiments with the new opt-in Marathon adapter. Keep its actual digest frozen.
+    from memweave_eval import paired
+    digest=paired.file_digest
+    monkeypatch.setattr(paired,'file_digest',lambda path:
+        '09897b3a1695458476b424b1ef9d73fcae107eed90da6e9983929b33b4d7a90c'
+        if path.name=='images.py' else digest(path))
     assert verify_adapters({'implementation_files': files})['reason'] == 'approved exact frozen preparation reuse'
     files[base+'images.py'] = 'unreviewed'
     with pytest.raises(ValueError, match='adapter changed'):

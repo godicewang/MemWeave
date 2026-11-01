@@ -151,6 +151,16 @@ def state_freshness(commits, requests, *, commits_complete=False, enabled=True):
         task = request.get("expected_task_id")
         if "expected_task_id" in request and task is None:
             checks.append(_item(identity, reason="unbound_request", na=True))
+        elif request.get('boundary_source') == 'atomic_journal_before_context_transform' and _integer(request.get('expected_version_at_prepare')):
+            expected=request['expected_version_at_prepare']
+            blocks=request.get('state_blocks')
+            if not isinstance(blocks,list) or any(not isinstance(b,dict) or not _integer(b.get('version')) for b in blocks):
+                checks.append(_item(identity,reason='delivered_State_metadata_incomplete'))
+            elif len(blocks)==1 and blocks[0].get('task_id')==task and blocks[0]['version']>expected:
+                checks.append(_item(identity,reason='concurrent_commit_after_prepare_boundary'))
+            else:
+                passed=len(blocks)==1 and blocks[0].get('task_id')==task and blocks[0]['version']==expected
+                checks.append(_item(identity,passed,None if passed else 'State_version_or_scope_mismatch'))
         elif not valid or not commits_complete or not isinstance(task, str) or not _integer(request.get("prepare_seq")):
             checks.append(_item(identity, reason="authoritative_commit_or_prepare_boundary_missing"))
         elif not isinstance(request.get("state_blocks"), list):
@@ -246,3 +256,25 @@ def window_integrity(gold, observations):
     if not gold and observations:
         checks = [_item(o.get("window_id"), reason="expected_window_projection_missing") for o in observations]
     return summarize(checks)
+
+
+def provider_projection_integrity(requests):
+    """Final public provider boundary vs actual HTTP payload, plus tool-pair mechanics.
+
+    This is delivery fidelity, not an independent oracle for the window-selection policy.
+    """
+    checks=[]
+    for r in requests:
+        identity=r.get('request_id');wanted=r.get('prepared_messages');actual=r.get('messages')
+        if not isinstance(wanted,list) or not isinstance(actual,list):
+            checks.append(_item(identity,reason='final_provider_projection_missing'));continue
+        projected=[{k:m.get(k) for k in ('role','sha256','tool_call_id','tool_calls')} for m in actual]
+        same=wanted==projected
+        calls=set();results=set();paired=True
+        for m in actual:
+            for call in m.get('tool_calls') or []:
+                paired &= call not in calls;calls.add(call)
+            if m.get('role')=='tool':
+                call=m.get('tool_call_id');paired &= bool(call) and call in calls and call not in results;results.add(call)
+        checks.append(_item(identity,bool(same and paired and calls==results),None if same and paired and calls==results else 'projection_or_tool_pair_mismatch'))
+    return summarize(checks,reason='final_provider_delivery_only_not_window_policy')
