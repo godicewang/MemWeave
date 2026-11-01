@@ -24,15 +24,19 @@ export default function observe(pi: any) {
       timestamp:new Date().toISOString(),variant:process.env.MEMWEAVE_EVAL_VARIANT,
       workspace:workspaceSummary()})+'\n');
   }
-  if(process.env.MEMWEAVE_EVAL_SEALED==='1')pi.on('tool_call',(event:any)=>{
+  if(process.env.MEMWEAVE_EVAL_SEALED==='1'){
+    const policy=process.env.MEMWEAVE_EVAL_POLICY_FILE;
+    if(!policy||!fs.existsSync(policy))throw Error('Missing sealed Bash execution policy');
+    process.env.BASH_ENV=policy;
+    pi.on('tool_call',(event:any)=>{
     const args=event.input??{};
-    const forbidden=event.toolName==='bash' && /(?:^|[\s;&|/])(?:node|nodejs|python[0-9.]*|perl|ruby|lua|npm|npx|bun|deno)(?:[\s;&|]|$)/.test(args.command??'');
     const privatePath=['read','write','edit'].includes(event.toolName) && /memweave-eval|\.pi\/agent/.test(args.path??'');
-    if(forbidden||privatePath){
-      fs.appendFileSync(trace!,JSON.stringify({event:'sealed_tool_rejected',tool:event.toolName,call_id:event.toolCallId,timestamp:new Date().toISOString()})+'\n');
+    if(privatePath){
+      fs.appendFileSync(trace!,JSON.stringify({event:'sealed_tool_rejected',executables:['private-asset'],tool:event.toolName,call_id:event.toolCallId,timestamp:new Date().toISOString()})+'\n');
       return {block:true,reason:'Sealed task permits C99 tools, not evaluation/controller runtimes or private assets.'};
     }
-  });
+    });
+  }
   pi.on('agent_start',()=>record('agent_start'));
   let returns=0,sent=false;
   const after=Number(process.env.MEMWEAVE_EVAL_PROGRESS_AFTER ?? 80);

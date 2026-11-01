@@ -498,7 +498,7 @@ def prepare_runtimes(spec, root, paths, images, state, execute, deadline) -> dic
             output = item[0].parent / "agent/runtime-preflight.json"
             if not output.is_file() or json.loads(output.read_text()).get("model_requests") != 0:
                 raise ValueError("runtime preflight evidence missing; no model started")
-    if spec.evaluation and spec.execution.paired_concurrent and len(paths)>1:
+    if spec.evaluation and spec.execution.paired_concurrent and spec.execution.concurrency>=2:
         configs=[]
         for variant in spec.variants:
             name='runtime-concurrent-'+variant.id
@@ -534,7 +534,7 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
     code_files = {
         p.relative_to(REPOSITORY).as_posix(): file_digest(p)
         for p in sorted((REPOSITORY / "experiments/src").rglob("*"))
-        if p.is_file() and p.suffix in ('.py','.mjs','.ts')
+        if p.is_file() and p.suffix in ('.py','.mjs','.ts','.sh')
     }
     spec.root.mkdir(parents=True, exist_ok=True, mode=0o700)
     with (spec.root / ".run.lock").open("a") as lease:
@@ -640,7 +640,9 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                 control.mkdir(parents=True,exist_ok=True,mode=0o700)
                 quota_deadline=datetime.fromisoformat(spec.evaluation.deadline_utc).timestamp()-spec.evaluation.finalization_reserve_seconds
                 arms=[f"{t['task_id']}:{v.id}"for t in selected for v in spec.variants] if spec.evaluation.per_task_arm_caps else [v.id for v in spec.variants]
-                arm_limits={arm:spec.evaluation.arm_budget_usd for arm in arms}
+                arm_limits=spec.evaluation.budget_arm_limits or {arm:spec.evaluation.arm_budget_usd for arm in arms}
+                if any(arm_limits.get(arm)!=spec.evaluation.arm_budget_usd for arm in arms):
+                    raise ValueError('selected arms must retain their registered equal cumulative caps')
                 if sum(arm_limits.values())>spec.evaluation.admission_budget_usd:
                     raise ValueError('all task-arm caps must fit shared budget')
                 if not (control/'quota.json').exists():
@@ -653,7 +655,7 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                         raise ValueError('shared task budget settings cannot change or reset')
                 platform_overlay.write_text(yaml.safe_dump({'services':{'main':{
                     'platform':spec.execution.platform,'labels':{'org.memweave.eval.run':run_id},
-                    'volumes':[str(control)+':/opt/memweave-eval-control:rw']}}}))
+                    'volumes':[str(control.resolve())+':/opt/memweave-eval-control:rw']}}}))
                 if spec.evaluation.canary_preflight:
                     configs=[]
                     for variant in spec.variants:
@@ -682,7 +684,7 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                             ids={e['request_id']for e in attempts}
                             if len(ids)!=1 or ids!={e['request_id']for e in ready} or ids!={e['request_id']for e in settled} or any(ledger['requests'].get(i,{}).get('status')!='settled'for i in ids):
                                 raise ValueError('paid canary guard/ledger mismatch')
-                    atomic_json(root/'canary-gate.json',{'passed':True,'requests':4,'output_tokens':128,
+                    atomic_json(root/'canary-gate.json',{'passed':True,'requests':len(paths)*len(spec.variants),'output_tokens':128,
                         'ledger_sha256_after_canaries':file_digest(control/'quota.json')},immutable=True)
                 if spec.evaluation.agent_timeouts and time.time()+max(spec.evaluation.agent_timeouts.values())+180>quota_deadline:
                     raise ValueError('too late to provide frozen identical task timeouts before model cutoff')
@@ -697,7 +699,7 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                 platform_overlay.write_text(yaml.safe_dump({'services':{'main':{
                     'platform':spec.execution.platform,
                     'labels':{'org.memweave.eval.run':run_id},
-                    'volumes':[str(control)+':/opt/memweave-eval-control:rw'],
+                    'volumes':[str(control.resolve())+':/opt/memweave-eval-control:rw'],
                 }}}))
             lock = {
                 "schema_version": 1,
@@ -751,7 +753,7 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
             def verify_inputs():
                 actual_code={p.relative_to(REPOSITORY).as_posix():file_digest(p)
                     for p in (REPOSITORY/'experiments/src').rglob('*')
-                    if p.is_file() and p.suffix in ('.py','.mjs','.ts')}
+                    if p.is_file() and p.suffix in ('.py','.mjs','.ts','.sh')}
                 if actual_code!=code_files:
                     raise ValueError('frozen experiment implementation changed')
                 plan_path = root / "runtime-assets.json"

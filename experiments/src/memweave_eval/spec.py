@@ -89,6 +89,7 @@ class Evaluation(StrictModel):
     control_expectations: dict = Field(default_factory=dict)
     canary_preflight: StrictBool = False
     agent_timeouts: dict[str, PositiveInt] = Field(default_factory=dict)
+    budget_arm_limits: dict[str, Annotated[float,Field(strict=True,gt=0)]] | None = None
 
     @model_validator(mode="after")
     def deadline(self):
@@ -98,6 +99,8 @@ class Evaluation(StrictModel):
             raise ValueError('evaluation deadline must be explicit UTC')
         if 2*self.arm_budget_usd > self.admission_budget_usd:
             raise ValueError('equal arm budgets must fit the global admission budget')
+        if self.budget_arm_limits and sum(self.budget_arm_limits.values())>self.admission_budget_usd:
+            raise ValueError('registered budget arms exceed shared admission budget')
         if self.resources and (set(self.resources)-{'cpus','memory_mb','storage_mb'}):
             raise ValueError('unknown resource adaptation')
         return self

@@ -51,3 +51,13 @@ run20261101T190306Z-8db1b10487的compiler两臂canary成功，zstd两臂因真�
 交接不按扩展名筛选：保留src下所有普通文件（包括.inc、生成表、.o、已构建产物），仅移除明确控制Node运行时捷径。每个文件记录清理前与移交SHA-256；容器外/悬空符号链接无法安全交接时写明确adapter错误，不静默丢失后算业务失败。C源码、原Makefile和合法构建输入不由评估器改写，原verifier不改变。
 
 正式时间政策补充：compiler两臂固定32400秒（9小时），zstd两臂18000秒（5小时），低于原题的部分明确作为共同适配；原正文仍保存，在末尾追加相同英文预算说明，明确替代题面更大的时限。每臂开始agent执行时以该固定时长设置真实/app/timer.sh（原脚本归档），并由独立PID请求截止同步执行。全局04:45:13仍是更早硬上限；正式入口在剩余时间不能容纳固定时长+3分钟部署裕量时拒绝启动，不能静默少给时间。原题verifier与业务代码不改。
+
+## Zstd守卫误拦后的独立续跑
+
+20261101T192923Z-bab528be27正式Zstd对中，整段bash字符串正则误拒绝which/command-v/grep字面参数；native7次、plugin5次。19:43:37暂停准确main容器，19:47:04归档后确认停止。两个compiler该规则未启用，拒绝数0，继续冻结7203cdd版本，不因Zstd缺陷重跑。
+
+仅在同一Git仓库隔离worktree修复：用保守的shell词法命令边界检查静态可识别的执行名，允许which、command-v、type和grep/printf字面参数；识别普通直接执行与env/timeout/exec/command/bash-c包装。动态或复杂语法不冒称完整shell沙箱，干净验证镜像仍是运行时捷径隔离边界。加实际CLI查询正例和专用工具执行拒绝负例，均免费。
+
+重跑仍用现有memweave_eval CLI/Harbor/报告，数据目录设为同一实验根的continuations子目录，避免改写仍在运行的compiler日志/源文件锁。软件cache指向已验证公共缓存；budgets同名目录指向原marathon-next-20261101账本，并将Docker挂载解析为原canonical目录，绝不建立第二本预算。显式登记原4个(task,variant)臂额，selected Zstd两臂预算取累计费用/未知预留扣除后的较小余量。只有Zstd配对从原题初始镜像全新开始；资源仍各2CPU/8GiB，和继续的compiler合计不超原4实例配置。无效尝试全部原样保留并计运营费用，原compiler和重跑Zstd形成各自有效配对，最终分开标注版本与时间。
+
+守卫实现收敛：不用手写整个shell解析器。通过原生Pi Bash工具继承的BASH_ENV，在Bash DEBUG实际执行边界只检查当前命令头及少量常用exec包装，按解析出的可执行文件是否位于注入的控制面资产目录拒绝。which/command-v和heredoc的cat只执行自身，不扫描源码正文；原镜像已移除的python/perl仍按原生shell缺失处理。函数/动态展开/其他shell等不宣称完整沙箱，最终干净镜像与运行时移除边界保持。不会把用户C程序恰好名叫node当作Node运行时。

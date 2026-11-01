@@ -256,7 +256,7 @@ class ExperimentPi(Pi):
         if self.options.evaluation_deadline:
             evaluator = self._asset_root + '/evaluation'
             await self.exec_as_agent(environment, f'mkdir -p {shlex.quote(evaluator)}')
-            for filename in ('fetch_guard.mjs', 'guard_bootstrap.mjs', 'preload.mjs', 'budget_guard.py', 'container_deadline.py', 'budget_guard.mjs', 'container_deadline.mjs', 'sealed_runtime.mjs', 'request_boundary.ts', 'checkpoint_observer.ts'):
+            for filename in ('fetch_guard.mjs', 'guard_bootstrap.mjs', 'preload.mjs', 'budget_guard.py', 'container_deadline.py', 'budget_guard.mjs', 'container_deadline.mjs', 'sealed_runtime.mjs', 'sealed_bash_env.sh', 'request_boundary.ts', 'checkpoint_observer.ts'):
                 await environment.upload_file(Path(__file__).with_name(filename), evaluator+'/'+filename)
             if self.options.prepare_only:
                 await environment.upload_file(Path(__file__).with_name('probe_request.mjs'),evaluator+'/probe_request.mjs')
@@ -382,11 +382,15 @@ class ExperimentPi(Pi):
 const e=fs.readFileSync('/logs/agent/cli-request-trace.jsonl','utf8').trim().split('\\n').map(JSON.parse);
 const a=e.filter(x=>x.event==='http_attempt'),s=e.filter(x=>x.event==='budget_settled');
 if(a.length!==EXPECTED || s.length!==EXPECTED)throw Error('CLI guard missing or not settled');
+if(e.some(x=>x.event==='sealed_tool_rejected'))throw Error('Harmless query rejected');
 fs.renameSync('/logs/agent/cli-request-trace.jsonl','/logs/agent/cli-positive-trace.jsonl');
 fs.renameSync('/logs/agent/cli-fake-upstream.jsonl','/logs/agent/cli-positive-upstream.jsonl');
-""".replace('EXPECTED','2' if self.options.variant=='pi-memweave' else '1')
+""".replace('EXPECTED',str((2 if self.options.variant=='pi-memweave' else 1)+(1 if self._evaluation_sealed else 0)))
         await self.exec_as_agent(environment,'node --input-type=module -e '+shlex.quote(validate),timeout_sec=20)
         if self._evaluation_sealed:
+            await self.exec_as_agent(environment,command,timeout_sec=120,env={'MEMWEAVE_EVAL_EXECUTION_NEGATIVE':'1'})
+            check="import fs from 'node:fs';const e=fs.readFileSync('/logs/agent/cli-request-trace.jsonl','utf8').trim().split('\\n').map(JSON.parse);if(!e.some(x=>x.event==='sealed_tool_rejected'&&x.executables?.includes('injected-runtime')))throw Error('Actual interpreter execution not rejected');fs.renameSync('/logs/agent/cli-request-trace.jsonl','/logs/agent/cli-execution-negative-trace.jsonl');fs.rmSync('/logs/agent/cli-fake-upstream.jsonl',{force:true});"
+            await self.exec_as_agent(environment,'node --input-type=module -e '+shlex.quote(check),timeout_sec=20)
             negative=await self.exec_as_agent(environment,command+' || true',timeout_sec=120,
                 env={'MEMWEAVE_EVAL_COMPRESSED_FIXTURE_NEGATIVE':'1'})
             if 'Codec unavailable in sealed evaluation runtime' not in ((negative.stdout or '')+(negative.stderr or '')):
@@ -444,6 +448,8 @@ positive:true,lost_guard_upstream_requests:0,actual_cli_pid_deadline:true}));
                     MEMWEAVE_EVAL_QUOTA_BACKEND=self.options.evaluation_quota_backend,
                     MEMWEAVE_EVAL_BUDGET_ARM=(self._evaluation_task_id+':'+self.options.variant) if self.options.evaluation_per_task_arms else self.options.variant,
                     MEMWEAVE_EVAL_SEALED='1' if self._evaluation_sealed else '0',
+                    MEMWEAVE_EVAL_POLICY_FILE=evaluator+'/sealed_bash_env.sh',
+                    MEMWEAVE_EVAL_ASSET_ROOT=self._asset_root,
                     MEMWEAVE_EVAL_WORKSPACE=json.dumps(self._evaluation_task_config.get('workspace',{})),
                     MEMWEAVE_EVAL_MAX_OUTPUT=str(self.options.evaluation_output_tokens),
                     MEMWEAVE_EVAL_RUN_ID=self.options.evaluation_run_id or 'unknown',
