@@ -1,5 +1,7 @@
 # MemWeave 公开基线实验
 
+SWE-Marathon新增P0计算与独立程序案例的v2离线入口、原运行额外输入和上下文差异见[版本化补充报告](../docs/experiments/METRICS_V2_REPORT_2026-11-01.md)。使用`report --metrics-version 2 --output NEW_DIRECTORY`，不会覆盖原v1成绩；新案例可由现有`score-cases`命令验证。
+
 在官方任务环境中实际重跑原生 Pi 和 Pi + MemWeave，保存原件，离线生成 JSON、CSV 和 Markdown 对照。只接入 Terminal-Bench 4.0 与 SWE-bench Pro V2，不包含自进化。行为边界见 [实现设计](../docs/experiments/IMPLEMENTATION_DESIGN.md)，实际通过范围见 [验收记录](../docs/experiments/VALIDATION.md)。
 
 当前历史结果：Pro V2 四题原生 4/4、插件 3/4；TB 四题原生均有效未通过，插件一题有效未通过、三题在安装阶段失败。软件缓存改造用于减少重复安装和提前发现此类问题，不改变这些历史成绩。边界见 [镜像接线方案](../docs/experiments/DOCKERFILE_FREEZE_PROPOSAL.md) 和 [软件缓存设计](../docs/experiments/RUNTIME_CACHE_DESIGN.md)，实际验证见验收记录。

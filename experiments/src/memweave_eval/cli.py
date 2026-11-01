@@ -17,7 +17,11 @@ def main(argv=None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     for name in ("validate", "run"):
         sub.add_parser(name).add_argument("config", type=Path)
-    sub.add_parser("report").add_argument("run_dir", type=Path)
+    report = sub.add_parser("report")
+    report.add_argument("run_dir", type=Path)
+    report.add_argument("--metrics-version", choices=("1", "2"), default="1")
+    report.add_argument("--output", type=Path)
+    report.add_argument("--contracts", type=Path)
     cases=sub.add_parser('score-cases',help='Score frozen offline cases with deterministic predicates')
     cases.add_argument('gold',type=Path)
     cases.add_argument('evidence',type=Path)
@@ -29,6 +33,16 @@ def main(argv=None) -> int:
             print(json.dumps(result,ensure_ascii=False,indent=2))
             return 0
         if args.command == "report":
+            if args.metrics_version == "2":
+                if args.output is None:
+                    raise ValueError('v2 requires an explicit new output directory')
+                from .supplement_report import generate_supplement
+                result = generate_supplement(args.run_dir, args.output, args.contracts)
+                print(json.dumps({'output':str(args.output),'provenance':result['provenance'],
+                                  'fixture_validation':result['fixture_validation']},ensure_ascii=False,indent=2))
+                return 0
+            if args.output is not None or args.contracts is not None:
+                raise ValueError('separate output/contracts require --metrics-version 2')
             summary = generate_report(args.run_dir.resolve())
             print(json.dumps(summary, ensure_ascii=False, indent=2))
             return 0 if summary["complete"] else 2

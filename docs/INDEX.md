@@ -19,6 +19,8 @@
 
 2026-11-01 用户授权在现有本机实验系统接入两类程序指标及 SWE-Marathon 单题并发对照，见 [SWE-Marathon 接线设计](experiments/MARATHON_METRICS_DESIGN.md) 和 [实际实验报告与覆盖边界](experiments/MARATHON_REPORT_2026-11-01.md)。它不修改产品 State/Rule/Window 契约，不回写历史实验结果。
 
+同日离线补齐P0逻辑操作/State边界/引用窗口判定及14个有区别的程序案例，见[指标v2验收与原实验适配附记](experiments/METRICS_V2_REPORT_2026-11-01.md)。v2显式新目录输出，不覆写v1，不追加模型成绩。
+
 2026-10-25 用户确认启动模式与本机宿主解耦：同一 Pi 配置目录，TUI 启动选择启用/未启用并显示状态，未启用恢复全局自动压缩且仅保留启动接线；详细行为以 Rule 技术稿 §14 与 PACKAGING.md 启动模式节为准，取代早期对启动框禁用时不恢复压缩的约定。
 
 | 文档 | 权威范围 |
