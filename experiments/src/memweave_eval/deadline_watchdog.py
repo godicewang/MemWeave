@@ -58,7 +58,7 @@ def monitor(root: Path, run_id: str, model_deadline: float, hard_stop: float):
         elif now >= model_deadline and identities is not None:
             record["model_stop"] = {
                 identity: command(
-                    ["exec", identity, "sh", "-c", "pkill -INT -x node || true"]
+                    ["exec", identity, "sh", "-c", "pkill -TERM -x pi || true; pkill -TERM -x node || true"]
                 ).returncode
                 for identity in identities
             }

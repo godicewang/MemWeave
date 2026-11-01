@@ -1,13 +1,10 @@
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {installGuard} from './fetch_guard.mjs';
+import {attachGuard} from './guard_bootstrap.mjs';
 import {spawn} from 'node:child_process';
 
 if (!process.env.MEMWEAVE_EVAL_LEDGER) throw Error('Evaluation quota configuration missing');
-globalThis.fetch=installGuard({ledger:process.env.MEMWEAVE_EVAL_LEDGER,
-  trace:process.env.MEMWEAVE_EVAL_TRACE,
-  deadline:Number(process.env.MEMWEAVE_EVAL_DEADLINE),variant:process.env.MEMWEAVE_EVAL_VARIANT,
-  quotaScript:path.join(path.dirname(fileURLToPath(import.meta.url)),'budget_guard.py')});
+attachGuard();
 if (process.platform==='linux') {
   const watchdog=spawn('python3',[path.join(path.dirname(fileURLToPath(import.meta.url)),
     'container_deadline.py'),String(process.pid),process.env.MEMWEAVE_EVAL_DEADLINE,

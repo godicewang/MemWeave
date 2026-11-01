@@ -65,7 +65,7 @@ export function workspaceSummary(root='/app/interpreter') {
   return {files, cargo}; // Small task-specific configuration; never source or answers.
 }
 
-export function installGuard({ledger,trace,deadline,variant,quotaScript,fetchImpl=globalThis.fetch}) {
+export function installGuard({ledger,trace,deadline,variant,quotaScript,credentialFile,fetchImpl=globalThis.fetch}) {
   if (!ledger || !trace || !Number.isFinite(deadline)) throw Error('Incomplete evaluation guard');
   const record = value => fs.appendFileSync(trace, JSON.stringify({timestamp:new Date().toISOString(),
     variant,...value})+'\n');
@@ -76,10 +76,23 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,fetchImp
     if (result.status !== 0) throw Error('Evaluation quota admission/settlement rejected');
     return JSON.parse(result.stdout);
   };
+  function authorized(input,init) {
+    if(!credentialFile)return init;
+    const auth=JSON.parse(fs.readFileSync(credentialFile,'utf8')).deepseek;
+    if(auth?.type!=='api_key' || typeof auth.key!=='string' || !auth.key)throw Error('Guard credential unavailable');
+    const headers=new Headers(init?.headers ?? input?.headers);
+    headers.set('authorization','Bearer '+auth.key);
+    return {...init,headers};
+  }
   return async function guardedFetch(input,init) {
     const url=new URL(typeof input === 'string' || input instanceof URL ? input : input.url);
     const method=(init?.method ?? input?.method ?? 'GET').toUpperCase();
+    if(url.hostname==='api.deepseek.com' && method==='GET' && /\/(?:v1\/)?models\/?$/.test(url.pathname)) {
+      if(url.protocol!=='https:')throw Error('Guard credential endpoint rejected');
+      return fetchImpl(input,authorized(input,init));
+    }
     if (url.hostname !== 'api.deepseek.com' || method !== 'POST') return fetchImpl(input,init);
+    if(url.protocol!=='https:')throw Error('Guard credential endpoint rejected');
     if (url.pathname !== '/chat/completions' && url.pathname !== '/v1/chat/completions') {
       throw Error('Unregistered paid provider endpoint');
     }
@@ -90,7 +103,11 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,fetchImp
     const maxOutput=payload.max_tokens ?? payload.max_completion_tokens;
     const configured=Number(process.env.MEMWEAVE_EVAL_MAX_OUTPUT ?? 384000);
     if (maxOutput>configured) throw Error('Output exceeds frozen experiment setting');
-    try { quota({action:'reserve',id,arm:variant,max_output:maxOutput}); }
+    try { const reserved=quota({action:'reserve',id,arm:variant,max_output:maxOutput,
+      episode:process.env.MEMWEAVE_EVAL_RUN_ID ?? 'fixture',
+      episode_budget:Number(process.env.MEMWEAVE_EVAL_EPISODE_BUDGET)||null,
+      max_requests:Number(process.env.MEMWEAVE_EVAL_REQUEST_LIMIT)||null});
+      record({event:'budget_reserved',request_id:id,charge_usd:reserved.charge_usd}); }
     catch (error) { record({event:'request_denied',request_id:id,reason:'quota_or_deadline'}); throw error; }
     record({event:'request_ready',request_id:id,...requestSummary(payload,originalInstruction),workspace:workspaceSummary()});
     const controller=new AbortController();
@@ -102,8 +119,9 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,fetchImp
     const combined=signal ? AbortSignal.any([signal,controller.signal]) : controller.signal;
     let response;
     try {
+      const requestInit=authorized(input,{...init,signal:combined});
       record({event:'http_attempt',request_id:id});
-      response=await fetchImpl(input,{...init,signal:combined});
+      response=await fetchImpl(input,requestInit);
       record({event:'http_response',request_id:id,status:response.status});
     } catch (error) {
       clearTimeout(timer);
@@ -118,8 +136,9 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,fetchImp
       ended=true;
       clearTimeout(timer);
       let settled=false;
-      try {quota({action:'settle',id,input:usage.input,output:usage.output,
-        cache_input:Number.isInteger(usage.cache_hit)?usage.cache_hit:0});settled=true;}
+      try {const billed=quota({action:'settle',id,input:usage.input,output:usage.output,
+        cache_input:Number.isInteger(usage.cache_hit)?usage.cache_hit:0});settled=true;
+        record({event:'budget_settled',request_id:id,charge_usd:billed.charge_usd});}
       catch {record({event:'settlement_rejected',request_id:id});}
       record({event:'request_end',request_id:id,usage,settled,stream_done:done,response_model:responseModel});
     }

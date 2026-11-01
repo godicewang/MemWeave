@@ -158,6 +158,8 @@ def build_job_config(
                     'evaluation_output_tokens':spec.evaluation.output_tokens,
                     'evaluation_progress_after_returns':spec.evaluation.progress_after_returns}
                    if getattr(spec, 'evaluation', None) else {}),
+                **({'evaluation_episode_budget':spec.evaluation.episode_budget_usd}
+                   if getattr(spec,'evaluation',None) else {}),
                 **({'evaluation_run_id':run_root.name} if getattr(spec,'evaluation',None) else {}),
             },
         }
@@ -384,8 +386,14 @@ def admit_tb_tasks(spec, subset, candidates, task_root, root, state, env, deadli
             admission["attempts"].append(attempt)
             atomic_json(root / "admission.json", admission)
             try:
+                frozen=None
+                if getattr(spec,'evaluation',None) and spec.evaluation.frozen_preparation:
+                    previous=json.loads(spec.evaluation.frozen_preparation.read_text())
+                    frozen=previous.get('preparations',{}).get(task_id) if 'preparations' in previous else previous
+                    if not frozen:
+                        raise ValueError('frozen original image preparation missing')
                 record = prepare_task(task_root / task_id, root, spec.execution.platform,
-                                      deadline, env, subset.model_dump())
+                                      deadline, env, subset.model_dump(),frozen=frozen)
             except TaskPreparationError as exc:
                 attempt.update(status="preparation_failed", reason=str(exc))
                 atomic_json(root / "admission.json", admission)
@@ -590,6 +598,13 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                     if (previous['maximum_usd']!=spec.evaluation.admission_budget_usd
                             or previous['deadline']!=quota_deadline or previous.get('arm_limits')!=arm_limits):
                         raise ValueError('shared task budget settings cannot change or reset')
+                ledger=json.loads((control/'quota.json').read_text())
+                remaining=min(spec.evaluation.arm_budget_usd-sum(r['charge_usd'] for r in ledger['requests'].values()
+                    if r.get('arm')==variant.id) for variant in spec.variants)
+                if remaining<=.32:
+                    raise ValueError('insufficient equal remaining arm budget')
+                spec=spec.model_copy(update={'evaluation':spec.evaluation.model_copy(update={
+                    'episode_budget_usd':min(remaining,spec.evaluation.episode_budget_usd or remaining)})})
                 atomic_json(root/'case-gold.json',json.loads(spec.evaluation.gold.read_text()),immutable=True)
                 platform_overlay.write_text(yaml.safe_dump({'services':{'main':{
                     'platform':spec.execution.platform,

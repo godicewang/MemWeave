@@ -37,4 +37,5 @@ evaluation:
   budget_id: marathon-20261101
   output_tokens: 16384
   progress_after_returns: 80
+  frozen_preparation: /Users/godice/.local/share/memweave-experiments/runs/20261101T141259Z-b33204deca/experiment.lock.json
 root: /Users/godice/.local/share/memweave-experiments

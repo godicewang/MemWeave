@@ -33,6 +33,9 @@ class PiExperimentOptions(PiOptions):
     evaluation_run_id: str | None = None
     evaluation_progress_after_returns: int = 80
     smoke_barrier: str | None = None
+    evaluation_canary: bool = False
+    evaluation_request_limit: int | None = None
+    evaluation_episode_budget: float | None = None
     runtime_plan: str | None = None
     runtime_plan_sha256: str | None = None
     prepare_only: bool = False
@@ -240,10 +243,11 @@ class ExperimentPi(Pi):
         if self.options.evaluation_deadline:
             evaluator = self._asset_root + '/evaluation'
             await self.exec_as_agent(environment, f'mkdir -p {shlex.quote(evaluator)}')
-            for filename in ('fetch_guard.mjs', 'preload.mjs', 'budget_guard.py', 'container_deadline.py', 'checkpoint_observer.ts'):
+            for filename in ('fetch_guard.mjs', 'guard_bootstrap.mjs', 'preload.mjs', 'budget_guard.py', 'container_deadline.py', 'checkpoint_observer.ts'):
                 await environment.upload_file(Path(__file__).with_name(filename), evaluator+'/'+filename)
             if self.options.prepare_only:
                 await environment.upload_file(Path(__file__).with_name('probe_request.mjs'),evaluator+'/probe_request.mjs')
+                await environment.upload_file(Path(__file__).with_name('fixture_transport.ts'),evaluator+'/fixture_transport.ts')
             await self.upload_private(environment,json.dumps({'providers':{'deepseek':{
                 'modelOverrides':{'deepseek-flash':{'samplingParams':{
                     'max_tokens':self.options.evaluation_output_tokens}}}}}}),profile+'/models.json')
@@ -252,6 +256,10 @@ class ExperimentPi(Pi):
             auth = json.loads(Path(self.options.auth_path).read_text())
             if "deepseek" not in auth or auth["deepseek"].get("type") != "api_key":
                 raise ValueError("an API-key DeepSeek private profile is required")
+            if self.options.evaluation_deadline:
+                await self.upload_private(environment,json.dumps({'deepseek':auth['deepseek']}),
+                                          self._asset_root+'/evaluation/private-auth.json')
+                auth={'deepseek':{'type':'api_key','key':'memweave-evaluation-guard-placeholder'}}
             await self.upload_private(
                 environment, json.dumps({"deepseek": auth["deepseek"]}), profile + "/auth.json"
             )
@@ -260,12 +268,15 @@ class ExperimentPi(Pi):
             json.dumps({"compaction": {"enabled": self.options.variant == "pi-native"}}),
             profile + "/settings.json",
         )
+        container_identity=await self.exec_as_agent(environment,'cat /etc/hostname')
         setup = {
+            'container_hostname':container_identity.stdout.strip(),
             "pi_version": self.options.version,
             "node_version": self.options.node_version,
             "variant": self.options.variant,
             "cwd": cwd,
             "prepare_only": self.options.prepare_only,
+            "canary": self.options.evaluation_canary,
             "fresh_profile_and_memory": True,
             "resources": resources,
             "deployment_seconds": time.monotonic() - started,
@@ -332,6 +343,53 @@ class ExperimentPi(Pi):
             await self.exec_as_agent(environment,'node '+' '.join(shlex.quote(arg) for arg in args),
                 timeout_sec=180,env={'MEMWEAVE_EVAL_TRACE':'/logs/agent/mock-request-trace.jsonl',
                                     'MEMWEAVE_EVAL_PROGRESS_AFTER':str(self.options.evaluation_progress_after_returns)})
+            await self.cli_transport_preflight(environment)
+
+    async def cli_transport_preflight(self,environment):
+        """Use the exact print CLI/dispatcher path; SDK-only probes cannot certify preloads."""
+        evaluator=self._asset_root+'/evaluation'
+        await self.upload_private(environment,json.dumps({'deepseek':{'type':'api_key','key':'fixture-only'}}),
+                                  evaluator+'/private-auth.json')
+        await self.upload_private(environment,json.dumps({'deepseek':{'type':'api_key','key':'memweave-evaluation-guard-placeholder'}}),
+                                  self._experiment_home+'/.pi/agent/auth.json')
+        with tempfile.TemporaryDirectory(prefix='memweave-cli-probe-') as directory:
+            for name,value in (
+                ('instruction.md','Verify offline CLI request conversion.'),
+                ('quota.json',json.dumps({'schema_version':1,'maximum_usd':1.,'deadline':self.options.evaluation_deadline,
+                                         'exposure_usd':0.,'requests':{},'arm_limits':{}})),
+            ):
+                local=Path(directory)/name;local.write_text(value)
+                await environment.upload_file(local,evaluator+'/instruction.md' if name=='instruction.md' else '/logs/agent/cli-probe-quota.json')
+        extension=(' --extension '+shlex.quote(self.options.extension)) if self.options.extension else ''
+        command=('pi --print --mode json --provider deepseek --model deepseek-flash --thinking off '
+                 '--session-dir /logs/agent/cli-probe/sessions'+extension+' '+shlex.quote('Verify offline CLI request conversion.'))
+        await self.exec_as_agent(environment,command,timeout_sec=120)
+        validate="""import fs from 'node:fs';
+const e=fs.readFileSync('/logs/agent/cli-request-trace.jsonl','utf8').trim().split('\\n').map(JSON.parse);
+const a=e.filter(x=>x.event==='http_attempt'),s=e.filter(x=>x.event==='budget_settled');
+if(a.length!==EXPECTED || s.length!==EXPECTED)throw Error('CLI guard missing or not settled');
+fs.renameSync('/logs/agent/cli-request-trace.jsonl','/logs/agent/cli-positive-trace.jsonl');
+fs.renameSync('/logs/agent/cli-fake-upstream.jsonl','/logs/agent/cli-positive-upstream.jsonl');
+""".replace('EXPECTED','2' if self.options.variant=='pi-memweave' else '1')
+        await self.exec_as_agent(environment,'node --input-type=module -e '+shlex.quote(validate),timeout_sec=20)
+        await self.exec_as_agent(environment,command+' || true',timeout_sec=120,
+                                 env={'MEMWEAVE_EVAL_DROP_GUARD':'1'})
+        negative="""import fs from 'node:fs';
+const e=fs.readFileSync('/logs/agent/cli-request-trace.jsonl','utf8').trim().split('\\n').map(JSON.parse);
+if(!e.some(x=>x.event==='guard_lost') || e.some(x=>x.event==='http_attempt') ||
+fs.existsSync('/logs/agent/cli-fake-upstream.jsonl'))throw Error('Guard loss did not fail closed');
+fs.renameSync('/logs/agent/cli-request-trace.jsonl','/logs/agent/cli-negative-trace.jsonl');
+"""
+        await self.exec_as_agent(environment,'node --input-type=module -e '+shlex.quote(negative),timeout_sec=20)
+        await self.exec_as_agent(environment,command+' || true',timeout_sec=15,
+            env={'MEMWEAVE_EVAL_HANG_FIXTURE':'1','MEMWEAVE_EVAL_LOCAL_STOP_AFTER':'2'})
+        terminated="""import fs from 'node:fs';
+const e=fs.readFileSync('/logs/agent/cli-request-trace.jsonl','utf8').trim().split('\\n').map(JSON.parse);
+if(!e.some(x=>x.event==='local_deadline_stop'))throw Error('CLI PID deadline not enforced');
+fs.writeFileSync('/logs/agent/cli-transport-result.json',JSON.stringify({real_model_requests:0,
+positive:true,lost_guard_upstream_requests:0,actual_cli_pid_deadline:true}));
+"""
+        await self.exec_as_agent(environment,'node --input-type=module -e '+shlex.quote(terminated),timeout_sec=20)
 
     async def exec_as_agent(self, environment, command: str, **kwargs):
         is_pi = "pi --print --mode json" in command
@@ -354,19 +412,25 @@ class ExperimentPi(Pi):
                 )
             if self.options.evaluation_deadline:
                 evaluator = self._asset_root + '/evaluation'
-                command = command.replace('pi --print --mode json', 'pi --print --mode json --extension '
+                extensions=('--extension '+shlex.quote(evaluator+'/fixture_transport.ts')+' ' if self.options.prepare_only else '')
+                command = command.replace('pi --print --mode json', 'pi --print --mode json '+extensions+'--extension '
                                           +shlex.quote(evaluator+'/checkpoint_observer.ts'))
                 kwargs['env'].update(
                     NODE_OPTIONS='--import '+evaluator+'/preload.mjs',
-                    MEMWEAVE_EVAL_LEDGER='/opt/memweave-eval-control/quota.json',
-                    MEMWEAVE_EVAL_TRACE='/logs/agent/request-trace.jsonl',
+                    MEMWEAVE_EVAL_LEDGER='/logs/agent/cli-probe-quota.json' if self.options.prepare_only else '/opt/memweave-eval-control/quota.json',
+                    MEMWEAVE_EVAL_TRACE='/logs/agent/cli-request-trace.jsonl' if self.options.prepare_only else '/logs/agent/request-trace.jsonl',
                     MEMWEAVE_EVAL_DEADLINE=str(self.options.evaluation_deadline),
                     MEMWEAVE_EVAL_VARIANT=self.options.variant,
                     MEMWEAVE_EVAL_MAX_OUTPUT=str(self.options.evaluation_output_tokens),
                     MEMWEAVE_EVAL_RUN_ID=self.options.evaluation_run_id or 'unknown',
                     MEMWEAVE_EVAL_PROGRESS_AFTER=str(self.options.evaluation_progress_after_returns),
                     MEMWEAVE_EVAL_INSTRUCTION_PATH=evaluator+'/instruction.md',
+                    MEMWEAVE_EVAL_CREDENTIAL_FILE=evaluator+'/private-auth.json',
+                    MEMWEAVE_EVAL_REQUEST_LIMIT=str(self.options.evaluation_request_limit or 0),
+                    MEMWEAVE_EVAL_EPISODE_BUDGET=str(self.options.evaluation_episode_budget or 0),
                 )
+                if self.options.prepare_only and kwargs['env'].get('MEMWEAVE_EVAL_LOCAL_STOP_AFTER'):
+                    kwargs['env']['MEMWEAVE_EVAL_DEADLINE']=str(time.time()+float(kwargs['env']['MEMWEAVE_EVAL_LOCAL_STOP_AFTER']))
         result = await super().exec_as_agent(environment, command, **kwargs)
         if not is_pi:
             setup_log = self.logs_dir / "setup/experiment-install.log"
@@ -386,6 +450,8 @@ class ExperimentPi(Pi):
             return
         self._agent_started = time.monotonic()
         try:
+            if self.options.evaluation_canary:
+                instruction='Reply only OK. Do not call any tools. This is a connectivity canary.'
             if self.options.evaluation_deadline:
                 with tempfile.TemporaryDirectory(prefix='memweave-eval-instruction-') as directory:
                     local=Path(directory)/'instruction.md'

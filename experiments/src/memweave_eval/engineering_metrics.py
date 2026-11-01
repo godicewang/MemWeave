@@ -54,6 +54,9 @@ def read_events(path: Path | None):
 def task_engineering_metrics(agent: Path) -> dict:
     events, status = read_events(agent / "pi.txt")
     transport, transport_status = read_events(agent / "request-trace.jsonl")
+    if transport_status=='available' and not any(e.get('event') in
+        ('guard_attached','request_ready','http_attempt','request_denied') for e in transport):
+        transport_status='missing_guard_instrumentation'
     tools = defaultdict(
         lambda: {
             "attempts": 0,

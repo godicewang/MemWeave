@@ -73,6 +73,8 @@ class Evaluation(StrictModel):
     budget_id: Identifier
     arm_budget_usd: Annotated[float, Field(strict=True, gt=0)] = 12.0
     progress_after_returns: Annotated[int, Field(strict=True, gt=0)] = 80
+    episode_budget_usd: Annotated[float,Field(strict=True,gt=0)] | None = None
+    frozen_preparation: Path | None = None
 
     @model_validator(mode="after")
     def deadline(self):
@@ -207,6 +209,8 @@ def load_experiment(path: Path) -> tuple[Experiment, Suite, Subset]:
     spec.subject.package = (path.parent / spec.subject.package.expanduser()).resolve()
     if spec.evaluation:
         spec.evaluation.gold = (path.parent / spec.evaluation.gold).resolve()
+        if spec.evaluation.frozen_preparation:
+            spec.evaluation.frozen_preparation=(path.parent/spec.evaluation.frozen_preparation).resolve()
     suite = Suite.model_validate(load_yaml(spec.suite))
     subset = Subset.model_validate(load_yaml(spec.subset))
     if suite.protocol == "swe-pro-v2" and spec.execution.platform != "linux/amd64":

@@ -85,6 +85,30 @@ def change(path: Path, operation: dict, *, now=None) -> dict:
             if exposure + reserve > ledger["maximum_usd"]:
                 raise ValueError("global budget admission denied")
             arm = operation.get("arm")
+            episode = operation.get("episode")
+            episode_limit = operation.get("episode_budget")
+            if episode_limit is not None and (
+                type(episode_limit) not in (int, float)
+                or episode_limit <= 0
+                or sum(
+                    r["charge_usd"]
+                    for r in requests.values()
+                    if r.get("episode") == episode and r.get("arm") == arm
+                )
+                + reserve
+                > episode_limit
+            ):
+                raise ValueError("equal episode budget reached")
+            request_limit = operation.get("max_requests")
+            if request_limit is not None and (
+                type(request_limit) is not int
+                or request_limit < 1
+                or sum(
+                    r.get("episode") == episode and r.get("arm") == arm for r in requests.values()
+                )
+                >= request_limit
+            ):
+                raise ValueError("episode request limit reached")
             limits = ledger.get("arm_limits", {})
             if limits and (
                 arm not in limits
@@ -98,6 +122,7 @@ def change(path: Path, operation: dict, *, now=None) -> dict:
                 "charge_usd": reserve,
                 "admitted_at": now,
                 "arm": arm,
+                "episode": episode,
             }
         elif operation["action"] == "settle":
             record = requests[identity]
