@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
+
 import pytest
+
 from memweave_eval import marathon_metrics as adapter
 
 GOLD=json.loads((Path(__file__).parents[1]/'cases/marathon-two-tasks-v1.json').read_text())

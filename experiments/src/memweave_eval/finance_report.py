@@ -3,8 +3,16 @@ import csv
 import io
 import json
 from pathlib import Path
-from .finance_metrics import attach_finance,attach_pair_columns,context_from_lock,finance_summary,finance_markdown,FINANCE_COLUMNS
-from .storage import atomic_json,contained,file_digest
+
+from .finance_metrics import (
+    FINANCE_COLUMNS,
+    attach_finance,
+    attach_pair_columns,
+    context_from_lock,
+    finance_markdown,
+    finance_summary,
+)
+from .storage import atomic_json, contained, file_digest
 
 
 def generate_finance_supplement(root:Path,output:Path):

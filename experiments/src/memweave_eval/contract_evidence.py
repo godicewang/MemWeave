@@ -10,9 +10,9 @@ from pathlib import Path
 from .contract_metrics import (
     _item,
     logical_operation_metrics,
+    provider_projection_integrity,
     reference_integrity,
     state_freshness,
-    provider_projection_integrity,
     summarize,
     window_integrity,
 )

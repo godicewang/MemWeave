@@ -8,7 +8,14 @@ import re
 from pathlib import Path
 
 from .artifact_replay import artifact_digest, audited_verifier_timeout
-from .finance_metrics import FINANCE_COLUMNS, attach_finance, attach_pair_columns, context_from_lock, finance_markdown, finance_summary
+from .finance_metrics import (
+    FINANCE_COLUMNS,
+    attach_finance,
+    attach_pair_columns,
+    context_from_lock,
+    finance_markdown,
+    finance_summary,
+)
 from .report import duration, normalize_trial, session_diagnostics, summarize
 from .state_metrics import metric_columns, metrics_markdown, task_state_metrics
 from .storage import atomic_json, contained, file_digest

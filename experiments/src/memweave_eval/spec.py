@@ -238,7 +238,7 @@ def load_experiment(path: Path) -> tuple[Experiment, Suite, Subset]:
         not spec.evaluation or not spec.execution.paired_concurrent or not subset.task_ids
     ):
         raise ValueError('Marathon requires fixed cases, request admission and concurrent pairs')
-    if spec.evaluation and spec.evaluation.per_task_arm_caps:
-        if subset.count*len(spec.variants)*spec.evaluation.arm_budget_usd>spec.evaluation.admission_budget_usd:
-            raise ValueError('all task-arm allocations must fit the new shared budget')
+    if (spec.evaluation and spec.evaluation.per_task_arm_caps
+            and subset.count*len(spec.variants)*spec.evaluation.arm_budget_usd>spec.evaluation.admission_budget_usd):
+        raise ValueError('all task-arm allocations must fit the new shared budget')
     return spec, suite, subset

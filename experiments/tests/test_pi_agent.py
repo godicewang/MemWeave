@@ -217,11 +217,13 @@ def test_warm_install_has_no_network_installer_or_auth_in_preparation(tmp_path):
 
 
 def test_formal_budget_notice_and_timer_match_fixed_task_timeout(tmp_path):
-    import time
     import re
+    import time
     from types import SimpleNamespace
-    from unittest.mock import AsyncMock,patch
+    from unittest.mock import AsyncMock, patch
+
     from harbor.agents.installed.pi import Pi
+
     import memweave_eval.pi_agent as module
     agent=ExperimentPi(version='1.4.0',logs_dir=tmp_path,model_name='deepseek/deepseek-flash',node_version='24.22.0',
         variant='pi-native',package_path='/tmp/a',package_sha256='a'*64,auth_path='/tmp/auth',protocol='swe-marathon',

@@ -53,7 +53,7 @@ a=change(a,{action:'reserve',id:'c',arm:'c:n',max_output:1000},1000).ledger;
 a=change(a,{action:'settle',id:'a',input:100,output:1,cache_input:90},1001).ledger;
 if(Object.keys(a.requests).length!==2||a.requests.a.status!=='settled'||a.requests.c.status!=='reserved')throw Error('wrong ledger');
 '''.replace('MODULE',json.dumps(str((SRC/'budget_guard.mjs').resolve())))
-    result=subprocess.run([NODE,'--input-type=module','-e',script],capture_output=True,text=True)
+    result=subprocess.run([NODE,'--input-type=module','-e',script],capture_output=True,text=True,check=False)
     assert result.returncode==0,result.stderr
 
 
@@ -65,7 +65,7 @@ def test_sealed_handoff_removes_renamed_elf_node_without_editing_source(tmp_path
 disableZstd();for(const key of Object.keys(zlib).filter(k=>/zstd/i.test(k)&&typeof zlib[k]==='function')){
 try{zlib[key]();throw Error('not disabled');}catch(e){if(e.message==='not disabled')throw e;}}
 console.log(JSON.stringify(sealSource(ROOT)));'''.replace('MODULE',json.dumps(str((SRC/'sealed_runtime.mjs').resolve()))).replace('ROOT',json.dumps(str(tmp_path)))
-    result=subprocess.run([NODE,'--input-type=module','-e',script],capture_output=True,text=True)
+    result=subprocess.run([NODE,'--input-type=module','-e',script],capture_output=True,text=True,check=False)
     assert result.returncode==0,result.stderr
     assert (tmp_path/'keep.c').read_text()=='int main(){return 0;}'
     assert not (tmp_path/'renamed').exists()and not(tmp_path/'link').exists()
@@ -89,7 +89,7 @@ def test_handoff_preserves_nonstandard_legal_inputs_and_flags_external_links(tmp
         (tmp_path/name).write_text('const unsigned value=17;')
     (tmp_path/'outside').symlink_to('/etc/hosts')
     script='import {sealSource}from MODULE;console.log(JSON.stringify(sealSource(ROOT)));'.replace('MODULE',json.dumps(str((SRC/'sealed_runtime.mjs').resolve()))).replace('ROOT',json.dumps(str(tmp_path)))
-    result=subprocess.run([NODE,'--input-type=module','-e',script],capture_output=True,text=True)
+    result=subprocess.run([NODE,'--input-type=module','-e',script],capture_output=True,text=True,check=False)
     assert result.returncode==0,result.stderr
     manifest=json.loads(result.stdout)
     for name in ('table.inc','generated-table.txt','odd-name.o'):

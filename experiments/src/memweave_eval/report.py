@@ -11,7 +11,13 @@ from datetime import datetime
 from pathlib import Path
 
 from .engineering_metrics import task_engineering_metrics
-from .finance_metrics import attach_finance, attach_pair_columns, context_from_lock, finance_markdown, finance_summary
+from .finance_metrics import (
+    attach_finance,
+    attach_pair_columns,
+    context_from_lock,
+    finance_markdown,
+    finance_summary,
+)
 from .state_metrics import metric_columns, metrics_markdown, task_state_metrics
 from .storage import atomic_json, contained, file_digest
 
@@ -319,8 +325,8 @@ def generate_report(root: Path) -> dict:
             agent=contained(root,originals[0]+'agent')
             row['engineering_metrics']=task_engineering_metrics(agent)
             if lock['suite']['protocol']=='swe-marathon':
-                from .marathon_metrics import marathon_metrics
                 from .contract_evidence import task_contract_metrics
+                from .marathon_metrics import marathon_metrics
                 gold_path=root/'case-gold.json'
                 if file_digest(gold_path)!=lock.get('evaluation_gold_sha256'):
                     raise ValueError('frozen case gold changed')

@@ -1,6 +1,10 @@
-import json,os,subprocess
+import json
+import os
+import subprocess
 from pathlib import Path
+
 import pytest
+
 POLICY=Path(__file__).parents[1]/'src/memweave_eval/sealed_bash_env.sh'
 
 @pytest.fixture
@@ -18,7 +22,7 @@ def environment(tmp_path):
  "cat > probe.c <<'EOF'\ntypedef struct Node node;\nnode *root;\nEOF\ntest -s probe.c",
 ])
 def test_queries_literals_and_heredoc_are_not_interpreter_execution(tmp_path,environment,command):
- result=subprocess.run(['/bin/bash','-c',command],env=environment,cwd=tmp_path,capture_output=True,text=True)
+ result=subprocess.run(['/bin/bash','-c',command],env=environment,cwd=tmp_path,capture_output=True,text=True,check=False)
  assert result.returncode==0,result.stderr
  assert not Path(environment['MEMWEAVE_EVAL_TRACE']).exists()
 
@@ -28,7 +32,7 @@ def test_queries_literals_and_heredoc_are_not_interpreter_execution(tmp_path,env
  "cat > probe.c <<'EOF'\nnode *root;\nEOF\nnode -v",
 ])
 def test_actual_injected_runtime_execution_is_rejected(tmp_path,environment,command):
- result=subprocess.run(['/bin/bash','-c',command],env=environment,cwd=tmp_path,capture_output=True,text=True)
+ result=subprocess.run(['/bin/bash','-c',command],env=environment,cwd=tmp_path,capture_output=True,text=True,check=False)
  assert result.returncode==126,(result.stdout,result.stderr)
  assert 'should-not-run'not in result.stdout
  events=[json.loads(s)for s in Path(environment['MEMWEAVE_EVAL_TRACE']).read_text().splitlines()]
@@ -37,7 +41,7 @@ def test_actual_injected_runtime_execution_is_rejected(tmp_path,environment,comm
 
 def test_legal_c_helper_named_node_is_not_the_injected_runtime(tmp_path,environment):
  helper=tmp_path/'node';helper.write_text('#!/bin/sh\necho legal-helper\n');helper.chmod(0o755)
- result=subprocess.run(['/bin/bash','-c','./node'],env=environment,cwd=tmp_path,capture_output=True,text=True)
+ result=subprocess.run(['/bin/bash','-c','./node'],env=environment,cwd=tmp_path,capture_output=True,text=True,check=False)
  assert result.returncode==0 and result.stdout=='legal-helper\n'
  assert not Path(environment['MEMWEAVE_EVAL_TRACE']).exists()
 
@@ -48,6 +52,6 @@ def test_legal_c_helper_named_node_is_not_the_injected_runtime(tmp_path,environm
  ('value=$(printf data); printf "%s" "$value"','data'),
 ])
 def test_allowed_shell_status_and_control_flow_are_preserved(tmp_path,environment,command,output):
- result=subprocess.run(['/bin/bash','-c',command],env=environment,cwd=tmp_path,capture_output=True,text=True)
+ result=subprocess.run(['/bin/bash','-c',command],env=environment,cwd=tmp_path,capture_output=True,text=True,check=False)
  assert result.returncode==0 and result.stdout==output,result.stderr
  assert not Path(environment['MEMWEAVE_EVAL_TRACE']).exists()

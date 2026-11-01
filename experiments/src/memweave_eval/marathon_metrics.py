@@ -1,12 +1,13 @@
 """Frozen official-task adapters; deterministic observations, never a free-text judge."""
-from pathlib import Path
 import hashlib
-import os
 import json
+import os
 import re
+from pathlib import Path
+
 from .behavior_metrics import evaluate_behavior
 from .engineering_metrics import read_events
-from .wasm_metrics import _originals, _text, wasm_metrics
+from .wasm_metrics import _originals, wasm_metrics
 
 
 def marathon_metrics(agent: Path,gold:dict,*,task_id:str,enabled:bool):

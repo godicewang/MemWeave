@@ -6,7 +6,7 @@ import json
 import shlex
 import tempfile
 import time
-from datetime import datetime,UTC
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -33,10 +33,11 @@ class PiExperimentOptions(PiOptions):
     evaluation_output_tokens: int = 16384
     evaluation_quota_backend: Literal["python", "node"] = "python"
     evaluation_per_task_arms: bool = False
-    evaluation_task_timeouts: dict[str,int] = {}
-    evaluation_task_ids: list[str] = []
-    evaluation_task_configs: dict = {}
-    evaluation_sealed_tasks: list[str] = []
+    # PiOptions is a Pydantic model; mutable field defaults are copied per instance.
+    evaluation_task_timeouts: dict[str,int] = {}  # noqa: RUF012
+    evaluation_task_ids: list[str] = []  # noqa: RUF012
+    evaluation_task_configs: dict = {}  # noqa: RUF012
+    evaluation_sealed_tasks: list[str] = []  # noqa: RUF012
     evaluation_run_id: str | None = None
     evaluation_progress_after_returns: int = 80
     smoke_barrier: str | None = None
