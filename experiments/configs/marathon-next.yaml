@@ -48,7 +48,7 @@ evaluation:
     storage_mb: 20480
   sealed_tasks:
   - zstd-decoder
-  finalization_reserve_seconds: 3000
+  finalization_reserve_seconds: 3900
   canary_preflight: true
   control_expectations:
     rust-c-compiler:
