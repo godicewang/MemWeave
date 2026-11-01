@@ -81,3 +81,25 @@ def test_registered_reference_defect_cannot_mask_another_failure(tmp_path):
     assert control_ok(tmp_path,'compiler',expected)
     (trial/'verifier/test-stdout.txt').write_text('FAIL (rc): different\n')
     assert not control_ok(tmp_path,'compiler',expected)
+
+
+def test_handoff_preserves_nonstandard_legal_inputs_and_flags_external_links(tmp_path):
+    import hashlib
+    for name in ('table.inc','generated-table.txt','odd-name.o'):
+        (tmp_path/name).write_text('const unsigned value=17;')
+    (tmp_path/'outside').symlink_to('/etc/hosts')
+    script='import {sealSource}from MODULE;console.log(JSON.stringify(sealSource(ROOT)));'.replace('MODULE',json.dumps(str((SRC/'sealed_runtime.mjs').resolve()))).replace('ROOT',json.dumps(str(tmp_path)))
+    result=subprocess.run([NODE,'--input-type=module','-e',script],capture_output=True,text=True)
+    assert result.returncode==0,result.stderr
+    manifest=json.loads(result.stdout)
+    for name in ('table.inc','generated-table.txt','odd-name.o'):
+        assert manifest['handoff_files'][name]['sha256']==hashlib.sha256((tmp_path/name).read_bytes()).hexdigest()
+    assert manifest['unsupported_inputs']==[{'path':'outside','reason':'external_or_unresolved_symbolic_input'}]
+    assert manifest['status']=='adapter_unsupported_input'
+
+
+def test_adapter_handoff_failure_is_not_counted_as_agent_business_failure():
+    from memweave_eval.report import normalize_trial
+    row=normalize_trial({'exception_info':{'exception_type':'RuntimeError','exception_message':'ADAPTER_HANDOFF_FAILED: unsupported'},'verifier_result':{'rewards':{'reward':0}}}, {'task_id':'zstd-decoder','variant_id':'pi-native'})
+    assert row['success']is None and row['native_reward']=={'reward':0}
+    assert row['execution_status']=='infrastructure_error'

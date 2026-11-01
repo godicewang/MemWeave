@@ -140,6 +140,8 @@ def normalize_trial(raw: dict | None, plan: dict) -> dict:
     }
     row["elapsed_seconds"] = duration(raw)
     row["started_at"], row["finished_at"] = raw.get("started_at"), raw.get("finished_at")
+    if (raw.get('exception_info')or{}).get('exception_message','').startswith('ADAPTER_HANDOFF_FAILED'):
+        row.update(execution_status='infrastructure_error',success=None,adapter_issue='unsupported_or_failed_source_handoff')
     return row
 
 

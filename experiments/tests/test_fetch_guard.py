@@ -23,7 +23,7 @@ const body=JSON.stringify({model:'deepseek-flash',stream:true,max_tokens:1000,me
 const bytes='data: {"choices":[{"delta":{"content":"秘密"}}]}\\r\\n\\r\\n'+
  'data: {"usage":{"prompt_tokens":123,"completion_tokens":45}}\\n\\n'+'data: [DONE]\\n\\n';
 let calls=0;
-const fake=async (url,init)=>{if(init.body!==body)throw Error('body changed');calls++;
+const fake=async (url,init)=>{if(init.body!==body)throw Error('body changed');if(new Headers(init.headers).get('accept-encoding')!=='identity')throw Error('control encoding changed');calls++;
 if(calls===2)throw Error('network');
 return new Response(new ReadableStream({start(c){const b=new TextEncoder().encode(bytes);
 for(let i=0;i<b.length;i+=7)c.enqueue(b.slice(i,i+7));c.close();}}));};

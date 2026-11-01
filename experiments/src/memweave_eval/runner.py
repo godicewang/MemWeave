@@ -164,6 +164,7 @@ def build_job_config(
                 **({'evaluation_quota_backend':spec.evaluation.quota_backend,
                     'evaluation_per_task_arms':spec.evaluation.per_task_arm_caps,
                     'evaluation_task_ids':[p.name for p in tasks],
+                    'evaluation_task_timeouts':spec.evaluation.agent_timeouts,
                     'evaluation_task_configs':json.loads(spec.evaluation.gold.read_text()).get('tasks',{}),
                     'evaluation_sealed_tasks':spec.evaluation.sealed_tasks}
                    if getattr(spec,'evaluation',None) else {}),
@@ -412,7 +413,8 @@ def admit_tb_tasks(spec, subset, candidates, task_root, root, state, env, deadli
                 record = prepare_task(task_root / task_id, root, spec.execution.platform,
                                       deadline, env, subset.model_dump(),frozen=frozen,
                                       resources=spec.evaluation.resources if spec.evaluation else None,
-                                      sealed=bool(spec.evaluation and task_id in spec.evaluation.sealed_tasks))
+                                      sealed=bool(spec.evaluation and task_id in spec.evaluation.sealed_tasks),
+                                      agent_timeout=spec.evaluation.agent_timeouts.get(task_id) if spec.evaluation else None)
             except TaskPreparationError as exc:
                 attempt.update(status="preparation_failed", reason=str(exc))
                 atomic_json(root / "admission.json", admission)
@@ -682,6 +684,8 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                                 raise ValueError('paid canary guard/ledger mismatch')
                     atomic_json(root/'canary-gate.json',{'passed':True,'requests':4,'output_tokens':128,
                         'ledger_sha256_after_canaries':file_digest(control/'quota.json')},immutable=True)
+                if spec.evaluation.agent_timeouts and time.time()+max(spec.evaluation.agent_timeouts.values())+180>quota_deadline:
+                    raise ValueError('too late to provide frozen identical task timeouts before model cutoff')
                 ledger=json.loads((control/'quota.json').read_text())
                 remaining=min(spec.evaluation.arm_budget_usd-sum(r['charge_usd'] for r in ledger['requests'].values()
                     if r.get('arm')==arm) for arm in arms)

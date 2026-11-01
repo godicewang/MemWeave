@@ -350,3 +350,18 @@ def test_cached_official_digest_avoids_remote_pull(tmp_path, monkeypatch):
                         "linux/amd64", time.monotonic()+60, {})
     assert all("pull" not in c for c in calls)
     assert calls[0][:2] == ["docker", "tag"]
+
+
+def test_declared_task_timeout_and_sealed_inputs_preserve_original(tmp_path,builder):
+    source=make_task(tmp_path/'original','one')
+    before=task_digest(source)
+    record=images.prepare_task(source,tmp_path/'new','linux/amd64',time.monotonic()+60,{},LIMITS,
+        resources={'cpus':2,'memory_mb':8192,'storage_mb':10240},sealed=True,agent_timeout=2400)
+    runtime=tmp_path/'new'/record['runtime_path']
+    config=tomllib.loads((runtime/'task.toml').read_text())
+    assert config['agent']['timeout_sec']==2400
+    assert config['environment']['cpus']==2
+    assert config['artifacts'][-1]['exclude']==[]
+    assert record['declared_adaptation']['agent_timeout_sec']==2400
+    assert task_digest(source)==before
+    images.verify_prepared_task(tmp_path/'new',record)

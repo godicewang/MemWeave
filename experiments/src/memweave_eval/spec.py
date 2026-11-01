@@ -88,6 +88,7 @@ class Evaluation(StrictModel):
     finalization_reserve_seconds: Annotated[int,Field(strict=True,ge=1500)] = 1500
     control_expectations: dict = Field(default_factory=dict)
     canary_preflight: StrictBool = False
+    agent_timeouts: dict[str, PositiveInt] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def deadline(self):

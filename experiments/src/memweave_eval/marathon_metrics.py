@@ -1,5 +1,7 @@
 """Frozen official-task adapters; deterministic observations, never a free-text judge."""
 from pathlib import Path
+import hashlib
+import os
 import json
 import re
 from .behavior_metrics import evaluate_behavior
@@ -49,7 +51,24 @@ def marathon_metrics(agent: Path,gold:dict,*,task_id:str,enabled:bool):
         if early and late and all(type(v)is bool for v in values):
             retention.update(value=bool(any(v for _,v in early)and all(v for _,v in late)),status='scored')
     result=evaluate_behavior({'version':gold['version'],'cases':spec['cases']},evidence)
-    result.update(adapter=gold['version'],task_id=task_id,source_status=status,original_metrics=original,
+    handoff_path=agent/'sealed-handoff.json'
+    handoff={'status':'not_applicable','reason':'task_has_no_sealed_handoff'}
+    if task_id=='zstd-decoder':
+        handoff={'status':'unknown','reason':'handoff_manifest_missing'}
+        if handoff_path.is_file():
+            manifest=json.loads(handoff_path.read_text());directory=agent.parent/'artifacts/src'
+            missing=[];mismatch=[]
+            for name,value in manifest.get('handoff_files',{}).items():
+                target=directory/name
+                if value['type']=='symlink':
+                    if not target.is_symlink()or os.readlink(target)!=value['target']:mismatch.append(name)
+                elif not target.is_file()or target.is_symlink()or not target.resolve().is_relative_to(directory.resolve()):missing.append(name)
+                elif hashlib.sha256(target.read_bytes()).hexdigest()!=value['sha256']:mismatch.append(name)
+            handoff={'status':'verified_host_artifact'if not missing and not mismatch and not manifest.get('unsupported_inputs')else'adapter_issue',
+                'file_count':len(manifest.get('handoff_files',{})),'missing':missing,'mismatched':mismatch,
+                'unsupported':manifest.get('unsupported_inputs',[]),'fresh_verifier_per_file_hash':'not_observed',
+                'scope':'source-side manifest vs Harbor collected input artifact; original verifier executes in fresh image'}
+    result.update(adapter=gold['version'],adapter_handoff=handoff,task_id=task_id,source_status=status,original_metrics=original,
         public_test_calls=tests,constraint_retention_proxy=retention,
         progress_inputs=[e for e in trace if e.get('event')=='case_input'],
         interpretation='Original verifier preserved; clause retention is a conservative proxy, not causal memory adoption. Offline C1-C8/Task fixtures are separate implementation validation.')

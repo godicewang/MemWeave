@@ -88,10 +88,12 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,credenti
     return JSON.parse(result.stdout);
   };
   function authorized(input,init) {
-    if(!credentialFile)return init;
+    const headers=new Headers(init?.headers ?? input?.headers);
+    // Control transport must not invoke the task-forbidden Zstd decoder.
+    headers.set('accept-encoding','identity');
+    if(!credentialFile)return {...init,headers};
     const auth=JSON.parse(fs.readFileSync(credentialFile,'utf8')).deepseek;
     if(auth?.type!=='api_key' || typeof auth.key!=='string' || !auth.key)throw Error('Guard credential unavailable');
-    const headers=new Headers(init?.headers ?? input?.headers);
     headers.set('authorization','Bearer '+auth.key);
     return {...init,headers};
   }

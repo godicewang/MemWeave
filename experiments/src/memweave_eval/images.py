@@ -159,7 +159,7 @@ def protocol_view(path: Path) -> dict:
 
 def prepare_task(
     source: Path, root: Path, platform: str, deadline: float, env: dict, limits: dict,
-    *, frozen: dict | None = None, resources: dict | None = None, sealed: bool = False,
+    *, frozen: dict | None = None, resources: dict | None = None, sealed: bool = False, agent_timeout: int | None = None,
 ) -> dict:
     source, root = source.resolve(), root.resolve()
     if time.monotonic() >= deadline:
@@ -251,17 +251,21 @@ def prepare_task(
     shutil.copytree(source, runtime)
     if resources:
         changed['environment'].update(resources)
+    if agent_timeout:
+        if agent_timeout>cfg.agent.timeout_sec:raise ValueError('adapted timeout exceeds original')
+        changed.setdefault('agent',{})['timeout_sec']=agent_timeout
     if sealed:
         changed.setdefault('verifier',{})['environment_mode']='separate'
         changed['artifacts']=[*changed.get('artifacts',[]),
-                              {'source':'/app/src','destination':'src','exclude':['*.o']}]
+                              {'source':'/app/src','destination':'src','exclude':[]}]
     rewritten = toml.dumps(changed)
     if tomllib.loads(rewritten) != changed:
         raise ValueError("TOML serialization changed official task values")
     (runtime / "task.toml").write_text(rewritten)
     actual_view=protocol_view(runtime)
     expected_view=protocol_view(source)
-    if resources or sealed:
+    if resources or sealed or agent_timeout:
+        if agent_timeout:expected_view['agent']['timeout_sec']=agent_timeout
         expected_view['environment'].update(resources or {})
         if sealed:
             expected_view['verifier']['environment_mode']='separate'
@@ -299,8 +303,8 @@ def prepare_task(
         "platform": platform,
         "images": built,
         "config_diff": diff.relative_to(root).as_posix(),
-        "protocol_equivalent": not (resources or sealed),
-        "declared_adaptation": {'resources':resources,'sealed_separate_verifier':sealed},
+        "protocol_equivalent": not (resources or sealed or agent_timeout),
+        "declared_adaptation": {'resources':resources,'sealed_separate_verifier':sealed,'agent_timeout_sec':agent_timeout},
         "verifier_resources": {
             k: getattr(verifier.config, k) for k in ("cpus", "memory_mb", "storage_mb")
         }

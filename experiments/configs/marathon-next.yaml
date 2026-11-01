@@ -62,4 +62,7 @@ evaluation:
       nop: 0
       known_good_receipt: /Users/godice/.local/share/memweave-experiments/preflights/marathon-next-20261101-compiler-known-good-v2/harbor/known-good-reference/rust-c-compiler__P5FW9hM/result.json
       known_good_sha256: d55e0cdaddf7f5ff477e1f0a16b59b0fda3f8296e9c0db51e39574e781facb4f
+  agent_timeouts:
+    zstd-decoder: 18000
+    rust-c-compiler: 32400
 root: /Users/godice/.local/share/memweave-experiments
