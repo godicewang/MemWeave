@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261102-v3'
+VERSION='fixed35-score-20261102-v4'
 
 
 def weighted_profile(metrics,profile,*,allowed_ids=None):
@@ -133,6 +133,9 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             if spec['design_status']=='DESIGN_NA'or arm=='pi-native'and item['applicability']=='plugin':
                 item.update(score=None,status='DESIGN_NA',reason='Plugin-only metric in native mode'
                     if arm=='pi-native'and item['applicability']=='plugin'else spec['reason'])
+            elif spec['design_status']=='DESIGN_UNRESOLVED':
+                item.update(observed_unaccepted_score=item.get('score'),score=None,status='DESIGN_UNRESOLVED',
+                    reason=spec['reason'],collection_status='REPAIR_REQUIRED')
             elif original_id.startswith('Q1.tool.')and '.duration.'in original_id and \
                     collection.get('execution_boundary_collection',{}).get('complete')is True and \
                     collection['tools'].get(original_id.split('.')[2],{}).get('executions')==0:
@@ -164,7 +167,8 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
         'rows':rows,'collection_accepted':all(r['collection']['collection_complete'] for r in rows)
             and (official is None or all(p['collection_complete']for p in official['arms'].values()))
             and not any(m.get('collection_status')=='REPAIR_REQUIRED'for r in rows for m in r['normalized_metrics']),
-        'fixture_scores_included':False,'official_outcomes_sha256':file_digest(official_outcomes)if official_outcomes else None,'contract_sha256':admission['contract_sha256']}
+        'fixture_scores_included':False,'official_outcomes_sha256':file_digest(official_outcomes)if official_outcomes else None,
+        'contract_sha256':admission['contract_sha256'],'contract_version':contract['version']}
     atomic_json(output/'results.json',result,immutable=True)
     columns=['case_id','arm','metric_id','meaning','raw','raw_formula','score','status','score_formula',
         'weight','reason','support_s','support_f','support_u','support_n','mapping_version']

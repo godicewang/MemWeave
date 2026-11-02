@@ -19,6 +19,16 @@ def register(sub):
     state.add_argument('case_id',choices=[f'INT-0{i}'for i in range(1,6)])
     state.add_argument('--source',type=Path,required=True)
     state.add_argument('--output',type=Path,required=True)
+    switch=commands.add_parser('switch-contract',help='Bind selected Switch source stages and original tests; evaluator-only component, not Task admission')
+    switch.add_argument('case_id',choices=['INT-06','INT-07'])
+    switch.add_argument('--source',type=Path,required=True)
+    switch.add_argument('--output',type=Path,required=True)
+    final=commands.add_parser('switch-final',help='Evaluate source-bound final-delivery and original-test checkpoints offline; no memory inference')
+    final.add_argument('--contract',type=Path,required=True)
+    final.add_argument('--answer',type=Path)
+    final.add_argument('--outcomes',type=Path)
+    final.add_argument('--original-result',type=Path)
+    final.add_argument('--output',type=Path,required=True)
     task=commands.add_parser('task-checkpoints',help='Replay real Task checkpoint evidence with a frozen evaluator-only opportunity contract; no model calls')
     task.add_argument('trial',type=Path)
     task.add_argument('--contract',type=Path,required=True)
@@ -48,6 +58,25 @@ def register(sub):
 
 
 def execute(args):
+    if args.fixed35_command=='switch-contract':
+        from .fixed35_switch import switch_contract
+        result=switch_contract(args.source,args.case_id)
+        atomic_json(args.output,result,immutable=True)
+        return {'case_id':args.case_id,'output':str(args.output),'paid_requests':0,
+            'source_stages':len(result['route_ledger'])+1,'status':result['status']}
+    if args.fixed35_command=='switch-final':
+        from .fixed35_switch import grade_switch_final
+        from .storage import file_digest
+        result=grade_switch_final(json.loads(args.contract.read_text()),
+            answer=args.answer.read_text()if args.answer else None,
+            outcomes=json.loads(args.outcomes.read_text())if args.outcomes else None,
+            original_result=json.loads(args.original_result.read_text())if args.original_result else None)
+        result['source_sha256']={name:file_digest(path)for name,path in {
+            'contract':args.contract,'answer':args.answer,'outcomes':args.outcomes,
+            'original_result':args.original_result}.items()if path}
+        atomic_json(args.output,result,immutable=True)
+        return {'output':str(args.output),'paid_requests':0,'collection_complete':result['collection_complete'],
+            'status':'BUSINESS_COMPONENT_REPLAY_NOT_A_MEMORY_OR_TASK_RESULT'}
     if args.fixed35_command=='mab-contracts':
         from .fixed35_mab import prepare_mab_components
         return prepare_mab_components(args.adapter,args.output)
@@ -84,7 +113,10 @@ def execute(args):
         record=prepare_source_manifest(args.design,args.sources,args.output/'sources.json')
         matrix=applicability_matrix(read_design(args.design))
         atomic_json(args.output/'research-applicability.json',matrix,immutable=True)
+        from .fixed35_sources import freeze_draft_contracts
+        manifest=freeze_draft_contracts(record,matrix,args.output)
         return {'sources':record['source_case_count'],'mapping_cells':len(matrix),
+                'draft_package_manifest':str(manifest),
                 'paid_requests':0,'status':'SOURCE_VERIFIED_NOT_ENVIRONMENT_ADMITTED'}
     if args.fixed35_command=='replay':
         from .evidence_replay import replay_content

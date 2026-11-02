@@ -97,3 +97,47 @@ def test_irreparable_exception_is_shared_and_never_design_na():
     rows[-1].pop('repair_attempts')
     with pytest.raises(ValueError,match='requires reason and attempted repairs'):
         package_metrics(rows,expected,registry)
+
+
+def test_unresolved_design_blocks_acceptance_even_if_a_numeric_result_exists():
+    registry,expected,rows=setup_rows()
+    expected[0]=dict(expected[0],design_status='DESIGN_UNRESOLVED',reason='opportunity not frozen')
+    result=package_metrics(rows,expected,registry)
+    assert not result['collection_accepted']
+    unresolved=result['rows'][0]
+    assert unresolved['status']=='DESIGN_UNRESOLVED' and unresolved['score'] is None
+    assert unresolved['observed_unaccepted_score']==0
+    assert unresolved['reason']=='opportunity not frozen'
+
+
+def test_result_cannot_hide_planned_or_unresolved_metric_as_design_na():
+    registry,expected,rows=setup_rows()
+    rows[0]=dict(rows[0],status='DESIGN_NA',score=None,reason='no record discovered')
+    for status in ('PLANNED','DESIGN_UNRESOLVED'):
+        expected[0]=dict(expected[0],design_status=status)
+        with pytest.raises(ValueError,match='cannot introduce a design NA'):
+            package_metrics(rows,expected,registry)
+
+
+def test_report_contract_and_schema_are_bound_not_just_case_label():
+    from copy import deepcopy
+
+    from memweave_eval.fixed35_pack import validate_case_report
+    case={'case_id':'a','contract_sha256':'a'*64,'report_schema_version':3,'report_evaluator_version':'frozen-v4'}
+    contract={'version':'case-contract-v2'}
+    report={'case_id':'a','contract_sha256':'a'*64,'contract_version':'case-contract-v2',
+        'schema_version':3,'evaluator_version':'frozen-v4','fixture_scores_included':False,
+        'rows':[{'case_id':'a','variant_id':arm,'normalized_metrics':[{'id':'m','mapping_version':'frozen-v4'}]}
+            for arm in ('pi-native','pi-memweave')]}
+    validate_case_report(case,contract,report,{'m'})
+    for key,value in [('case_id','b'),('contract_sha256','b'*64),('contract_version','old'),
+        ('schema_version',2),('evaluator_version','old'),('fixture_scores_included',True)]:
+        with pytest.raises(ValueError):validate_case_report(case,contract,dict(report,**{key:value}),{'m'})
+    bad=deepcopy(report);bad['rows'][1]['normalized_metrics']=[]
+    with pytest.raises(ValueError,match='metric schema'):validate_case_report(case,contract,bad,{'m'})
+    bad=deepcopy(report);bad['rows'][0]['case_id']='another-case'
+    with pytest.raises(ValueError,match='variant row'):validate_case_report(case,contract,bad,{'m'})
+    bad=deepcopy(report);bad['rows'][0]['normalized_metrics'][0]['mapping_version']='old'
+    with pytest.raises(ValueError,match='mapping versions'):validate_case_report(case,contract,bad,{'m'})
+    with pytest.raises(ValueError,match='not frozen'):validate_case_report(
+        {k:v for k,v in case.items()if k!='report_evaluator_version'},contract,report,{'m'})

@@ -129,7 +129,7 @@ def test_state_program_grade_reaches_existing_report_without_official_judge_scor
     plugin=tmp_path/'plugin-trial';plugin.mkdir()
     plugin_private=private/plugin.name;plugin_private.mkdir()
     fixture_files(plugin_private,arm='pi-memweave')
-    outer = {'adapter_kind':'state-business-v1','state_business':c,
+    outer = {'version':'state-program-test-contract-v1','adapter_kind':'state-business-v1','state_business':c,
         'metric_matrix':[{'metric_id':m['id'],'design_status':'PLANNED' if m['id']=='S.common.protected_constraints' else 'DESIGN_NA',
             'reason':'fixed test-only applicability','opportunity_ids':['state-program']}for m in catalogue()['metrics']]}
     path = tmp_path/'contract.json'; path.write_text(json.dumps(outer))

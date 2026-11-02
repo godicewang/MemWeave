@@ -1,5 +1,6 @@
 import json
 
+import pytest
 from harbor.models.job.config import JobConfig
 
 from memweave_eval.fixed35_execution import can_pair, job_config
@@ -24,3 +25,21 @@ def test_fixed_jobs_keep_real_pi_full_subject_and_harbor_resume(tmp_path):
         assert options['evaluation_content_evidence'] and options['evaluation_case_id']=='MAB-01'
         assert 'source_revision' not in options and 'gold' not in options
         assert options['auth_path'].endswith('/auth.json')
+
+
+def test_long_episode_uses_frozen_source_timeout_not_an_unrelated_45_minute_cap(tmp_path):
+    from memweave_eval.fixed35_campaign import validate_episode_policy
+    (tmp_path/'task.toml').write_text('[agent]\ntimeout_sec=28800\n')
+    validate_episode_policy({'task_path':str(tmp_path),'seconds':28800,'episode_budget':.5})
+    (tmp_path/'task.toml').write_text('[agent]\ntimeout_sec=900\n')
+    with pytest.raises(ValueError):validate_episode_policy({'task_path':str(tmp_path),'seconds':901,'episode_budget':.5})
+    validate_episode_policy({'task_path':str(tmp_path),'seconds':900,'episode_budget':.5})
+
+
+@pytest.mark.parametrize('field,value',[('seconds',float('nan')),('seconds',float('inf')),('seconds',True),
+    ('episode_budget',float('nan')),('episode_budget',False)])
+def test_episode_policy_rejects_invalid_values(tmp_path,field,value):
+    from memweave_eval.fixed35_campaign import validate_episode_policy
+    (tmp_path/'task.toml').write_text('[agent]\ntimeout_sec=900\n')
+    with pytest.raises(ValueError):validate_episode_policy(
+        {'task_path':str(tmp_path),'seconds':900,'episode_budget':.5,field:value})

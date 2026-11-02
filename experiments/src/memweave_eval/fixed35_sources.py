@@ -16,6 +16,7 @@ FAMILIES = {'Terminal-Bench 4.0': 'tb4', 'SlopCodeBench': 'slop',
             'STATE-Bench 0.8.1': 'state', 'Switch-SWE current main': 'switch',
             'InterruptBench current main': 'interrupt', 'MemoryAgentBench': 'mab',
             'SWE-Marathon': 'marathon'}
+PROTOCOL_OPPORTUNITIES={'tool_execution','cost_resource','density','rule_template','projection_window','native_outcome'}
 
 
 def read_design(path: Path):
@@ -93,7 +94,12 @@ def prepare_source_manifest(design_path, sources, output):
 
 
 def applicability_matrix(design):
-    """Freeze research assignments as assignments, not claims of implemented or run cases."""
+    """Research suggestions are positive assignments, never an exhaustive NA list.
+
+    Only the design's explicit legacy-task disposition establishes structural NA.
+    Original outcomes are retained for every selected source case. Unassigned
+    capabilities require an authored case contract before collection acceptance.
+    """
     cases=design['selection']['cases']
     opportunities={o['id']:o for o in design['coverage_plan']['opportunities']}
     rows=[]
@@ -104,10 +110,47 @@ def applicability_matrix(design):
                 aliases.add('MemoryAgentBench/'+case['upstream_case_id'])
             ids=[i for i in metric['opportunity_ids']
                  if aliases.intersection(opportunities[i]['proposed_case_ids'])]
+            legacy_na=metric.get('disposition')=='legacy_task_specific_NA'
+            protocol=[i for i in metric['opportunity_ids']if i in PROTOCOL_OPPORTUNITIES]
+            ids=sorted(set(ids+protocol))
+            status='DESIGN_NA'if legacy_na else'PLANNED'if ids else'DESIGN_UNRESOLVED'
+            reason=('Explicit legacy task-specific metric; a separately named selected-case successor is required'
+                if legacy_na else None if ids else
+                'Research proposed_case_ids has no assignment; this is not evidence of structural inapplicability. '
+                'Author and freeze the case opportunity or an independently justified structural NA before admission.')
             rows.append({'case_id':case['pack_case_id'],'metric_id':metric['metric_id'],
                          'benchmark':case['benchmark'],'opportunity_ids':ids,
-                         'design_status':'PLANNED' if ids else 'DESIGN_NA',
-                         'reason':None if ids else 'No assigned opportunity in approved design',
+                         'design_status':status,'reason':reason,
+                         'applicability_version':'fixed35-research-assignments-20261102-v2',
+                         'measurement_role':'legacy_task_specific'if legacy_na else
+                            'raw_diagnostic'if metric.get('score_mapping_preserved')=='diagnostic'else'capability_score',
+                         'assignment_basis':'explicit_legacy_disposition'if legacy_na else
+                            'protocol_wide_telemetry'if protocol else'research_positive_assignment'if ids else'not_authored',
+                         'conditional_na':'An explicitly observed zero denominator/operation opportunity may be mathematical NA; '
+                            'missing instrumentation or an unimplemented checker is not zero or design NA',
                          'implementation_status':'NOT_ACCEPTED',
                          'design_sha256':DESIGN_SHA256})
     return rows
+
+
+def freeze_draft_contracts(source_manifest,matrix,output:Path):
+    """Make a reproducible unrun package view without pretending drafts are admitted."""
+    contracts=output/'draft-contracts';contracts.mkdir(exist_ok=False)
+    cases=[]
+    for source in source_manifest['cases']:
+        identity=source['pack_case_id'];path=contracts/(identity+'.json')
+        rows=[r for r in matrix if r['case_id']==identity]
+        if not rows or len({r['metric_id']for r in rows})!=len(rows):
+            raise ValueError('draft case metric matrix is absent or duplicated')
+        contract={'version':'fixed35-source-draft-20261102-v2','contract_status':'DRAFT_NOT_ADMITTED',
+            'case_id':identity,'source_revision':source['source_revision'],
+            'source_task_sha256':source.get('task_sha256'),'metric_matrix':rows,
+            'warning':'Source assignments are not an executable opportunity ledger or collection preflight. '
+                'Do not run this contract or replace missing actual results with fixtures.'}
+        atomic_json(path,contract,immutable=True)
+        cases.append({'case_id':identity,'benchmark':source['benchmark'],
+            'contract_path':str(path.resolve()),'contract_sha256':file_digest(path)})
+    manifest=output/'pack-draft.json'
+    atomic_json(manifest,{'version':'fixed35-source-draft-20261102-v2','cases':cases,
+        'design_sha256':source_manifest['design_sha256'],'admission_status':'NOT_ADMITTED'},immutable=True)
+    return manifest

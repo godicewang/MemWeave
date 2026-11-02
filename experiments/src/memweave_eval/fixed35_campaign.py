@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import subprocess
 import sys
 import time
+import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
@@ -51,6 +53,29 @@ def validate_paid_canary(record,ledger=None):
     if len(identities)!=len(set(identities)):raise ValueError('canary variants reused request identities')
 
 
+def validate_case_design(contract):
+    matrix=contract.get('metric_matrix')
+    if contract.get('contract_status')=='DRAFT_NOT_ADMITTED'or not isinstance(matrix,list)or not matrix:
+        raise ValueError('source draft or empty case opportunities cannot be admitted')
+    if len({m.get('metric_id')for m in matrix})!=len(matrix):
+        raise ValueError('case design repeats a metric')
+    for metric in matrix:
+        if metric.get('applicability_version')!='fixed35-research-assignments-20261102-v2':
+            raise ValueError('legacy research-as-NA matrix must be migrated before admission')
+        if metric.get('design_status')not in {'PLANNED','DESIGN_NA'}:
+            raise ValueError('unresolved case opportunities cannot be admitted')
+        if metric['design_status']=='DESIGN_NA'and not metric.get('reason'):
+            raise ValueError('structural design NA requires an explicit frozen reason')
+
+
+def validate_episode_policy(record):
+    declared=tomllib.loads((Path(record['task_path'])/'task.toml').read_text()).get('agent',{}).get('timeout_sec')
+    seconds=record['seconds'];budget=record['episode_budget']
+    if any(type(value)not in (int,float)or not math.isfinite(value)for value in (declared,seconds,budget)) \
+            or not 0<seconds<=declared or budget<.31:
+        raise ValueError('episode must fit its frozen task agent timeout and bounded budget')
+
+
 def validate_admission(record):
     for key in ('case_id','benchmark','task_path','task_sha256','runtime_plan','runtime_plan_sha256',
                 'code_path','contract_path','contract_sha256','resources','seconds','episode_budget',
@@ -69,8 +94,8 @@ def validate_admission(record):
         expected=record['runtime_plan_sha256' if key=='runtime_plan' else 'contract_sha256']
         if file_digest(Path(record[key]))!=expected:
             raise ValueError('admitted evaluator input changed')
-    if not 0 < record['seconds'] <= 2700 or record['episode_budget'] < .31:
-        raise ValueError('invalid bounded episode policy')
+    validate_case_design(json.loads(Path(record['contract_path']).read_text()))
+    validate_episode_policy(record)
     allowed={'state_source_path','state_selector','evaluation_host_ledger','state_evaluator_output',
         'evaluation_judge_deadline'}
     if set(record.get('agent_options',{}))-allowed:

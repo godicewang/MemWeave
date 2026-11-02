@@ -11,6 +11,31 @@ from .normalized_scores import catalogue
 from .storage import atomic_json, file_digest
 
 
+def validate_case_report(case,contract,report,metric_ids):
+    """A case label alone cannot authorize mixing old score definitions."""
+    if report.get('case_id')!=case['case_id']:
+        raise ValueError('report belongs to a different case')
+    if report.get('contract_sha256')!=case['contract_sha256']or report.get('contract_version')!=contract.get('version'):
+        raise ValueError('report scoring contract hash/version mismatch')
+    for key in ('schema_version','evaluator_version'):
+        expected=case.get('report_'+key)
+        if expected is None or report.get(key)!=expected:
+            raise ValueError('report schema/evaluator version was not frozen or differs')
+    if report.get('fixture_scores_included')is not False:
+        raise ValueError('fixture results cannot enter a real package score')
+    rows=report.get('rows')
+    if not isinstance(rows,list)or len(rows)!=2 or {r.get('variant_id')for r in rows}!={'pi-native','pi-memweave'}:
+        raise ValueError('report must contain exactly the two paired variants')
+    for row in rows:
+        if row.get('case_id')!=case['case_id']:
+            raise ValueError('variant row belongs to a different case')
+        metrics=row.get('normalized_metrics')
+        if not isinstance(metrics,list)or len(metrics)!=len(metric_ids)or {m.get('id')for m in metrics}!=metric_ids:
+            raise ValueError('report metric schema differs from frozen registry')
+        if any(m.get('mapping_version')!=report['evaluator_version']for m in metrics):
+            raise ValueError('report mixes metric mapping versions')
+
+
 def profile_score(rows,registry,profile):
     weights={m['id']:m['weights'].get(profile,0)for m in registry}
     eligible=[r for r in rows if weights[r['metric_id']]>0 and r['status']not in
@@ -50,6 +75,11 @@ def package_metrics(rows,expected,registry):
             row=dict(e,status='DESIGN_NA'if e['design_status']=='DESIGN_NA'else'NOT_RUN',score=None)
         elif e['design_status']=='DESIGN_NA'and row['status']!='DESIGN_NA':
             raise ValueError('result contradicts frozen design NA')
+        elif row['status']=='DESIGN_NA'and e['design_status']!='DESIGN_NA':
+            raise ValueError('result cannot introduce a design NA absent from the frozen matrix')
+        if e['design_status']=='DESIGN_UNRESOLVED':
+            row=dict(row,observed_unaccepted_score=row.get('score'),score=None,
+                status='DESIGN_UNRESOLVED',reason=e['reason'],collection_complete=False)
         complete.append(dict(metadata[e['metric_id']],**{k:v for k,v in row.items()if k!='id'}))
     aggregates=[]
     for arm in ('pi-native','pi-memweave'):
@@ -133,8 +163,10 @@ def pack_report(manifest:Path,output:Path):
                     'arm':arm,'design_status':'DESIGN_NA'if native_na else spec['design_status'],
                     'reason':'Plugin-only metric in native mode'if native_na else spec.get('reason')})
         if case.get('report_path'):
-            path=Path(case['report_path']);source_hashes[str(path)]=file_digest(path);report=json.loads(path.read_text())
-            if report['case_id']!=case['case_id']:raise ValueError('report belongs to a different case')
+            path=Path(case['report_path']);source_hashes[str(path)]=file_digest(path)
+            if case.get('report_sha256')!=source_hashes[str(path)]:raise ValueError('report artifact hash was not frozen or changed')
+            report=json.loads(path.read_text())
+            validate_case_report(case,contract,report,{m['id']for m in registry})
             for run in report['rows']:
                 for metric in run['normalized_metrics']:
                     rows.append(dict(metric,case_id=case['case_id'],benchmark=case['benchmark'],
@@ -142,7 +174,7 @@ def pack_report(manifest:Path,output:Path):
                         status='SCORED'if metric['status']=='scored'else'DIAGNOSTIC'if metric['status']=='diagnostic'else metric['status'],
                         collection_complete=metric.get('collection_status')!='REPAIR_REQUIRED'))
     result=package_metrics(rows,expected,registry)
-    result.update(version='fixed35-pack-20261102-v1',manifest_sha256=file_digest(manifest),source_sha256=source_hashes,
+    result.update(version='fixed35-pack-20261102-v2',manifest_sha256=file_digest(manifest),source_sha256=source_hashes,
         aggregation='valid cases equally within benchmark, then valid benchmark means equally; no test-count weighting')
     output.mkdir(parents=True,exist_ok=False);atomic_json(output/'results.json',result,immutable=True)
     with (output/'metrics.csv').open('w',newline='')as stream:
