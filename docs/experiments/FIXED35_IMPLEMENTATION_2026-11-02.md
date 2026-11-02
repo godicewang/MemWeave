@@ -43,3 +43,19 @@ C4须三个真实驱逐及对应快照，中间遗失即失败，不以无意义
 ## 验证与真实阻塞
 
 免费回归、日志截断/重排/重复、拒绝调用、断点、零机会、AND负例、同scope/版本/否定错误、guard丢失零上游、真实CLI采集、预算双进程锁、独立停止及全部source/actor隔离是付费准入门槛。当前会话无MemWeave State/Task专用工具，因此不能更新当前State；未通过Bash改写。其他采集与实验工程继续推进，不将该限制混作题目成绩。
+
+### 环境与执行适配（真实模型运行前记录）
+
+所有原生/插件使用Pi1.4.0默认系统提示与原生工具；插件使用未修改的生产归档5ed61de2…，额外评估hook不改生产协议。新增fixed35协议禁用旧Marathon第80返回进度插话。暂定普通case总actor1800秒、五个长程候选2700秒，多阶段按整case累计；这是总预算下的显式时间适配，不是原题8–10小时复现，不承诺五个千次资格。
+
+MAB八个独立上下文使用原数据4096-token自然句子分块（2/9/67/33/17/33/33/33块），通过Harbor持久Session逐块输入，仅末尾查询所选QA。原始substring score独立保留，strict answer和answer.json写文件为DERIVED动作指标。答案只在evaluator-only目录。八题共用同一已验证、按ID冻结的Python容器；原MAB无Pi官方容器，故此为明确接口/环境适配。
+
+STATE仍调用固定源码domain环境、用户模拟器、state-requirements判定与官方judge提示。完整Pi接口超出上游domain-only工具集合，标DERIVED；只公开domain schema与鉴权tool端点，task_summary/requirements和后续模拟器信息不进actor。短生命周期host端点关闭后保留镜像工具日志和前后业务状态。模拟用户和judge使用相同原子总账、独立角色，不走默认Azure配置。官方LLM judge分与程序行为分分列。
+
+Switch原始Dockerfile在排除/usr/sbin后调用useradd，实测构建127。独立副本仅改为现有/usr/sbin/useradd；原始checkout、指令、16步骤、grader和测试不变。TB-02/TB-09只准入按内容hash审查的本地服务Compose：无host ports、host mounts、特权或主机网络，不改系统设置。
+
+本机Colima对/tmp挂载曾导致控制reward无法回传；失败控制保留v1，后续运行使用已做双向读写探针的原有共享实验目录。公共环境不沿用Pro的强制offline验收，按各题声明验证网络策略，不改实际策略。
+
+Slop使用额外冻结的官方runner af5a9cbc311605b5cceb80200ca9832bdff2d7b1及其uv.lock；只用eval-snapshot/tools入口运行题目测试，不直接pytest。其CLI依赖曾尝试初始化用户mini-swe-agent目录，被沙箱拒绝后经工具审批允许默认空目录初始化；没有创建凭据或修改网络/安全设置。
+
+截至13:20 UTC仍无付费调用。已观察365项回归、TypeScript类型检查与Rule资源校验通过；MAB真实CLI假provider双臂并发及CAS重放通过。Mirror只作为原始证据恢复源；fixture通过不记为actor行为通过。

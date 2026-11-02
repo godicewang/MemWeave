@@ -32,9 +32,9 @@ def test_empty_or_duplicate_required_assertions_cannot_pass_vacuously():
 
 
 def test_metric_uses_case_then_benchmark_macro_not_pool_size():
-    rows = [dict(case_id=str(i), benchmark='a', score=v, status='SCORED')
+    rows = [{'case_id': str(i), 'benchmark': 'a', 'score': v, 'status': 'SCORED'}
             for i, v in enumerate([100, 100, 0])]
-    rows += [dict(case_id='x', benchmark='b', score=0, status='SCORED')]
+    rows += [{'case_id': 'x', 'benchmark': 'b', 'score': 0, 'status': 'SCORED'}]
     result = aggregate_metric(rows)
     assert result['score'] == pytest.approx((200/3+0)/2)
     assert result['benchmarks']['a']['valid_cases'] == 3
@@ -42,9 +42,9 @@ def test_metric_uses_case_then_benchmark_macro_not_pool_size():
 
 
 def test_structural_na_and_unrecoverable_collection_exception_are_distinct():
-    rows = [dict(case_id='a', benchmark='b', score=100, status='SCORED'),
-            dict(case_id='n', benchmark='b', score=None, status='DESIGN_NA', reason='native no State'),
-            dict(case_id='m', benchmark='b', score=None, status='MISSING_EVIDENCE')]
+    rows = [{'case_id': 'a', 'benchmark': 'b', 'score': 100, 'status': 'SCORED'},
+            {'case_id': 'n', 'benchmark': 'b', 'score': None, 'status': 'DESIGN_NA', 'reason': 'native no State'},
+            {'case_id': 'm', 'benchmark': 'b', 'score': None, 'status': 'MISSING_EVIDENCE'}]
     result = aggregate_metric(rows)
     assert result['score'] == 100 and result['collection_accepted'] is False
     assert result['design_na'] == 1 and result['missing'] == 1
@@ -58,7 +58,7 @@ def test_structural_na_and_unrecoverable_collection_exception_are_distinct():
 
 
 def test_comparison_uses_common_effective_case_metric_mask():
-    rows = [dict(case_id=c, metric_id='m', arm=a, benchmark='b', score=s, status=st)
+    rows = [{'case_id': c, 'metric_id': 'm', 'arm': a, 'benchmark': 'b', 'score': s, 'status': st}
             for c, a, s, st in [('a','pi-native',100,'SCORED'),('a','pi-memweave',0,'SCORED'),
                                 ('b','pi-native',0,'SCORED'),('b','pi-memweave',None,'MISSING_EVIDENCE')]]
     pair = paired_effective_rows(rows)
@@ -68,8 +68,8 @@ def test_comparison_uses_common_effective_case_metric_mask():
 
 
 def test_selection_rejects_duplicate_source_case_even_under_different_labels():
-    selection = {'cases': [dict(pack_case_id='a', benchmark='b', upstream_case_id='x', source_revision='a'*40),
-                           dict(pack_case_id='b', benchmark='b', upstream_case_id='x', source_revision='a'*40)]}
+    selection = {'cases': [{'pack_case_id': 'a', 'benchmark': 'b', 'upstream_case_id': 'x', 'source_revision': 'a'*40},
+                           {'pack_case_id': 'b', 'benchmark': 'b', 'upstream_case_id': 'x', 'source_revision': 'a'*40}]}
     original = deepcopy(selection)
     with pytest.raises(ValueError):
         validate_selection(selection, expected_count=2)

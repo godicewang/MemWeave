@@ -25,12 +25,15 @@ export function contentEvidence(root=process.env.MEMWEAVE_EVAL_CONTENT_STORE) {
       const temporary=target+'.'+randomUUID()+'.partial',fd=fs.openSync(temporary,'wx',0o600);
       try{fs.writeFileSync(fd,gzipSync(bytes));fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
       fs.renameSync(temporary,target);
+      const directory=fs.openSync(path.dirname(target),'r');
+      try{fs.fsyncSync(directory);}finally{fs.closeSync(directory);}
     }
     return {sha256:digest,bytes:bytes.length,object:'objects/'+digest+'.gz',encoding:'gzip'};
   };
   const event=(kind,data)=>{
     const body={schema_version:1,producer_id:producer,sequence:++sequence,previous_sha256:previous,
       run_id:process.env.MEMWEAVE_EVAL_RUN_ID??null,case_id:process.env.MEMWEAVE_EVAL_CASE_ID??null,
+      stage_id:process.env.MEMWEAVE_EVAL_STAGE_ID??null,
       arm:process.env.MEMWEAVE_EVAL_BUDGET_ARM??process.env.MEMWEAVE_EVAL_VARIANT??null,
       role:process.env.MEMWEAVE_EVAL_ROLE??'actor',event:kind,
       timestamp:new Date().toISOString(),monotonic_ns:process.hrtime.bigint().toString(),...data};
@@ -38,7 +41,7 @@ export function contentEvidence(root=process.env.MEMWEAVE_EVAL_CONTENT_STORE) {
     const line=JSON.stringify({...body,event_sha256:digest})+'\n';
     for(const target of [journal,mirror]) {
       const fd=fs.openSync(target,'a',0o600);
-      try{fs.writeSync(fd,line);fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
+      try{fs.writeFileSync(fd,line);fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
     }
     previous=digest;return {producer_id:producer,sequence,event_sha256:digest};
   };

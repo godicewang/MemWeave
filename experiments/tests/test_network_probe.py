@@ -7,6 +7,17 @@ import pytest
 from memweave_eval.network_probe import check_network
 
 
+def test_fixed_public_environment_checks_original_policy_without_changing_it(tmp_path):
+    class Environment:
+        async def exec(self, **_):
+            return SimpleNamespace(return_code=0,stdout=json.dumps({
+                'model':{'ok':True,'status':401,'error':None},
+                'outside':{'ok':True,'status':200,'error':None}}))
+    asyncio.run(check_network(Environment(),'/fixed/node/bin/node',tmp_path,expected_offline=False))
+    result=json.loads((tmp_path/'network-probe.json').read_text())
+    assert result['passed'] and result['expected_offline'] is False
+
+
 @pytest.mark.parametrize("status", [200, 401])
 def test_node_probe_uses_no_system_curl_and_preserves_policy(tmp_path, status):
     class Environment:

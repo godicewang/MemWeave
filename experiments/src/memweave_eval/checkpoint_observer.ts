@@ -4,11 +4,24 @@ import {createHash} from 'node:crypto';
 import {workspaceSummary} from './fetch_guard.mjs';
 import {attachBoundaries} from './request_boundary.ts';
 import {attachGuard,guardReady} from './guard_bootstrap.mjs';
+import {contentEvidence} from './content_evidence.mjs';
 
 export default function observe(pi: any) {
   const trace=process.env.MEMWEAVE_EVAL_TRACE;
   if (!trace) throw Error('Missing evaluation trace');
   attachBoundaries(pi);
+  const evidence=contentEvidence();
+  pi.on('input',(event:any)=>{
+    if(evidence)evidence.event('actor_input',{record_ref:evidence.put(event)});
+  });
+  // Public Pi 1.4 events: retain actual inputs/results, including blocked calls.
+  // The content store is evaluation-only and never appears in actor context.
+  for(const kind of ['tool_call','tool_execution_start','tool_execution_end','tool_result'] as const){
+    pi.on(kind,(event:any)=>{
+      if(evidence)evidence.event(kind,{call_id:event.toolCallId,tool:event.toolName,
+        parent_call_id:event.parentToolCallId??null,record_ref:evidence.put(event)});
+    });
+  }
   if(process.env.MEMWEAVE_EVAL_LEDGER) {
     // CLI dispatcher initialization precedes extension factories and can replace preloads.
     attachGuard();
@@ -43,7 +56,7 @@ export default function observe(pi: any) {
   pi.on('message_end',(event: any)=>{
     if(event.message?.role!=='assistant' || typeof event.message.usage!=='object')return;
     returns++;
-    if(!sent && returns>=after) {
+    if(after>0 && !sent && returns>=after) {
       sent=true;
       fs.appendFileSync(trace!,JSON.stringify({event:'case_input',case_id:'marathon-progress-detour',
         after_assistant_returns:returns,timestamp:new Date().toISOString(),

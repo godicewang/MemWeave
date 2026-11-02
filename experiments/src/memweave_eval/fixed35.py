@@ -46,7 +46,7 @@ def checkpoint_verdict(contract, evidence):
 
 def aggregate_metric(rows):
     groups = defaultdict(list)
-    counts = dict(valid_cases=0, eligible_cases=0, design_na=0, missing=0, excluded=0, not_run=0)
+    counts = {'valid_cases': 0, 'eligible_cases': 0, 'design_na': 0, 'missing': 0, 'excluded': 0, 'not_run': 0}
     identities = set()
     for row in rows:
         identity = (row['benchmark'], row['case_id'])

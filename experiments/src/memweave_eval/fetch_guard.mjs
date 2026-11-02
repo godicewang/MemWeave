@@ -115,6 +115,10 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,credenti
     if (payload.model !== 'deepseek-flash' || payload.stream !== true) throw Error('Unbounded provider request');
     const arm=process.env.MEMWEAVE_EVAL_BUDGET_ARM??variant;
     const id=(process.env.MEMWEAVE_EVAL_RUN_ID ?? 'fixture')+':'+arm+':'+randomUUID();
+    if(Date.now()/1000>=deadline){
+      record({event:'request_denied',request_id:id,reason:'local_deadline_before_reservation'});
+      throw Error('Evaluation deadline');
+    }
     const evidence=contentEvidence();
     // Capture before reservation: a local write failure must dispatch zero upstream requests.
     const payloadRef=evidence?.put(raw);

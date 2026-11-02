@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import {createHash,randomUUID} from 'node:crypto';
+import {contentEvidence} from './content_evidence.mjs';
 export const boundaryKey=Symbol.for('memweave.eval.requestBoundary');
 const hash=(value:any)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export function attachBoundaries(pi:any) {
@@ -26,6 +27,9 @@ export function attachBoundaries(pi:any) {
         const rows=bytes.trimEnd().split('\n').map(line=>JSON.parse(line));
         prepared.expected_version_at_prepare=rows.length;
         prepared.expected_journal_sha256=createHash('sha256').update(bytes).digest('hex');
+        const evidence=contentEvidence();
+        // CAS deduplicates unchanged journals. No snapshot is injected or persisted to Session.
+        if(evidence)prepared.expected_journal_ref=evidence.put(bytes);
       } catch {prepared.boundary_error='authoritative_journal_unavailable';}
     }
   });

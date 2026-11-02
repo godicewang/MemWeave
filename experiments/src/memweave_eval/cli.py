@@ -15,6 +15,8 @@ def main(argv=None) -> int:
         description="Run and compare frozen public Pi/MemWeave experiments"
     )
     sub = parser.add_subparsers(dest="command", required=True)
+    from .fixed35_cli import register
+    register(sub)
     for name in ("validate", "run"):
         sub.add_parser(name).add_argument("config", type=Path)
     report = sub.add_parser("report")
@@ -33,6 +35,10 @@ def main(argv=None) -> int:
     cases.add_argument('evidence',type=Path)
     args = parser.parse_args(argv)
     try:
+        if args.command=='fixed35':
+            from .fixed35_cli import execute
+            print(json.dumps(execute(args),ensure_ascii=False,indent=2))
+            return 0
         if args.command=='score-report':
             from .score_report import generate_score_report
             print(json.dumps(generate_score_report(args.source,args.output),ensure_ascii=False,indent=2))
