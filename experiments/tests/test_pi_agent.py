@@ -243,3 +243,29 @@ def test_formal_budget_notice_and_timer_match_fixed_task_timeout(tmp_path):
     assert '32400 seconds (9 hours)'in instruction and 'supersedes any larger time budget'in instruction
     epoch=int(re.search(r'DEADLINE=(\d+)',uploaded['/app/timer.sh'])[1])
     assert abs(epoch-(time.time()+32400))<3
+
+
+
+@pytest.mark.parametrize('service',['main','egress-control'])
+def test_fixed_case_identity_rejects_wrong_scope_before_credentials(tmp_path,service):
+    import json
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    from memweave_eval.storage import file_digest
+    plan=tmp_path/'plan.json';plan.write_text(json.dumps({'entries':{'fixed':{'image':{'id':'sha256:wanted'}}}}))
+    agent=ExperimentPi(version='1.4.0',logs_dir=tmp_path,model_name='deepseek/deepseek-flash',
+        node_version='24.22.0',variant='pi-native',package_path='/missing',package_sha256='a'*64,
+        auth_path='',protocol='fixed35',prepare_only=True,runtime_plan=str(plan),runtime_plan_sha256=file_digest(plan))
+    actual={'Id':'a'*64,'Image':'sha256:wrong','Config':{'Labels':{
+        'com.docker.compose.project':'trusted-session','com.docker.compose.service':service}}}
+    def inspect(command,**kwargs):
+        if command[1]=='ps':
+            assert 'label=com.docker.compose.project=trusted-session' in command
+            assert 'label=com.docker.compose.service=main' in command
+            return 'a'*64+'\n'
+        return json.dumps([actual])
+    environment=SimpleNamespace(session_id='Trusted-Session',task_env_config=SimpleNamespace(docker_image='fixed'))
+    with (patch('memweave_eval.pi_agent.subprocess.check_output',side_effect=inspect),
+          pytest.raises(ValueError,match='image differs'if service=='main'else'labels do not match')):
+        asyncio.run(agent.install(environment))

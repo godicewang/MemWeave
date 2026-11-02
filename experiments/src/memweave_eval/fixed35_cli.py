@@ -25,9 +25,15 @@ def register(sub):
     report=commands.add_parser('report',help='Recompute offline into a new explicit output directory')
     report.add_argument('root',type=Path)
     report.add_argument('--output',type=Path,required=True)
+    package=commands.add_parser('pack-report',help='Report the complete frozen 35-case matrix')
+    package.add_argument('manifest',type=Path)
+    package.add_argument('--output',type=Path,required=True)
 
 
 def execute(args):
+    if args.fixed35_command=='pack-report':
+        from .fixed35_pack import pack_report
+        return pack_report(args.manifest,args.output)
     if args.fixed35_command=='report':
         from .fixed35_report import single_report
         return single_report(args.root,args.output)

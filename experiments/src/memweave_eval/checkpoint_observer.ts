@@ -53,6 +53,7 @@ export default function observe(pi: any) {
     });
   }
   pi.on('agent_start',()=>record('agent_start'));
+  pi.on('tool_result',(event:any)=>record('tool_result',event.toolCallId));
   let returns=0,sent=false;
   const after=Number(process.env.MEMWEAVE_EVAL_PROGRESS_AFTER ?? 80);
   pi.on('message_end',(event: any)=>{

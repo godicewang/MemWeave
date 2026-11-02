@@ -30,6 +30,21 @@ def unique_sessions(trial: Path):
     return chosen
 
 
+def qualified_actor_calls(requests,responses):
+    result=[]
+    for identity,payload in requests.items():
+        response=responses.get(identity,{})
+        usage=response.get('usage')or{}
+        if (response.get('http_status')in range(200,300)and response.get('stream_done')is True
+            and response.get('successful_finish')is True and response.get('assistant_payload_present')is True
+            and response.get('provider_error')is False and type(usage.get('prompt_tokens'))is int
+            and usage['prompt_tokens']>0 and type(usage.get('completion_tokens'))is int
+            and usage['completion_tokens']>0 and any(t.get('function',{}).get('name')=='bash'
+                for t in payload.get('tools')or[])):
+            result.append(identity)
+    return result
+
+
 def collect_episode(trial: Path, *, arm, ledger: Path,auxiliary_roots=(),expected_episode=None):
     records={};requests={};responses={};locations={}
     stores=list(trial.rglob('request-content'))
@@ -107,10 +122,11 @@ def collect_episode(trial: Path, *, arm, ledger: Path,auxiliary_roots=(),expecte
         return values
     usage=totals(actor_http);all_usage=totals(requests)
     known_usage={'input_tokens':sum(r['input']for r in settled),'output_tokens':sum(r['output']for r in settled)}
-    qualified=[i for i in actor_http if responses.get(i,{}).get('stream_done') and
-        isinstance(responses[i].get('usage'),dict)and any(
-            t.get('function',{}).get('name')=='bash'for t in requests[i].get('tools')or[])]
-    return {'collection_complete':not unresolved,'requests':len(requests),
+    qualified=qualified_actor_calls({i:requests[i]for i in actor_http},responses)
+    from .fixed35_business import execution_boundaries
+    boundary=execution_boundaries(trial,events)
+    return {'collection_complete':not unresolved and boundary['complete'],
+        'transport_collection_complete':not unresolved,'execution_boundary_collection':boundary,'requests':len(requests),
         'actor_http_attempts':len(actor_http),'auxiliary_http_attempts':len(requests)-len(actor_http),
         'completed_unique_actor_agent_calls':len(qualified),
         'usage_assistant_returns':sum(e['event']=='assistant_return'for e in events),

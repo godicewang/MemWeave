@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261102-v1'
+VERSION='fixed35-score-20261102-v2'
 
 
 def weighted_profile(metrics,profile,*,allowed_ids=None):
@@ -50,7 +50,7 @@ def single_report(root:Path,output:Path|None=None):
         engineering['tools']={name:dict(value,error_rate=value['errors']/value['attempts']
             if value['attempts']and not value['unknown_results']else None)for name,value in collection['tools'].items()}
         behavior=grade_mab_trial(trial,contract,arm=arm)if admission['family']=='mab'else None
-        if contract.get('adapter_kind')=='readonly-before-first-change-v1':
+        if contract.get('adapter_kind')in {'readonly-before-first-change-v1','readonly-before-first-change-v2'}:
             from .fixed35_business import grade_readonly
             behavior=grade_readonly(trial,contract,arm=arm)
         reward=behavior['native']['native_outcome']/100 if admission['family']=='mab'else (outcome.get('verifier')or{}).get('rewards',{}).get('reward')
@@ -63,9 +63,9 @@ def single_report(root:Path,output:Path|None=None):
         row['_normalization_cost_pair']={'native':pair['arms'][0]['collection']['estimated_usd'],
             'plugin':pair['arms'][1]['collection']['estimated_usd'],
             'compatible':all(a['collection']['collection_complete']for a in pair['arms'])}
-        def explicit(identity,score,reason=None,row=row):
+        def explicit(identity,score,reason=None,row=row,status=None):
             row['normalization_evidence'][identity]={'value':None if score is None else score/100,
-                'status':'unknown'if score is None else 'scored','reason':reason}
+                'status':status or('unknown'if score is None else 'scored'),'reason':reason}
         if admission['family']=='mab':
             explicit('S.common.protected_constraints',behavior['derived_action']['score'],
                 'MAB typed-action overlay: correct final answer AND exact one-value JSON schema AND correct file value')
@@ -74,9 +74,11 @@ def single_report(root:Path,output:Path|None=None):
                               ('S.case_v2.C4-three-window-checkpoints','three_evictions')]:
                 point=memory.get(field)or{}
                 explicit(old,point.get('score'),point.get('reason')or'controlled checkpoint evidence unavailable')
-        elif contract.get('adapter_kind')=='readonly-before-first-change-v1':
+        elif contract.get('adapter_kind')in {'readonly-before-first-change-v1','readonly-before-first-change-v2'}:
             explicit('S.common.protected_constraints',behavior['common_constraint']['score'])
-            explicit('S.case_v2.C3-before-dependent-edit',behavior['plugin_memory']['score'])
+            point=behavior['plugin_memory']
+            explicit('S.case_v2.C3-before-dependent-edit',point['score'],behavior['opportunity_status'],
+                status='not_applicable'if point['status']=='CONDITIONAL_NO_OPPORTUNITY'else None)
             for metric,field in [('S1.timely_write','timely_write'),('S1.retention','retention'),
                                  ('S1.write_precision','write_precision'),('S1.pollution','pollution')]:
                 row['normalization_evidence'][metric]=dict(behavior[field],
@@ -87,11 +89,15 @@ def single_report(root:Path,output:Path|None=None):
         for item in normalized['metrics']:
             original_id=item['id'];spec=assigned[original_id]
             item['id']=metric_alias(original_id);item['legacy_registry_id']=original_id
-            if spec['design_status']=='DESIGN_NA':
-                item.update(score=None,status='DESIGN_NA',reason=spec['reason'])
+            if spec['design_status']=='DESIGN_NA'or arm=='pi-native'and item['applicability']=='plugin':
+                item.update(score=None,status='DESIGN_NA',reason='Plugin-only metric in native mode'
+                    if arm=='pi-native'and item['applicability']=='plugin'else spec['reason'])
             elif item['status']=='not_applicable':
                 item.update(status='CONDITIONAL_NO_OPPORTUNITY',design_reason=spec.get('conditional_na'))
             elif item['status'] in {'unknown','partial'}:
+                item['collection_status']='REPAIR_REQUIRED'
+            if contract.get('adapter_kind')in {'readonly-before-first-change-v1','readonly-before-first-change-v2'}and not behavior['boundary_coverage']['complete']and original_id in {
+                    'S.common.protected_constraints','S.case_v2.C3-before-dependent-edit'}and item['status']!='DESIGN_NA':
                 item['collection_status']='REPAIR_REQUIRED'
             item['opportunity_ids']=spec['opportunity_ids'];item['mapping_version']=VERSION
             metrics.append(item)

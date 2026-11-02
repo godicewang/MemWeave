@@ -144,12 +144,20 @@ class ExperimentPi(Pi):
         reference = environment.task_env_config.docker_image
         entry = plan["entries"][reference]
         if self.options.protocol=='fixed35':
-            identity=await self.exec_as_agent(environment,'cat /etc/hostname')
-            container_id=identity.stdout.strip()
-            if not re.fullmatch(r'[a-f0-9]{12,64}',container_id):
-                raise ValueError('actual fixed-case container identity unavailable')
+            from harbor.environments.docker.docker import _sanitize_docker_compose_project_name
+            project=_sanitize_docker_compose_project_name(environment.session_id)
+            identities=await asyncio.to_thread(subprocess.check_output,['docker','ps','--filter',
+                'label=com.docker.compose.project='+project,'--filter',
+                'label=com.docker.compose.service=main','--format','{{.ID}}'],text=True,timeout=15)
+            candidates=identities.splitlines()
+            if len(candidates)!=1 or not re.fullmatch(r'[a-f0-9]{12,64}',candidates[0]):
+                raise ValueError('unique actual fixed-case main container identity unavailable')
+            container_id=candidates[0]
             actual=json.loads(await asyncio.to_thread(subprocess.check_output,
                 ['docker','inspect',container_id],text=True,timeout=15))[0]
+            labels=actual.get('Config',{}).get('Labels',{})
+            if labels.get('com.docker.compose.project')!=project or labels.get('com.docker.compose.service')!='main':
+                raise ValueError('fixed-case main container labels do not match trusted Harbor session')
             (self.logs_dir/'container-image-identity.json').write_text(json.dumps({
                 'container_id':actual['Id'],'image_id':actual['Image'],'expected_image_id':entry['image']['id'],
                 'verified_before_credentials':actual.get('Image')==entry['image']['id']}))

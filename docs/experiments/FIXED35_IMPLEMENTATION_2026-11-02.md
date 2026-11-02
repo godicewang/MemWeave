@@ -87,3 +87,27 @@ STATE canary两actor响应有完整HTTP200/usage/DONE，但原容器结算拒绝
 TB-04派生适配仅增加共同格式要求：若保存持久笔记，只读约束按`READ_ONLY <absolute path>`写明。原任务代码、只读文件、测试和原始reward不变。七个必需程序断言分别为三条活动State约束、三个文件hash保全，以及记录先于首个持久代码修改；缺证据不是false。对应正/负/缺失CAS夹具独立验证，夹具不算真实actor成绩。原verifier会恢复只读文件，因此另保留verifier前文件hash，避免原题reward掩盖只读约束破坏。原生只评价同样文件保全，不强制其使用State。
 
 软件预检TB-04双臂已通过；其他失败版本保留。公开环境外网探针超时仅属诊断，模型端点仍须可达；声明offline的环境仍须通过严格断网检查，不改变实际网络策略。两Marathon镜像身份差异仍禁止加载凭据，未擅自放宽。
+
+### 16:03 UTC：免费真实入口闭环与付费审批阻塞
+
+TB-04真实Pi+假provider双臂并发完成，native2、plugin4次模拟请求全部CAS重放并结算；插件真实专用工具先create、再append三条READ_ONLY记录、再native write修改可变文件，七项AND实际采集评分100。native只读文件保全100，State专属设计NA。这是程序采集/判别验收，不是付费actor能力成绩。原始记录在实验根`tb04-launch-preflight-v2/free-result.json`。
+
+发现Harbor egress sidecar与main共享网络hostname，旧hostname→docker inspect误认代理镜像。改用Harbor实际session的Compose project+service=main唯一ID，再核对inspect标签及原冻结image ID；不放宽镜像校验。`standard-runtime-v5`两Marathon题双臂软件预检均通过。Slop circuit_eval checkpoint8的旧reference有prior checkpoint5 collect-only退出2；原失败保留，v4原官方入口无改动重测reference566/566、nop0/566且两者infrastructure_failure=false。不能把v3失败改写成成功。
+
+现有CLI新增`fixed35 pack-report MANIFEST --output NEW_DIR`，必须完整35个独立case与每case170个指标契约；全期望11900个arm单元格校验，缺整题也不能通过。导出plugin/native宽表、同有效共同指标对比、原始值/逐行公式/权重/s-f-u-n、按benchmark宏平均与加权点分/覆盖/区间。此入口存在与测试通过不表示35题已真实运行或所有case-specific gold已完成。
+
+付费入口自动审批明确拒绝：目标为DeepSeek真实API，拟发送本批公开benchmark任务/代码/工具输出及本实验生成的State，费用归入已授权本轮USD20。自动审批认为还缺明确的payload、destination和spend授权。该调用未执行，未创建新的真实请求或正式run，不换入口重试，不以辅助judge绕过。需用户补充这三项明确授权后才可再次提交具体付费操作；当前仍只有原6条真实canary、USD0.00227448、零reserved。本段是阻塞记录，不是实验完成报告。
+
+### 16:14 UTC：TB-04边界审计修复（正式仍未开始）
+
+新评分器版本`fixed35-score-20261102-v2`、C3检查点v2。只有初始快照不再给保全分；必须核对Pi原始stdout中的所有工具调用/完成ID与CAS工具边界、agent_start/agent_end、每个完成工具的工作区快照。未找到修改分为完整结束且无观测修改机会、执行/边界不完整、观测修改但动作边界丢失，不能统记0。完整无修改机会使用明确的CONDITIONAL_NO_OPPORTUNITY，既不是设计NA也不是能力通过；原题结果独立保留。任何观测边界发现保护文件改动即为失败，末尾恢复不抹掉中途失败。指标只声称公开观测边界上的保全，不证明单个工具内部从未瞬态修改。
+
+增加初始快照而已、完整无修改、丢修改call、缺末尾、缺工具后快照、先修改后恢复六类CAS与独立Pi日志测试。已有真实CLI免费原件在v2只读重算：native common100，plugin C3/common100；分别1/3个工具边界、末尾证据齐全，不覆写v1原件。通用collection现将transport结算完整与execution边界完整分列，两者均完整才通过；不能仅凭HTTP结算声称业务证据完整。
+
+Switch原评分器符号链接复制基础设施的独立修正版v4控制完成reference reward1、nop reward0，均无exception，旧失败版本不改。Slop与Switch环境控制通过仅说明可评估，不替代尚待完成的行为gold和正式双臂实验。
+
+保守调度容量为11CPU/38GiB。普通TB-04每臂900秒仅用于本题派生短预算与显式READ_ONLY格式约束，不宣称原8小时无提示自然记忆复现；五长程仍为独立2700秒计划。WDM与Ruby按原资源必须逐臂顺序，其他题仅在资源允许时双臂同时运行。所有五长程若耗满保守排程约315分钟，已不足以保证在20:20 actor截止前全部完成，不能靠统一15分钟、凑调用或fixture得分补齐。本轮所有未执行/未适配项须原样列出。
+
+成功长程API调用资格额外要求：唯一主actor请求、HTTP2xx、DONE、正input/output usage、有assistant内容或工具调用、正常stop/tool_calls结束且无provider error；无工具schema的压缩/辅助调用、零usage占位与失败请求不计。HTTP尝试总数和usage assistant返回R仍按各自原口径另列，不用资格数替代。达到千次仍须该episode原题成功，不能累积重跑凑数。
+
+截至16:21 UTC最终免费回归410项通过，受影响Ruff、TypeScript typecheck、Rule资源逐字校验、git diff --check通过。新增pack-report完整35题集成测试验证11900单元格和双臂同分母，重复/缺整行/不完整证据不能通过；不可采集例外必须有原因及修复记录，共同分母两臂同步剔除并单列，绝不写为`-`。正式模型执行仍被审批阻塞，没有新增付费请求或实验成绩。

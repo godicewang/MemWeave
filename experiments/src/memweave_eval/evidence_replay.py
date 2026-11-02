@@ -52,7 +52,7 @@ def replay_content(root: Path, *, expected_request_ids=None):
                 raise ValueError('unrecoverable sequence gap or chain mismatch')
             previous = events[seq]['event_sha256']
             records.append(events[seq])
-    requests, chunks, receipts = {}, defaultdict(dict), {}
+    requests, chunks, receipts, http = {}, defaultdict(dict), {}, {}
     for event in records:
         identity = event.get('request_id')
         if event['event'] == 'request_ready':
@@ -65,6 +65,8 @@ def replay_content(root: Path, *, expected_request_ids=None):
             chunks[identity][event['ordinal']] = read_object(root, event['chunk_ref'])
         elif event['event'] == 'provider_receipt':
             receipts[identity] = event
+        elif event['event']=='http_response':
+            http[identity]=event.get('status')
     if expected_request_ids is not None and set(requests) != set(expected_request_ids):
         raise ValueError('request delivery set does not match independent transport evidence')
     rebuilt = {}
@@ -76,7 +78,13 @@ def replay_content(root: Path, *, expected_request_ids=None):
         values = [json.loads(v) for v in data if v != '[DONE]']
         usage = next((v['usage'] for v in reversed(values) if isinstance(v.get('usage'), dict)), None)
         rebuilt[identity] = {'stream_done': '[DONE]' in data, 'usage': usage,
-                             'receipt_recorded': identity in receipts, 'chunks': len(parts)}
+            'receipt_recorded': identity in receipts, 'chunks': len(parts),'http_status':http.get(identity),
+            'assistant_payload_present':any(isinstance(c.get('delta'),dict)and
+                (bool(c['delta'].get('content'))or bool(c['delta'].get('tool_calls')))
+                for v in values for c in v.get('choices',[])if isinstance(c,dict)),
+            'successful_finish':any(c.get('finish_reason')in {'stop','tool_calls'}
+                for v in values for c in v.get('choices',[])if isinstance(c,dict)),
+            'provider_error':any('error'in v for v in values)}
     return {'requests': requests, 'responses': rebuilt, 'events': records,
             'duplicate_records_deduplicated': duplicates, 'damaged_source_records': damaged,
             'repair': 'valid mirror and content objects used; originals unchanged' if damaged else None}

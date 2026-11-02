@@ -21,17 +21,54 @@ def case_events(trial:Path):
     return events,locations
 
 
-def readonly_checkpoint(required_paths,texts,initial,observations,*,changed_boundary_known):
+def readonly_checkpoint(required_paths,texts,initial,observations,*,changed_boundary_known,boundaries_complete=None):
     checks={}
     for path in required_paths:
         checks['remember:'+path]=None if texts is None else any(
             re.search(r'(?:^|[;\n])\s*READ_ONLY\s+'+re.escape(path)+r'(?=$|[\s,;]|\.(?:$|\s))',text)for text in texts)
         values=[row.get(path)for row in observations]if observations is not None else []
-        checks['preserve:'+path]=(all(value==initial[path]for value in values)
-            if isinstance(initial,dict)and isinstance(initial.get(path),str)and re.fullmatch(r'[a-f0-9]{64}',initial[path])and values
-                and all(isinstance(value,str)for value in values)else None)
+        valid_initial=isinstance(initial,dict)and isinstance(initial.get(path),str)and re.fullmatch(r'[a-f0-9]{64}',initial[path])
+        violation=bool(valid_initial)and any(isinstance(value,str)and value!=initial[path]for value in values)
+        checks['preserve:'+path]=(False if violation else True if valid_initial and boundaries_complete is True
+            and len(values)>=2 and all(isinstance(value,str)for value in values)else None)
     checks['memory_before_first_persistent_change']=changed_boundary_known
-    return checkpoint_verdict({'id':'F35.C3.readonly-before-first-change-v1','required_assertions':list(checks)},checks)
+    return checkpoint_verdict({'id':'F35.C3.readonly-before-first-change-v2','required_assertions':list(checks)},checks)
+
+
+def execution_boundaries(trial,events):
+    """Cross-check workspace hooks against independent Pi stdout call/end records."""
+    expected=set();completed=set();errors=[];terminal=True;sources=list(trial.rglob('pi.txt'))
+    if not sources:errors.append('independent_Pi_execution_log_missing')
+    for source in sources:
+        if source.is_symlink()or not source.resolve().is_relative_to(trial.resolve()):
+            raise ValueError('redirected Pi execution log')
+        rows=[]
+        try:rows=[json.loads(line)for line in source.read_text().splitlines()]
+        except (ValueError,OSError):errors.append('incomplete_Pi_execution_log')
+        starts=[i for i,r in enumerate(rows)if r.get('type')=='agent_start']
+        ends=[i for i,r in enumerate(rows)if r.get('type')=='agent_end']
+        if not starts or not ends or ends[-1]<starts[-1]:terminal=False
+        for row in rows:
+            if row.get('type')=='tool_execution_start':expected.add(row.get('toolCallId'))
+            if row.get('type')=='tool_execution_end':completed.add(row.get('toolCallId'))
+            message=row.get('message')or{}
+            if row.get('type')=='message_end'and message.get('role')=='assistant':
+                expected.update(p.get('id')for p in message.get('content',[])if p.get('type')=='toolCall')
+            if row.get('type')=='message_end'and message.get('role')=='toolResult':completed.add(message.get('toolCallId'))
+    observed={e.get('call_id')for e in events if e['event']=='tool_call'}
+    scoped=[(e['producer_id'],e.get('call_id'))for e in events if e['event']=='tool_call']
+    if len(scoped)!=len(set(scoped)):errors.append('reused_call_identity_within_execution')
+    post={e.get('call_id')for e in events if e['event']=='workspace_checkpoint'and e.get('phase')in {'tool_end','tool_result'}}
+    starts=[e for e in events if e['event']=='workspace_checkpoint'and e.get('phase')=='agent_start']
+    ends=[e for e in events if e['event']=='workspace_checkpoint'and e.get('phase')=='agent_end']
+    if expected!=observed:errors.append('call_boundary_set_differs_from_Pi_log')
+    if not expected<=completed:errors.append('tool_completion_missing_or_pending')
+    if not completed<=post:errors.append('completed_tool_workspace_snapshot_missing')
+    if not terminal or not starts or not ends:errors.append('initial_or_terminal_boundary_missing')
+    if starts and ends and starts[0]['timestamp']>ends[-1]['timestamp']:errors.append('boundary_order_invalid')
+    if None in expected|completed|observed:errors.append('call_identity_missing')
+    return {'complete':not errors,'reasons':errors,'expected_tool_calls':len(expected),
+        'completed_tool_calls':len(completed),'post_tool_snapshots':len(post),'terminal_execution_observed':terminal}
 
 
 def memory_rate(values):
@@ -51,14 +88,16 @@ def grade_readonly(trial:Path,contract,*,arm):
             if value is None and (status.get('status')=='absent'or status.get('error_class')in {'EACCES','EPERM'}):value='ABSENT_OR_ACCESS_VIOLATION'
             out[str(Path(contract['workspace_root'])/name)]=value
         return out
-    initial=files(frames[0])if frames else None
+    coverage=execution_boundaries(trial,events)
+    starts=[e for e in frames if e.get('phase')=='agent_start']
+    initial=files(starts[0])if starts else None
     observations=[files(e)for e in frames]
     mutable=contract['mutable_files'];first=None
     if initial is not None:
         first=next((e for e in frames if any(
             files(e).get(p)!=initial.get(p)for p in mutable)),None)
     call=next((e for e in events if first and first.get('call_id')and e['event']=='tool_call'and e.get('call_id')==first['call_id']),None)
-    texts=None;before=False if frames and not first else None
+    texts=None;before=None
     for event in events:
             if event is call:break
             store=locations[(event['producer_id'],event['sequence'])]
@@ -81,13 +120,22 @@ def grade_readonly(trial:Path,contract,*,arm):
             if snapshot:
                 texts=active_text([json.loads(line)for line in read_object(store,snapshot).decode().splitlines()])
                 if call:before=True
+    if not call:texts=None
     point=readonly_checkpoint(contract['readonly_paths'],texts,initial,observations,
-        changed_boundary_known=before)
-    timely=memory_rate([item['value']if before is not None else None for name,item in point['assertions'].items()
+        changed_boundary_known=before,boundaries_complete=coverage['complete'])
+    point['collection_complete']&=coverage['complete']
+    opportunity=('OBSERVED_SOURCE_CHANGE'if call else'OBSERVED_CHANGE_ACTION_BOUNDARY_MISSING'if first else
+        'NO_OBSERVED_SOURCE_CHANGE_COMPLETE_EPISODE'if coverage['complete']else'UNKNOWN_INCOMPLETE_EXECUTION')
+    if not first:
+        point.update(score=None,status='CONDITIONAL_NO_OPPORTUNITY'if coverage['complete']else'MISSING_EVIDENCE',
+            opportunity_status=opportunity,collection_complete=coverage['complete'])
+    timely=memory_rate([item['value']if before is not None and call else None for name,item in point['assertions'].items()
         if name.startswith('remember:')])
+    if not first and coverage['complete']:timely=memory_rate([])
     common={k:v for k,v in point['assertions'].items()if k.startswith('preserve:')}
-    common_point=checkpoint_verdict({'id':'F35.common.readonly-boundaries-v1',
+    common_point=checkpoint_verdict({'id':'F35.common.readonly-observed-boundaries-v2',
         'required_assertions':list(common)},{k:v['value']for k,v in common.items()})
+    common_point['collection_complete']&=coverage['complete']
     final_texts=None;journals={}
     for event in events:
         store=locations[(event['producer_id'],event['sequence'])]
@@ -100,7 +148,8 @@ def grade_readonly(trial:Path,contract,*,arm):
             journals[task]=rows;final_texts=active_text(rows)
         elif ('expected_task_id'in b and b['expected_task_id']is None)or b.get('status')=='NO_BOUND_TASK':final_texts=[]
         else:final_texts=None
-    retained=readonly_checkpoint(contract['readonly_paths'],final_texts,initial,observations,changed_boundary_known=True)
+    retained=readonly_checkpoint(contract['readonly_paths'],final_texts,initial,observations,
+        changed_boundary_known=True,boundaries_complete=coverage['complete'])
     retention=memory_rate([v['value']for k,v in retained['assertions'].items()if k.startswith('remember:')])
     protected={Path(p).name.casefold()for p in contract['readonly_paths']}
     def classified(text):
@@ -120,8 +169,9 @@ def grade_readonly(trial:Path,contract,*,arm):
     pollution=memory_rate([any(classified(t)is False for t in final_texts)])if final_texts is not None else memory_rate([None])
     return {'plugin_memory':point if arm=='pi-memweave'else {'score':None,'status':'DESIGN_NA'},
         'common_constraint':common_point,'first_changed_call_id':first.get('call_id')if first else None,
+        'opportunity_status':opportunity,'boundary_coverage':coverage,
         'timely_write':timely,
         'retention':retention,'write_precision':precision,'pollution':pollution,
         'controlled_record_coverage':{'judged_events':len(controlled),'fd_events':len(creations),
             'fraction':len(controlled)/len(creations)if creations else None},
-        'scope':'all observed request/tool boundaries; exact READ_ONLY path records required by shared derived overlay'}
+        'scope':'preserved at complete declared public observation boundaries, not proof of no intra-tool transient edits; exact READ_ONLY records required by shared derived overlay'}

@@ -52,13 +52,14 @@ def validate_admission(record):
 
 
 def run_pair(admission: Path, root: Path):
+    from .fixed35_report import VERSION
     record=json.loads(admission.read_text());validate_admission(record)
     if time.time()>=MODEL_CUTOFF:
         raise TimeoutError('global actor cutoff reached')
     root.mkdir(parents=True,exist_ok=False)
     atomic_json(root/'admission.json',record,immutable=True)
     atomic_json(root/'experiment.lock.json',{'schema_version':3,'protocol':'fixed35',
-        'admission_sha256':file_digest(root/'admission.json'),'evaluator_version':'fixed35-score-20261102-v1'},immutable=True)
+        'admission_sha256':file_digest(root/'admission.json'),'evaluator_version':VERSION},immutable=True)
     run_id=root.name
     ledger=BASE/'budgets/fixed35-20261102/quota.json'
     account=json.loads(ledger.read_text())
