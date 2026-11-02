@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {createHash, randomUUID} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
+import {contentEvidence} from './content_evidence.mjs';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 const text = value => typeof value === 'string' ? value : JSON.stringify(value ?? null);
@@ -114,6 +115,9 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,credenti
     if (payload.model !== 'deepseek-flash' || payload.stream !== true) throw Error('Unbounded provider request');
     const arm=process.env.MEMWEAVE_EVAL_BUDGET_ARM??variant;
     const id=(process.env.MEMWEAVE_EVAL_RUN_ID ?? 'fixture')+':'+arm+':'+randomUUID();
+    const evidence=contentEvidence();
+    // Capture before reservation: a local write failure must dispatch zero upstream requests.
+    const payloadRef=evidence?.put(raw);
     const maxOutput=payload.max_tokens ?? payload.max_completion_tokens;
     const configured=Number(process.env.MEMWEAVE_EVAL_MAX_OUTPUT ?? 384000);
     if (maxOutput>configured) throw Error('Output exceeds frozen experiment setting');
@@ -126,7 +130,9 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,credenti
     const boundary=globalThis[Symbol.for('memweave.eval.requestBoundary')];
     const matched=boundary?.prepared_messages_sha256===hash(JSON.stringify(payload.messages??[]));
     record({event:'request_ready',request_id:id,...requestSummary(payload,originalInstruction),
-      ...(matched?boundary:{boundary_error:'no_matching_provider_preparation'}),workspace:workspaceSummary()});
+      ...(matched?boundary:{boundary_error:'no_matching_provider_preparation'}),
+      ...(payloadRef?{payload_ref:payloadRef}:{}),workspace:workspaceSummary()});
+    evidence?.event('request_ready',{request_id:id,payload_ref:payloadRef,prepared_boundary:matched?boundary:null});
     const controller=new AbortController();
     const remaining=deadline*1000-Date.now();
     if (remaining<=0) {record({event:'request_expired',request_id:id});throw Error('Evaluation deadline');}
@@ -140,14 +146,20 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,credenti
       record({event:'http_attempt',request_id:id});
       response=await fetchImpl(input,requestInit);
       record({event:'http_response',request_id:id,status:response.status});
+      evidence?.event('http_response',{request_id:id,status:response.status,
+        provider_request_id:response.headers.get('x-request-id')??response.headers.get('request-id')});
     } catch (error) {
       clearTimeout(timer);
       record({event:'http_error',request_id:id,error_class:error?.name ?? 'Error'});
       throw error;
     }
-    if (!response.ok || !response.body) { clearTimeout(timer); return response; }
+    if (!response.ok || !response.body) {
+      if(evidence)evidence.event('provider_error_receipt',{request_id:id,status:response.status,
+        body_ref:evidence.put(Buffer.from(await response.clone().arrayBuffer()))});
+      clearTimeout(timer); return response;
+    }
     const decoder=new TextDecoder();
-    let pending='',usage=null,done=false,ended=false,responseModel=null;
+    let pending='',usage=null,done=false,ended=false,responseModel=null,chunkIndex=0;
     function finalize() {
       if (ended || !done || !usage) return;
       ended=true;
@@ -158,6 +170,7 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,credenti
         record({event:'budget_settled',request_id:id,charge_usd:billed.charge_usd});}
       catch {record({event:'settlement_rejected',request_id:id});}
       record({event:'request_end',request_id:id,usage,settled,stream_done:done,response_model:responseModel});
+      evidence?.event('provider_receipt',{request_id:id,usage,settled,stream_done:done,response_model:responseModel,chunks:chunkIndex});
     }
     function consume(line) {
       if (!line.startsWith('data:')) return;
@@ -176,6 +189,7 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,credenti
     }
     const stream=response.body.pipeThrough(new TransformStream({
       transform(chunk,controller) {
+        if(evidence)evidence.event('response_chunk',{request_id:id,ordinal:++chunkIndex,chunk_ref:evidence.put(Buffer.from(chunk))});
         pending+=decoder.decode(chunk,{stream:true});
         let split;
         while ((split=pending.indexOf('\n'))>=0) {

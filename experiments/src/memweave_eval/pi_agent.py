@@ -33,6 +33,7 @@ class PiExperimentOptions(PiOptions):
     evaluation_output_tokens: int = 16384
     evaluation_quota_backend: Literal["python", "node"] = "python"
     evaluation_per_task_arms: bool = False
+    evaluation_content_evidence: bool = False
     # PiOptions is a Pydantic model; mutable field defaults are copied per instance.
     evaluation_task_timeouts: dict[str,int] = {}  # noqa: RUF012
     evaluation_task_ids: list[str] = []  # noqa: RUF012
@@ -257,7 +258,7 @@ class ExperimentPi(Pi):
         if self.options.evaluation_deadline:
             evaluator = self._asset_root + '/evaluation'
             await self.exec_as_agent(environment, f'mkdir -p {shlex.quote(evaluator)}')
-            for filename in ('fetch_guard.mjs', 'guard_bootstrap.mjs', 'preload.mjs', 'budget_guard.py', 'container_deadline.py', 'budget_guard.mjs', 'container_deadline.mjs', 'sealed_runtime.mjs', 'sealed_bash_env.sh', 'request_boundary.ts', 'checkpoint_observer.ts'):
+            for filename in ('fetch_guard.mjs', 'content_evidence.mjs', 'guard_bootstrap.mjs', 'preload.mjs', 'budget_guard.py', 'container_deadline.py', 'budget_guard.mjs', 'container_deadline.mjs', 'sealed_runtime.mjs', 'sealed_bash_env.sh', 'request_boundary.ts', 'checkpoint_observer.ts'):
                 await environment.upload_file(Path(__file__).with_name(filename), evaluator+'/'+filename)
             if self.options.prepare_only:
                 await environment.upload_file(Path(__file__).with_name('probe_request.mjs'),evaluator+'/probe_request.mjs')
@@ -459,6 +460,7 @@ positive:true,lost_guard_upstream_requests:0,actual_cli_pid_deadline:true}));
                     MEMWEAVE_EVAL_CREDENTIAL_FILE=evaluator+'/private-auth.json',
                     MEMWEAVE_EVAL_REQUEST_LIMIT=str(self.options.evaluation_request_limit or 0),
                     MEMWEAVE_EVAL_EPISODE_BUDGET=str(self.options.evaluation_episode_budget or 0),
+                    MEMWEAVE_EVAL_CONTENT_STORE='/logs/agent/request-content' if self.options.evaluation_content_evidence else '',
                 )
                 if self.options.prepare_only and kwargs['env'].get('MEMWEAVE_EVAL_LOCAL_STOP_AFTER'):
                     kwargs['env']['MEMWEAVE_EVAL_DEADLINE']=str(time.time()+float(kwargs['env']['MEMWEAVE_EVAL_LOCAL_STOP_AFTER']))
