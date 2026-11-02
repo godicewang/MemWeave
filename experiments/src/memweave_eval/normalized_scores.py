@@ -118,11 +118,19 @@ def _view(row):
     reward = row.get('native_reward')
     passed = native.get('passed', native.get('new_passed', native.get('total_passed')))
     total = native.get('total', native.get('new_total', native.get('total_tests')))
-    partial = native.get('pass_rate', native.get('partial_score'))
-    if passed is not None or total is not None:
-        partial = passed/total if _number(passed) and _number(total) and total > 0 and 0 <= passed <= total else {'invalid_passed': passed, 'invalid_total': total}
+    partial, partial_status, partial_reason, partial_support = None, None, None, None
+    if passed is None or total is None:
+        partial_status, partial_reason = 'unknown', 'passed_or_total_count_missing'
+    elif not _number(passed) or not _number(total) or passed < 0 or total < 0 or passed > total:
+        partial = {'invalid_passed': passed, 'invalid_total': total}
+        partial_status, partial_reason = 'invalid', 'invalid_passed_or_total_count'
+    elif total == 0:
+        partial_status, partial_reason = 'not_applicable', 'zero_test_denominator'
+    else:
+        partial, partial_support = passed/total, {'numerator': passed, 'denominator': total, 'unknown': 0}
     view['quality'] = {'binary': reward.get('reward') if isinstance(reward, dict) else reward,
-                       'partial': partial}
+                       'partial': partial, 'partial_status': partial_status,
+                       'partial_reason': partial_reason, 'partial_support': partial_support}
     engineering = row.get('engineering_metrics') or {}
     ready, bad = engineering.get('request_ready'), engineering.get('unresolved_template_requests')
     template = None
@@ -142,6 +150,8 @@ def _view(row):
 
 def _support(row, spec):
     identity, path = spec['id'], spec['raw_source']
+    if identity == 'S3.partial_pass_rate':
+        return _get(row, 'quality.partial_support')
     if identity.startswith('Q1.tool.') and identity.endswith('.error_rate'):
         tool = identity.split('.')[2]
         value = _get(row, 'engineering_metrics.tools.' + tool)
@@ -178,6 +188,8 @@ def normalize_trial_scores(row):
         support = _support(view, spec)
         source_status = parent.get('status') if isinstance(parent, dict) else None
         reason = parent.get('reason') if isinstance(parent, dict) else None
+        if identity == 'S3.partial_pass_rate':
+            source_status, reason = _get(view, 'quality.partial_status'), _get(view, 'quality.partial_reason')
         if identity.startswith(('Q2.write.', 'Q1.tool.')):
             # Counts can still expose a useful interval when the original scalar is null.
             source_status = None
@@ -224,9 +236,15 @@ def normalize_trial_scores(row):
         if identity == 'Q7.fd_density' and _get(view, 'state_metrics.sample_status') == 'short_sample' and value['score'] is not None:
             value['reason'] = 'short_sample_strategy_score_not_long_term_behavior_evidence'
         source = row.get('_normalization_source') or {}
+        ss = sf = su = sn = None
+        if support and all(_number(support.get(k)) for k in ('numerator', 'denominator', 'unknown')):
+            num, den, su = (support[k] for k in ('numerator', 'denominator', 'unknown'))
+            ss, sf = (den-num, num) if spec['mapping'] == 'rate_lower' else (num, den-num)
+            sn = den+su
         metrics.append({**deepcopy(spec), 'raw': _safe_raw(raw), **value,
                         'weight': spec['weights']['common_product'],
                         'support': _safe_raw(support), 'source': {'raw_path': path, **source},
+                        'support_s': ss, 'support_f': sf, 'support_u': su, 'support_n': sn,
                         'source_hash': source.get('sha256'),
                         'evidence_ids': parent.get('evidence_ids', []) if isinstance(parent, dict) else []})
     by_id = {m['id']: m for m in metrics}
@@ -302,6 +320,8 @@ def attach_normalized_scores(rows):
             a, b = a[0], b[0]
             ca, cb = a.get('finance_context') or {}, b.get('finance_context') or {}
             compatible = all(ca.get(k) is not None and ca.get(k) == cb.get(k) for k in ('model', 'price', 'currency'))
+            compatible = compatible and a.get('actual_task_id', a['task_id']) == b.get('actual_task_id', b['task_id'])
+            compatible = compatible and all(r.get('cost_pair_status') not in ('unknown', 'invalid') for r in (a, b))
             compatible = compatible and all(type((r.get('finance') or {}).get('unknown_charge_attempts')) is int
                 and r['finance']['unknown_charge_attempts'] == 0 for r in (a, b))
             pair = {'native': a.get('finance_estimated_usd'), 'plugin': b.get('finance_estimated_usd'),
@@ -322,6 +342,13 @@ def attach_normalized_scores(rows):
         b = [r for r in group if r['variant_id'] == 'pi-memweave']
         if len(a) != 1 or len(b) != 1:
             pairs.append({'task_id': key[1], 'status': 'unknown', 'reason': 'missing_or_duplicate_arm'})
+            continue
+        if a[0].get('actual_task_id', a[0]['task_id']) != b[0].get('actual_task_id', b[0]['task_id']):
+            pairs.append({'task_id': key[1], 'status': 'unknown', 'reason': 'different_actual_tasks_in_same_slot'})
+            continue
+        ca, cb = a[0].get('finance_context') or {}, b[0].get('finance_context') or {}
+        if ca.get('model') is None or ca.get('model') != cb.get('model'):
+            pairs.append({'task_id': key[1], 'status': 'unknown', 'reason': 'missing_or_different_paired_model_context'})
             continue
         am = {m['id']: m for m in a[0]['normalized_scores']['metrics']}
         bm = {m['id']: m for m in b[0]['normalized_scores']['metrics']}

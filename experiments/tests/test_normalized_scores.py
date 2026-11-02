@@ -140,6 +140,16 @@ def test_cost_mapping_aggregates_costs_not_task_indices_and_requires_charge_cove
     assert result['auxiliary_finance']['relative_cost_overall']['score'] is None
 
 
+def test_cost_index_cannot_compare_different_actual_tasks_in_same_campaign_slot():
+    rows = [{'task_id': 'slot', 'actual_task_id': task, 'variant_id': variant,
+             'finance_estimated_usd': 1, 'finance': {'unknown_charge_attempts': 0},
+             'finance_context': {'model': 'm', 'price': 'p', 'currency': 'USD'}}
+            for task, variant in [('a', 'pi-native'), ('b', 'pi-memweave')]]
+    result = attach_normalized_scores(rows)
+    assert result['auxiliary_finance']['relative_cost_overall']['score'] is None
+    assert result['pairs'][0]['status'] == 'unknown'
+
+
 def test_nonfinite_raw_is_invalid_and_exportable_without_nan_json():
     row = {'variant_id': 'pi-native', 'native_reward': {'reward': float('nan')}}
     output = normalize_trial_scores(row)
@@ -155,3 +165,15 @@ def test_partial_quality_uses_original_counts_not_rounded_fraction():
     m = next(m for m in normalize_trial_scores(row)['metrics'] if m['id'] == 'S3.partial_pass_rate')
     assert m['raw'] == 31759/31767
     assert m['score'] == pytest.approx(100*31759/31767)
+
+
+@pytest.mark.parametrize(('metrics', 'status'), [
+    ({'passed': 0, 'total': 0}, 'not_applicable'),
+    ({'passed': 1}, 'unknown'), ({'total': 1}, 'unknown'),
+    ({'passed': -1, 'total': 1}, 'invalid'),
+    ({'passed': 2, 'total': 1}, 'invalid'),
+])
+def test_partial_quality_zero_missing_and_invalid_counts(metrics, status):
+    row = {'variant_id': 'pi-native', 'behavior_metrics': {'native_metrics': metrics}}
+    m = next(m for m in normalize_trial_scores(row)['metrics'] if m['id'] == 'S3.partial_pass_rate')
+    assert m['status'] == status and m['score'] is None

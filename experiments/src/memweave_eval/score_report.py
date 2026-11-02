@@ -14,10 +14,11 @@ from .storage import atomic_json, contained, file_digest
 SCORE_COLUMNS = tuple(f'normalized_{profile}_{key}'
                       for profile in ('common_product', 'plugin_memory')
                       for key in ('score', 'observed_score', 'coverage', 'lower', 'upper', 'status'))
-LONG_COLUMNS = ('task_id', 'variant_id', 'id', 'meaning', 'raw', 'unit', 'raw_formula',
+LONG_COLUMNS = ('task_id', 'variant_id', 'id', 'meaning', 'raw', 'observed_raw', 'unit', 'raw_formula',
                 'direction', 'score', 'status', 'coverage', 'lower', 'upper',
                 'score_formula', 'mapping_version', 'weight', 'weights', 'weight_basis',
-                'threshold_basis', 'score_qualification', 'reason', 'source', 'source_hash', 'support')
+                'threshold_basis', 'score_qualification', 'reason', 'source', 'source_hash', 'support',
+                'support_s', 'support_f', 'support_u', 'support_n')
 
 
 def _display(value):
@@ -84,7 +85,12 @@ def write_score_artifacts(output: Path, rows, summary):
             writer.writerow({k: json.dumps(v, ensure_ascii=False) if isinstance(v, (dict, list)) else v
                              for k, v in record.items() if k in LONG_COLUMNS})
             score = f"{_display(m['score'])} / {m['status']} / {m['coverage']:.4g} / [{m['lower']:.6g},{m['upper']:.6g}]"
-            fields = (m['id']+' / '+m['meaning'], f"{_display(m['raw'])} / {m['unit']}",
+            raw = f"{_display(m['raw'])} / {m['unit']}"
+            if m['support'] is not None:
+                raw += (f"; 已知子集原比率={_display(m['observed_raw'])}; "
+                        f"s/f/u/n={_display(m['support_s'])}/{_display(m['support_f'])}/"
+                        f"{_display(m['support_u'])}/{_display(m['support_n'])}; 原分子分母={_display(m['support'])}")
+            fields = (m['id']+' / '+m['meaning'], raw,
                       m['raw_formula'], score, m['score_formula'],
                       f"{_display(m['weights'])}; {m['weight_basis']}", m['threshold_basis'],
                       m.get('reason') or m.get('score_qualification') or '证据完整', m['source'])

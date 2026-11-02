@@ -75,17 +75,19 @@ wasm两臂已违反保护文件要求，其保护约束分为0。插件在驱逐
 
 实现检查点6f468712ef09b3625df95bad1055b7dd423b8e04。新增score_catalog.json、normalized_scores.py、score_report.py，经现有report/campaign自动写原始+分数JSON、长CSV/Markdown及固定family→leaf权重CSV；新增CLI score-report生成独立历史补充。
 
-最终完整免费回归342 passed in8.10s；Ruff、npm run typecheck和git diff --check通过。先修复了超大CSV字段，保留此前失败日志；没有再跑付费模型、benchmark或完整付费发布验收。产品src/resources/docs/specs/预算/窗口未改。
+最终完整免费回归348 passed（完整免费回归）；Ruff、npm run typecheck和git diff --check通过。先修复了超大CSV字段，保留此前失败日志；没有再跑付费模型、benchmark或完整付费发布验收。产品src/resources/docs/specs/预算/窗口未改。
 
-完整新目录：`/Users/godice/.local/share/memweave-experiments/analysis/normalized-three-cases-20261102/v1`。provenance.json记录17个输入文件hash并复核原raw-index；artifact-index.json记录新工件。原有效/无效run、raw、旧报告和两个预算账本保持。
+完整新目录：`/Users/godice/.local/share/memweave-experiments/analysis/normalized-three-cases-20261102/v2`。provenance.json记录17个输入文件hash并复核原raw-index；artifact-index.json记录新工件。原有效/无效run、raw、旧报告和两个预算账本保持。
 
 ```sh
 PYTHONPATH=experiments/src experiments/.venv/bin/python -m pytest experiments/tests -q -o addopts=''
 PYTHONPATH=experiments/src experiments/.venv/bin/python -m memweave_eval.cli score-report \
-  /Users/godice/.local/share/memweave-experiments/analysis/normalized-three-cases-20261102/v1/six-valid-arms-input.json \
+  /Users/godice/.local/share/memweave-experiments/analysis/normalized-three-cases-20261102/v2/six-valid-arms-input.json \
   --output /tmp/memweave-normalized-recomputed-new
 ```
 
 输出目录必须不存在。新实验原report/campaign流程自动生成；历史必须用新目录，禁止对旧run默认重写report。
 
 当前会话没有MemWeave State/Task专用工具，执行前State核对/新任务记录未执行，未通过Bash改写State；这是工具可用性限制，不影响已完成的离线实现。
+
+最终审计补充：细分通过计数0/0为N/A，缺passed或total为unknown，负值或passed>total为invalid；CSV保留observed_raw及s/f/u/n，Markdown逐行也展示已知原比率与分子分母/未知数。相同campaign槽位但实际任务或模型不同不做配对比较。v1生成记录保留，最终增强表在v2新目录，未覆盖旧原始报告。

@@ -25,9 +25,13 @@ def test_immutable_offline_cli_and_each_row_explains_the_score(tmp_path, capsys)
     assert metric['lower'] == 40 and metric['upper'] == 80
     lines = list(csv.DictReader((output/'normalized-scores.csv').open()))
     assert len(lines) == 170
+    partial = next(r for r in lines if r['id'] == 'Q1.tool.bash.error_rate')
+    assert float(partial['observed_raw']) == pytest.approx(1/3)
+    assert [float(partial[k]) for k in ('support_s', 'support_f', 'support_u', 'support_n')] == [2, 1, 2, 5]
     assert all(r['meaning'] and r['raw_formula'] and r['score_formula'] and r['weight_basis'] and r['threshold_basis'] for r in lines)
     markdown = (output/'normalized-scores.md').read_text()
     assert '100*(1-x)' in markdown and '真实工具错误回执数' in markdown
+    assert 's/f/u/n=2/1/2/5' in markdown
     assert exported['trials'][0]['profiles']['common_product']['score'] is None
     with pytest.raises(ValueError, match='new independent'):
         generate_score_report(source, output)
