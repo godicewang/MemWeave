@@ -30,3 +30,22 @@ def test_long_qualification_counts_only_successful_unique_main_api_returns():
         {'provider_error':True},{'usage':{'prompt_tokens':0,'completion_tokens':0}},{'stream_done':False}]:
         assert qualified_actor_calls({'main':request},{'main':dict(response,**change)})==[]
     assert qualified_actor_calls({'aux':{'tools':[]}},{'aux':response})==[]
+
+
+def test_real_admission_requires_matching_two_arm_settled_canary(tmp_path):
+    import json
+
+    from memweave_eval.fixed35_campaign import validate_paid_canary
+    from memweave_eval.storage import file_digest
+    ledger=tmp_path/'ledger.json';ledger.write_text(json.dumps({'requests':{
+        'native':{'status':'settled','arm':'preflight'},'plugin':{'status':'settled','arm':'preflight'}}}))
+    proof=tmp_path/'canary.json';evidence={'passed':True,'evaluator_commit':'a'*40,'runtime_plan_sha256':'b'*64,
+        'per_arm':{a:{'actor_request_ids':[identity],'guard_negative_upstream_requests':0}
+            for a,identity in [('pi-native','native'),('pi-memweave','plugin')]}}
+    proof.write_text(json.dumps(evidence));record={'admission_status':'ADMITTED','family':'tb4','evaluator_commit':'a'*40,
+        'runtime_plan_sha256':'b'*64,'paid_canary':{'path':str(proof),'sha256':file_digest(proof)}}
+    validate_paid_canary(record,ledger)
+    with pytest.raises(ValueError,match='not admitted'):validate_paid_canary(dict(record,admission_status='PENDING'),ledger)
+    with pytest.raises(ValueError,match='frozen'):validate_paid_canary(dict(record,evaluator_commit='c'*40),ledger)
+    ledger.write_text(json.dumps({'requests':{'native':{'status':'reserved','arm':'preflight'}}}))
+    with pytest.raises(ValueError,match='not settled'):validate_paid_canary(record,ledger)

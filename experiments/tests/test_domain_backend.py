@@ -42,7 +42,11 @@ def test_backend_thread_failure_is_not_claimed_complete(tmp_path):
     env=SimpleNamespace(tool_handlers={},get_full_snapshot=dict)
     backend=DomainBackend(env,tmp_path/'private/log.jsonl',tmp_path/'exchange')
     backend.start()
-    (tmp_path/'exchange/requests/wrong.json').write_text('{"call_id":"x"}')
+    # Publish atomically, as the real IPC client does. A direct write races the
+    # reader and tests accidental JSON truncation instead of the wrong identity.
+    pending=tmp_path/'exchange/requests/wrong.partial'
+    pending.write_text('{"call_id":"x"}')
+    pending.replace(tmp_path/'exchange/requests/wrong.json')
     until=time.monotonic()+2
     while not backend.fatal_error and time.monotonic()<until:time.sleep(.01)
     backend.close()

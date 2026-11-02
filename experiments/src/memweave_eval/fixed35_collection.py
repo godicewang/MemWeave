@@ -63,7 +63,7 @@ def collect_episode(trial: Path, *, arm, ledger: Path,auxiliary_roots=(),expecte
             requests[identity]=payload
         responses.update(replay['responses'])
     events=sorted(records.values(),key=lambda e:(e['timestamp'],e['producer_id'],e['sequence']))
-    transport={}
+    transport={};transport_records=[]
     actor_http=set()
     transport_paths=list(trial.rglob('request-trace.jsonl'))
     actor_paths=set(transport_paths)
@@ -71,7 +71,10 @@ def collect_episode(trial: Path, *, arm, ledger: Path,auxiliary_roots=(),expecte
     for path in transport_paths:
         for line in path.read_text().splitlines():
             item=json.loads(line)
+            transport_records.append(item)
             if item.get('event')=='http_attempt':
+                if item['request_id']in transport and transport[item['request_id']]!=item:
+                    raise ValueError('conflicting HTTP attempt copies')
                 transport[item['request_id']]=item
                 if path in actor_paths:actor_http.add(item['request_id'])
     if set(requests)!=set(transport):
@@ -123,10 +126,13 @@ def collect_episode(trial: Path, *, arm, ledger: Path,auxiliary_roots=(),expecte
     usage=totals(actor_http);all_usage=totals(requests)
     known_usage={'input_tokens':sum(r['input']for r in settled),'output_tokens':sum(r['output']for r in settled)}
     qualified=qualified_actor_calls({i:requests[i]for i in actor_http},responses)
+    from .fixed35_delivery import delivery_metrics
+    delivery=delivery_metrics(transport_records,actor_http,enabled=arm=='pi-memweave')
     from .fixed35_business import execution_boundaries
     boundary=execution_boundaries(trial,events)
-    return {'collection_complete':not unresolved and boundary['complete'],
+    return {'collection_complete':not unresolved and boundary['complete']and delivery['complete'],
         'transport_collection_complete':not unresolved,'execution_boundary_collection':boundary,'requests':len(requests),
+        'delivery_metrics':delivery,
         'actor_http_attempts':len(actor_http),'auxiliary_http_attempts':len(requests)-len(actor_http),
         'completed_unique_actor_agent_calls':len(qualified),
         'usage_assistant_returns':sum(e['event']=='assistant_return'for e in events),

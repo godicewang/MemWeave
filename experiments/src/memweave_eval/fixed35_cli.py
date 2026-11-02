@@ -15,6 +15,10 @@ def register(sub):
     sources.add_argument('design',type=Path)
     sources.add_argument('--sources',type=Path,required=True)
     sources.add_argument('--output',type=Path,required=True)
+    state=commands.add_parser('state-contract',help='Freeze evaluator-only program predicates for a pinned STATE case; no model calls')
+    state.add_argument('case_id',choices=[f'INT-0{i}'for i in range(1,6)])
+    state.add_argument('--source',type=Path,required=True)
+    state.add_argument('--output',type=Path,required=True)
     replay=commands.add_parser('replay',help='Verify exact request/tool evidence without model calls')
     replay.add_argument('root',type=Path)
     replay.add_argument('--transport',type=Path,required=True)
@@ -22,21 +26,35 @@ def register(sub):
     run=commands.add_parser('run',help='Run an admitted case through the existing paired Harbor/Pi path')
     run.add_argument('admission',type=Path)
     run.add_argument('--output',type=Path,required=True)
+    schedule=commands.add_parser('schedule',help='Dry-run the fixed35 resource queue, or explicitly execute admitted cases')
+    schedule.add_argument('plan',type=Path)
+    schedule.add_argument('--output',type=Path,required=True)
+    schedule.add_argument('--execute',action='store_true')
     report=commands.add_parser('report',help='Recompute offline into a new explicit output directory')
     report.add_argument('root',type=Path)
     report.add_argument('--output',type=Path,required=True)
+    report.add_argument('--official-outcomes',type=Path)
     package=commands.add_parser('pack-report',help='Report the complete frozen 35-case matrix')
     package.add_argument('manifest',type=Path)
     package.add_argument('--output',type=Path,required=True)
 
 
 def execute(args):
+    if args.fixed35_command=='state-contract':
+        from .fixed35_state_behavior import state_contract
+        record=state_contract(args.source,args.case_id)
+        atomic_json(args.output,record,immutable=True)
+        return {'case_id':args.case_id,'output':str(args.output),'paid_requests':0,
+            'status':'PROGRAM_ORACLE_COMPONENT_NOT_A_MODEL_RESULT'}
+    if args.fixed35_command=='schedule':
+        from .fixed35_schedule import execute_schedule
+        return execute_schedule(args.plan,args.output,dry_run=not args.execute)
     if args.fixed35_command=='pack-report':
         from .fixed35_pack import pack_report
         return pack_report(args.manifest,args.output)
     if args.fixed35_command=='report':
         from .fixed35_report import single_report
-        return single_report(args.root,args.output)
+        return single_report(args.root,args.output,getattr(args,'official_outcomes',None))
     if args.fixed35_command=='run':
         from .fixed35_campaign import run_pair
         return run_pair(args.admission,args.output)

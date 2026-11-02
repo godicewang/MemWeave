@@ -36,30 +36,57 @@ def metric_alias(identity):
     return identity
 
 
-def single_report(root:Path,output:Path|None=None):
+def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=None):
     admission=json.loads((root/'admission.json').read_text())
     contract=json.loads(Path(admission['contract_path']).read_text())
     if file_digest(Path(admission['contract_path']))!=admission['contract_sha256']:
         raise ValueError('frozen scoring contract changed')
     pair=json.loads((root/'pair-result.json').read_text());rows=[]
+    official=json.loads(official_outcomes.read_text())if official_outcomes else None
+    if admission['family']=='slop'and (not official or official.get('case_id')!=admission['case_id']or official.get('fixture_scores_included')is not False):
+        raise ValueError('matching actual Slop verifier outcomes required; fixture scores rejected')
     for outcome in pair['arms']:
         arm=outcome['arm'];collection=outcome['collection'];trial=Path(outcome['result_path']).parent
         agents=[p.parent for p in trial.rglob('request-trace.jsonl')]
         agent=max(agents,key=lambda p:(p/'request-trace.jsonl').stat().st_size)if agents else None
         engineering=task_engineering_metrics(agent)if agent else {}
+        delivery=collection.get('delivery_metrics')
+        if delivery:
+            engineering.update(delivery['engineering'])
+            engineering.update(usage_confirmed_attempts=collection['actor_http_attempts']-len([
+                i for i in collection['unsettled_request_ids']if i in delivery['request_ids']]),
+                unknown_charge_attempts=len([i for i in collection['unsettled_request_ids']if i in delivery['request_ids']]))
         engineering['tools']={name:dict(value,error_rate=value['errors']/value['attempts']
             if value['attempts']and not value['unknown_results']else None)for name,value in collection['tools'].items()}
         behavior=grade_mab_trial(trial,contract,arm=arm)if admission['family']=='mab'else None
         if contract.get('adapter_kind')in {'readonly-before-first-change-v1','readonly-before-first-change-v2'}:
             from .fixed35_business import grade_readonly
             behavior=grade_readonly(trial,contract,arm=arm)
+        if contract.get('adapter_kind')=='state-business-v1':
+            from .fixed35_state_behavior import grade_state_trial
+            private=Path(admission['agent_options']['state_evaluator_output'])/trial.name
+            behavior=grade_state_trial(private,contract['state_business'])
         reward=behavior['native']['native_outcome']/100 if admission['family']=='mab'else (outcome.get('verifier')or{}).get('rewards',{}).get('reward')
+        if admission['family']=='slop':
+            behavior=official['arms'][arm];reward=behavior['score']/100 if behavior['score']is not None else None
+        row_official=None
+        if admission['family']=='state'and outcome.get('host_official_score')and 'official_status'in outcome['host_official_score']:
+            status=outcome['host_official_score'];score_path=Path(status['scored_file'])
+            if status['official_status'].get('status')=='OK'and score_path.is_file()and file_digest(score_path)==status['scored_sha256']:
+                state_official=json.loads(score_path.read_text());value=state_official.get('task_completion_pass')
+                reward=int(value)if type(value)is bool else value if value in (0,1)else None
+                row_official=state_official
+            else:row_official=None
         row={'case_id':admission['case_id'],'task_id':admission['case_id'],'benchmark':admission['benchmark'],
             'variant_id':arm,'execution_status':'scored','native_reward':reward,
             'state_metrics':collection['state_metrics'],'engineering_metrics':engineering,
             'contract_metrics':task_contract_metrics(agent,enabled=arm=='pi-memweave')if agent else {},
             'finance':{'cache_metrics':collection['cache']},'normalization_evidence':{},
             'collection':collection,'original_exception':outcome['exception'],'case_behavior':behavior}
+        if admission['family']=='state':row['official_llm_judged_result']=row_official
+        if delivery:
+            for name in ('state_latest_at_prepare','provider_delivery_integrity'):
+                row['contract_metrics'][name]=delivery[name]
         row['_normalization_cost_pair']={'native':pair['arms'][0]['collection']['estimated_usd'],
             'plugin':pair['arms'][1]['collection']['estimated_usd'],
             'compatible':all(a['collection']['collection_complete']for a in pair['arms'])}
@@ -83,6 +110,12 @@ def single_report(root:Path,output:Path|None=None):
                                  ('S1.write_precision','write_precision'),('S1.pollution','pollution')]:
                 row['normalization_evidence'][metric]=dict(behavior[field],
                     reason='Controlled READ_ONLY path records only; see parser coverage and exact case contract')
+        elif contract.get('adapter_kind')=='state-business-v1':
+            explicit('S.common.protected_constraints',behavior['score'],
+                behavior.get('reason')or'AND of pinned state fields, protected domain records and case-specific behavior assertions; official LLM judge is separate')
+            if admission['case_id']in {'INT-01','INT-02'}:
+                explicit('S.case_v2.C8-missing',behavior['score'],
+                    'Finite English clarification parser, actual domain actions and all protected-state checks; not a general semantic classifier')
         normalized=normalize_trial_scores(row)
         metrics=[]
         assigned={m['metric_id']:m for m in contract['metric_matrix']}
@@ -99,6 +132,9 @@ def single_report(root:Path,output:Path|None=None):
             if contract.get('adapter_kind')in {'readonly-before-first-change-v1','readonly-before-first-change-v2'}and not behavior['boundary_coverage']['complete']and original_id in {
                     'S.common.protected_constraints','S.case_v2.C3-before-dependent-edit'}and item['status']!='DESIGN_NA':
                 item['collection_status']='REPAIR_REQUIRED'
+            if contract.get('adapter_kind')=='state-business-v1'and not behavior['collection_complete']and original_id in {
+                    'S.common.protected_constraints','S.case_v2.C8-missing'}and item['status']!='DESIGN_NA':
+                item['collection_status']='REPAIR_REQUIRED'
             item['opportunity_ids']=spec['opportunity_ids'];item['mapping_version']=VERSION
             metrics.append(item)
         row['normalized_metrics']=metrics
@@ -113,8 +149,9 @@ def single_report(root:Path,output:Path|None=None):
     output=output or root/'reports';output.mkdir(exist_ok=False)
     result={'schema_version':3,'evaluator_version':VERSION,'case_id':admission['case_id'],
         'rows':rows,'collection_accepted':all(r['collection']['collection_complete'] for r in rows)
+            and (official is None or all(p['collection_complete']for p in official['arms'].values()))
             and not any(m.get('collection_status')=='REPAIR_REQUIRED'for r in rows for m in r['normalized_metrics']),
-        'fixture_scores_included':False,'contract_sha256':admission['contract_sha256']}
+        'fixture_scores_included':False,'official_outcomes_sha256':file_digest(official_outcomes)if official_outcomes else None,'contract_sha256':admission['contract_sha256']}
     atomic_json(output/'results.json',result,immutable=True)
     columns=['case_id','arm','metric_id','meaning','raw','raw_formula','score','status','score_formula',
         'weight','reason','support_s','support_f','support_u','support_n','mapping_version']

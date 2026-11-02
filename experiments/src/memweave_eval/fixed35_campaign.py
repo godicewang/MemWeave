@@ -26,12 +26,38 @@ def trusted_environment(code: Path):
     return env
 
 
+def validate_paid_canary(record,ledger=None):
+    if record.get('admission_status')!='ADMITTED':raise ValueError('case is not admitted for real execution')
+    proof=record.get('paid_canary')
+    if not isinstance(proof,dict)or not {'path','sha256'}<=set(proof):raise ValueError('real canary evidence is required')
+    path=Path(proof['path'])
+    if file_digest(path)!=proof['sha256']:raise ValueError('real canary evidence changed')
+    canary=json.loads(path.read_text())
+    if canary.get('passed')is not True or canary.get('runtime_plan_sha256')!=record['runtime_plan_sha256']or canary.get('evaluator_commit')!=record.get('evaluator_commit'):
+        raise ValueError('canary did not verify this frozen evaluator and runtime plan')
+    if set(canary.get('per_arm',{}))!={'pi-native','pi-memweave'}:raise ValueError('both canary variants required')
+    account=json.loads((ledger or BASE/'budgets/fixed35-20261102/quota.json').read_text())['requests']
+    identities=[]
+    for evidence in canary['per_arm'].values():
+        ids=evidence.get('actor_request_ids')
+        if not isinstance(ids,list)or len(ids)!=1 or type(evidence.get('guard_negative_upstream_requests'))is not int or evidence['guard_negative_upstream_requests']!=0:
+            raise ValueError('canary must prove one actual actor request and zero negative-test upstream dispatch')
+        ids=ids+evidence.get('auxiliary_request_ids',[])
+        if record.get('family')=='state'and len(ids)<2:raise ValueError('STATE host auxiliary canary missing')
+        for identity in ids:
+            entry=account.get(identity,{})
+            if entry.get('status')!='settled'or entry.get('arm')!='preflight':raise ValueError('canary request is not settled in this campaign preflight ledger')
+        identities.extend(ids)
+    if len(identities)!=len(set(identities)):raise ValueError('canary variants reused request identities')
+
+
 def validate_admission(record):
     for key in ('case_id','benchmark','task_path','task_sha256','runtime_plan','runtime_plan_sha256',
                 'code_path','contract_path','contract_sha256','resources','seconds','episode_budget',
                 'preflight_evidence'):
         if key not in record:
             raise ValueError('missing admission field '+key)
+    validate_paid_canary(record)
     if not record['preflight_evidence']:
         raise ValueError('no preflight evidence')
     for source in record['preflight_evidence']:
@@ -54,8 +80,10 @@ def validate_admission(record):
 def run_pair(admission: Path, root: Path):
     from .fixed35_report import VERSION
     record=json.loads(admission.read_text());validate_admission(record)
-    if time.time()>=MODEL_CUTOFF:
-        raise TimeoutError('global actor cutoff reached')
+    from .fixed35_schedule import pair_policy
+    policy=pair_policy(record)
+    if time.time()>=policy['latest_pair_start_unix']:
+        raise TimeoutError('insufficient time for both complete arm budgets and verifier reserve')
     root.mkdir(parents=True,exist_ok=False)
     atomic_json(root/'admission.json',record,immutable=True)
     atomic_json(root/'experiment.lock.json',{'schema_version':3,'protocol':'fixed35',
@@ -71,7 +99,8 @@ def run_pair(admission: Path, root: Path):
     from .quota_authority import add_channel, start_authority
     authority=start_authority(BASE/'fixed35-20261102/quota-authority-v1',ledger,env)
     atomic_json(root/'quota-authority.json',authority,immutable=True)
-    parallel=2*record['resources']['cpus']<=12 and 2*record['resources']['memory_mb']<=38000
+    parallel=policy['parallel_arms']
+    atomic_json(root/'resource-policy.json',policy,immutable=True)
     atomic_json(root/'run.json',{'run_id':run_id,'case_id':record['case_id'],'started_at':datetime.now(UTC).isoformat(),
         'status':'RUNNING','parallel_arms':parallel,'ledger':str(ledger),'arms':{}},immutable=True)
     watch=subprocess.Popen([sys.executable,'-m','memweave_eval.deadline_watchdog',str(root),run_id,
@@ -115,9 +144,15 @@ def run_pair(admission: Path, root: Path):
         aux=[]
         if record['family']=='state':
             aux=[Path(record['agent_options']['state_evaluator_output'])/path.parent.name]
+        host_score=None
+        if record['family']=='state':
+            from .state_postscore import score_state_trial
+            try:host_score=score_state_trial(cfg['agents'][0]['kwargs'],path.parent)
+            except Exception as error:  # noqa: BLE001 -- preserve actor evidence and all quota traces if post-judge fails.
+                host_score={'status':'POST_JUDGE_FAILED','error_class':type(error).__name__,'requires_repair':True}
         collection=collect_episode(path.parent,arm=arm,ledger=ledger,auxiliary_roots=aux,expected_episode=episode)
         outcome={'arm':arm,'exit_code':code,'result_path':str(path),'result_sha256':file_digest(path),
-            'exception':result.get('exception_info'),'verifier':result.get('verifier_result'),
+            'exception':result.get('exception_info'),'verifier':result.get('verifier_result'),'host_official_score':host_score,
             'collection':collection,'finished_at':datetime.now(UTC).isoformat()}
         atomic_json(root/(arm+'-collected.json'),outcome,immutable=True)
         print(json.dumps({'case_id':record['case_id'],'arm':arm,'status':'TERMINAL',
@@ -129,10 +164,15 @@ def run_pair(admission: Path, root: Path):
             with ThreadPoolExecutor(max_workers=2)as pool:
                 arms=list(pool.map(arm_run,['pi-native','pi-memweave']))
         else:
-            arms=[arm_run(a)for a in ('pi-native','pi-memweave')]
+            arms=[arm_run(a)for a in policy['sequential_order']]
+        arms.sort(key=lambda x:x['arm']!='pi-native')
         atomic_json(root/'pair-result.json',{'case_id':record['case_id'],'arms':arms,'finished_at':datetime.now(UTC).isoformat()},immutable=True)
         from .fixed35_report import single_report
-        report=single_report(root)
+        official=None
+        if record['family']=='slop':
+            from .fixed35_slop import score_pair
+            official=score_pair(root,root/'official-slop')
+        report=single_report(root,official_outcomes=official)
         atomic_json(root/'run.json',{'status':'TERMINAL','case_id':record['case_id'],
             'run_id':run_id,'arms':arms,'report':report,'finished_at':datetime.now(UTC).isoformat()})
         return {'root':str(root),'case_id':record['case_id'],'arms':len(arms)}

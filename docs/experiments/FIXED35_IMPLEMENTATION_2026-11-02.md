@@ -111,3 +111,23 @@ Switch原评分器符号链接复制基础设施的独立修正版v4控制完成
 成功长程API调用资格额外要求：唯一主actor请求、HTTP2xx、DONE、正input/output usage、有assistant内容或工具调用、正常stop/tool_calls结束且无provider error；无工具schema的压缩/辅助调用、零usage占位与失败请求不计。HTTP尝试总数和usage assistant返回R仍按各自原口径另列，不用资格数替代。达到千次仍须该episode原题成功，不能累积重跑凑数。
 
 截至16:21 UTC最终免费回归410项通过，受影响Ruff、TypeScript typecheck、Rule资源逐字校验、git diff --check通过。新增pack-report完整35题集成测试验证11900单元格和双臂同分母，重复/缺整行/不完整证据不能通过；不可采集例外必须有原因及修复记录，共同分母两臂同步剔除并单列，绝不写为`-`。正式模型执行仍被审批阻塞，没有新增付费请求或实验成绩。
+
+### 等待明确数据外发授权期间的独立工程
+
+继续免费工作，不重试被拒绝的DeepSeek请求。Slop actor采用官方固定renderer的8/5/5个公开阶段，完整Pi与同一持久Session/工作区，每阶段按官方snapshot忽略规则交接源码；隐藏测试/solutions不进入actor。独立官方eval-snapshot后评分保留所有阶段与回归，整题主分为全阶段AND，partial为阶段通过率等权均值；缺报告/infra_failure不当0。为官方SDK没有资源字段的问题，仅在单次eval进程对Docker create传入两臂相同2CPU/8192MiB与本次run标签，不修改上游源码/断言；实际HostConfig写入审计，独立watchdog只清理该标签。资源适配须重新控制验收。
+
+公平调度使用现有case runner，工作池11CPU/38000MiB，资源只按冻结任务及verifier上限预留。普通可承载配对同时跑，WDM/Ruby不可双开则顺序；顺序臂起跑顺序按case ID哈希事先固定，报表仍固定native/plugin顺序。最迟起跑时间同时考虑整case actor预算、顺序第一臂verifier时间、两臂setup和容器硬截止；不在临近截止时只给第二臂缩水预算。队列默认仅dry-run，显式执行还必须有ADMITTED状态及与冻结评估器、软件plan一致的已结算真实canary证据。缺服务/缺授权/缺真实证据均不得加载真实运行入口。
+
+STATE后置评分改为现有配对runner的host阶段：StatePi.run只完成真实actor/模拟用户轨迹并保存原件，退出Harbor actor超时范围后再调用原官方score_one与Task/UX judge。仍使用同一VM权威、同一arm、独立judge episode/截止和已预留子预算，不能因actor用完时间而取消本应保留的评分时间。原轨迹不改，评分写独立host-only文件；原官方LLM judge与程序化行为分继续分列。domain事件增加当前conversation turn/stage关联，仅评估侧字段，不进模型上下文，不改变产品State/工具协议。
+
+### 18:37 UTC：离线恢复与业务评分补齐
+
+重连后先核实不确定写入：`fixed35_state_behavior.py`未落盘，未重复追加。前一完整离线回归418项通过。本轮加入五个分别定义的STATE程序判据：原state_requirements逐字段AND、非目标实体逐domain边界保全、INT-01先澄清后目标回复再return/refund、INT-02仅取消已明确耳机且保护未明确配件、INT-03转return后不再exchange、INT-04先读权威booking再取消、INT-05先报57/150两项费用再观察撤回意图且所有观测状态不变。INT-05没有原state_requirements，不能由空AND或无操作得到100；先改后恢复仍失败。语句判据明确限定为版本固定英文解析规则，不声称通用意图理解，也不替代原官方LLM judge。
+
+新增`fixed35 state-contract INT-0N --source PINNED_SOURCE --output NEW_JSON`离线冻结组件，交由逐题完整契约的`state_business`引用；`adapter_kind=state-business-v1`接入现有report，官方LLM分和程序分分列。domain双日志、起末快照、call_id、case/arm/run身份、提交前后链和末尾hash完整性均核对；缺失/损坏不变成0或成功。已验证正例、负例、缺证据及report贯通；这些全部是程序实现验收，不是模型成绩。
+
+多阶段report现在从全部真实actor request_id计算State请求准备版本一致性及provider交付保真，不再只取最大的一份阶段日志。复制事件去重，冲突副本拒绝；缺request_ready保留unknown机会并阻止采集验收。该交付保真不等于独立Window选择策略正确，更不证明模型使用记忆。引用/Window独立gold、Switch Task实际查回/路由、Interrupt环境和其余业务gold仍需完成，不把框架存在写作35题全部适配。
+
+恢复完整回归时发现一项测试自身竞态：故障测试直接写JSON，后台线程可能先读到空文件，得到JSONDecodeError而非预期identity ValueError。测试改为与真实IPC相同的partial→rename发布，不改运行时错误处理。最终本阶段全量427项通过、受影响Ruff/TypeScript/Rule资源校验通过。Slop受资源限制的控制因断线中断，v3六项通过；退出容器已归档清理，v4复用六项已核验控制继续其余30项，不改旧结果。
+
+真实模型外发确认仍待用户回复，禁止重试被拒绝请求。费用仍6 settled、USD0.00227448、reserved0；正式配对0。固定原截止不延期，后续排程仍须满足两臂完整同预算及验证余量，不能以短demo代替35题或长程资格。

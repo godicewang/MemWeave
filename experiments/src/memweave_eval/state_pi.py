@@ -102,8 +102,6 @@ class StatePi(ExperimentPi):
                 return await super().run(instruction,environment,context)
             from state_bench.agents.base import BaseAgent
             from state_bench.orchestrator import run_task
-            from state_bench.scoring import TaskRequirementsJudge, UXQualityJudge
-            from state_bench.scripts.score import score_one
             loop=asyncio.get_running_loop();owner=self
             from .pair_barrier import paired_start
             self._episode_started_unix=await paired_start(
@@ -114,6 +112,7 @@ class StatePi(ExperimentPi):
             class Agent(BaseAgent):
                 def __init__(self):super().__init__();self.turn_index=0;self.partial=[]
                 def act(self,conversation):
+                    owner._backend.metadata.update(conversation_turn=self.turn_index,actor_stage=self.turn_index+1)
                     before=len(owner._backend.calls)
                     self.partial.append(copy.deepcopy(conversation[-1]))
                     try:
@@ -153,12 +152,7 @@ class StatePi(ExperimentPi):
                     metadata={'interface':'DERIVED full Pi; actual partial episode',
                               'stop_classification':'UNCLASSIFIED_ACTOR_OR_HARNESS_ERROR'},error=type(error).__name__)
             original=self._private_output/'state-trajectory-original.json';trajectory.save(original)
-            judge=client('official_judge')
-            task_judge=TaskRequirementsJudge(judge,self._domain.prompts_dir,self._domain.judge_system_prompt)
-            ux_judge=UXQualityJudge(judge,self._domain.prompts_dir,self._domain.judge_system_prompt)
-            scored=await asyncio.to_thread(score_one,original,
-                Path(self.options.state_source_path)/'state_bench/domains'/self._domain.name/'tasks',
-                task_judge,ux_judge,self._private_output/'state-official-scores.json')
-            (self._private_output/'state-scoring-status.json').write_text(json.dumps(scored))
+            (self._private_output/'state-actor-status.json').write_text(json.dumps({
+                'status':'ACTOR_TERMINAL_JUDGE_PENDING','trajectory':'state-trajectory-original.json'}))
         finally:
             if getattr(self,'_backend',None):self._backend.close()
