@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import re
 import shlex
+import subprocess
 import tempfile
 import time
-import re
-import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Literal
@@ -33,7 +34,8 @@ class PiExperimentOptions(PiOptions):
     protocol: Literal["tb4", "swe-pro-v2", "swe-marathon", "fixed35"]
     evaluation_deadline: float | None = None
     evaluation_output_tokens: int = 16384
-    evaluation_quota_backend: Literal["python", "node"] = "python"
+    evaluation_quota_backend: Literal["python", "node", "ipc"] = "python"
+    evaluation_quota_channel: str | None = None
     evaluation_per_task_arms: bool = False
     evaluation_content_evidence: bool = False
     evaluation_case_id: str | None = None
@@ -52,6 +54,7 @@ class PiExperimentOptions(PiOptions):
     evaluation_request_limit: int | None = None
     evaluation_episode_budget: float | None = None
     evaluation_pair_barrier: str | None = None
+    evaluation_fixture_quota_path: str | None = None
     runtime_plan: str | None = None
     runtime_plan_sha256: str | None = None
     prepare_only: bool = False
@@ -120,6 +123,11 @@ class ExperimentPi(Pi):
         )
 
     async def install(self, environment) -> None:
+        if self.options.protocol=='fixed35' and not self.options.prepare_only and (
+            self.options.evaluation_quota_backend!='ipc'or not self.options.evaluation_quota_channel):
+            raise ValueError('fixed35 paid episodes require the single-VM quota authority')
+        if self.options.evaluation_fixture_quota_path and not self.options.prepare_only:
+            raise ValueError('fixture quota override is forbidden for paid episodes')
         started = time.monotonic()
         matches=[t for t in self.options.evaluation_task_ids if any(part.startswith(t+'__') for part in self.logs_dir.parts)]
         if self.options.evaluation_per_task_arms and len(matches)!=1:
@@ -140,12 +148,13 @@ class ExperimentPi(Pi):
             container_id=identity.stdout.strip()
             if not re.fullmatch(r'[a-f0-9]{12,64}',container_id):
                 raise ValueError('actual fixed-case container identity unavailable')
-            actual=json.loads(subprocess.check_output(['docker','inspect',container_id],text=True,timeout=15))[0]
-            if actual.get('Image')!=entry['image']['id']:
-                raise ValueError('actual container image differs from frozen runtime plan; no credential loaded')
+            actual=json.loads(await asyncio.to_thread(subprocess.check_output,
+                ['docker','inspect',container_id],text=True,timeout=15))[0]
             (self.logs_dir/'container-image-identity.json').write_text(json.dumps({
                 'container_id':actual['Id'],'image_id':actual['Image'],'expected_image_id':entry['image']['id'],
-                'verified_before_credentials':True}))
+                'verified_before_credentials':actual.get('Image')==entry['image']['id']}))
+            if actual.get('Image')!=entry['image']['id']:
+                raise ValueError('actual container image differs from frozen runtime plan; no credential loaded')
         cache = Path(plan["cache"])
         info = await self.exec_as_agent(environment, 'printf \'%s\\n%s\\n\' "$HOME" "$PWD"')
         home, cwd = info.stdout.strip().splitlines()
@@ -276,7 +285,7 @@ class ExperimentPi(Pi):
         if self.options.evaluation_deadline:
             evaluator = self._asset_root + '/evaluation'
             await self.exec_as_agent(environment, f'mkdir -p {shlex.quote(evaluator)}')
-            for filename in ('fetch_guard.mjs', 'content_evidence.mjs', 'guard_bootstrap.mjs', 'preload.mjs', 'budget_guard.py', 'container_deadline.py', 'budget_guard.mjs', 'container_deadline.mjs', 'sealed_runtime.mjs', 'sealed_bash_env.sh', 'request_boundary.ts', 'checkpoint_observer.ts'):
+            for filename in ('fetch_guard.mjs', 'content_evidence.mjs', 'guard_bootstrap.mjs', 'preload.mjs', 'budget_guard.py', 'quota_ipc.mjs', 'container_deadline.py', 'budget_guard.mjs', 'container_deadline.mjs', 'sealed_runtime.mjs', 'sealed_bash_env.sh', 'request_boundary.ts', 'checkpoint_observer.ts'):
                 await environment.upload_file(Path(__file__).with_name(filename), evaluator+'/'+filename)
             if self.options.prepare_only:
                 await environment.upload_file(Path(__file__).with_name('probe_request.mjs'),evaluator+'/probe_request.mjs')
@@ -302,8 +311,10 @@ class ExperimentPi(Pi):
             profile + "/settings.json",
         )
         container_identity=await self.exec_as_agent(environment,'cat /etc/hostname')
+        actor_uid=await self.exec_as_agent(environment,'id -u')
         setup = {
             'container_hostname':container_identity.stdout.strip(),
+            'actor_uid':int(actor_uid.stdout.strip()),
             "pi_version": self.options.version,
             "node_version": self.options.node_version,
             "variant": self.options.variant,
@@ -466,7 +477,7 @@ positive:true,lost_guard_upstream_requests:0,actual_cli_pid_deadline:true}));
                         ' '.join('--extension '+shlex.quote(p)for p in self._evaluation_extra_extensions))
                 kwargs['env'].update(
                     NODE_OPTIONS='--import '+evaluator+'/preload.mjs',
-                    MEMWEAVE_EVAL_LEDGER='/logs/agent/cli-probe-quota.json' if self.options.prepare_only else '/opt/memweave-eval-control/quota.json',
+                    MEMWEAVE_EVAL_LEDGER=self.options.evaluation_quota_channel or ((self.options.evaluation_fixture_quota_path or '/logs/agent/cli-probe-quota.json') if self.options.prepare_only else '/opt/memweave-eval-control/quota.json'),
                     MEMWEAVE_EVAL_TRACE='/logs/agent/cli-request-trace.jsonl' if self.options.prepare_only else '/logs/agent/request-trace.jsonl',
                     MEMWEAVE_EVAL_DEADLINE=str(getattr(self,'_evaluation_effective_deadline',self.options.evaluation_deadline)),
                     MEMWEAVE_EVAL_VARIANT=self.options.variant,

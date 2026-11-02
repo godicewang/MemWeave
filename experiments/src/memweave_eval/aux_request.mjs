@@ -9,7 +9,7 @@ if(!['user_simulator','official_judge','preflight'].includes(role))throw Error('
 const dir=path.dirname(fileURLToPath(import.meta.url));
 const fetch=installGuard({ledger:process.env.MEMWEAVE_EVAL_LEDGER,trace:process.env.MEMWEAVE_EVAL_TRACE,
   deadline:Number(process.env.MEMWEAVE_EVAL_DEADLINE),variant:process.env.MEMWEAVE_EVAL_VARIANT,
-  quotaScript:path.join(dir,'budget_guard.py'),credentialFile:process.env.MEMWEAVE_EVAL_CREDENTIAL_FILE});
+  quotaScript:path.join(dir,process.env.MEMWEAVE_EVAL_QUOTA_BACKEND==='ipc'?'quota_ipc.mjs':'budget_guard.py'),credentialFile:process.env.MEMWEAVE_EVAL_CREDENTIAL_FILE});
 const payload={model:'deepseek-flash',stream:true,stream_options:{include_usage:true},
   max_tokens:input.max_tokens,messages:input.messages,thinking:{type:'disabled'},
   ...(input.temperature===null?{}:{temperature:input.temperature??0}),

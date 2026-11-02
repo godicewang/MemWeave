@@ -10,6 +10,8 @@ import json
 import sys
 from pathlib import Path
 
+from pydantic import Field
+
 from .aux_client import GuardedAuxClient
 from .domain_backend import DomainBackend
 from .pi_agent import ExperimentPi, PiExperimentOptions
@@ -35,6 +37,7 @@ class StatePiOptions(PiExperimentOptions):
     evaluation_host_ledger:str
     state_evaluator_output:str
     evaluation_judge_deadline:float
+    evaluation_aux_quota_channels:dict[str,str]=Field(default_factory=dict)
 
 
 class StatePi(ExperimentPi):
@@ -129,9 +132,10 @@ class StatePi(ExperimentPi):
                 return GuardedAuxClient(ledger=self.options.evaluation_host_ledger,
                     trace=self._private_output/(role+'-transport.jsonl'),evidence=self._private_output/(role+'-content'),
                     auth=self.options.auth_path,arm=self.options.variant,case_id=self.options.evaluation_case_id,
-                    run_id=self.options.evaluation_run_id,
+                    run_id=self.options.evaluation_run_id+(':judge'if role=='official_judge'else''),
                     deadline=self.options.evaluation_judge_deadline if role=='official_judge' else episode_deadline,role=role,
-                    max_output=self.options.evaluation_output_tokens,episode_budget=self.options.evaluation_episode_budget)
+                    max_output=self.options.evaluation_output_tokens,episode_budget=self.options.evaluation_episode_budget,
+                    quota_channel=self.options.evaluation_aux_quota_channels.get(role))
             actor=Agent();initial=copy.deepcopy(self._state_environment.get_full_snapshot())
             try:
                 trajectory=await asyncio.to_thread(run_task,self._state_task,self._state_data,

@@ -45,6 +45,10 @@ def validate_admission(record):
             raise ValueError('admitted evaluator input changed')
     if not 0 < record['seconds'] <= 2700 or record['episode_budget'] < .31:
         raise ValueError('invalid bounded episode policy')
+    allowed={'state_source_path','state_selector','evaluation_host_ledger','state_evaluator_output',
+        'evaluation_judge_deadline'}
+    if set(record.get('agent_options',{}))-allowed:
+        raise ValueError('case options may not replace frozen model, guard, output, time, or variant policy')
 
 
 def run_pair(admission: Path, root: Path):
@@ -63,10 +67,9 @@ def run_pair(admission: Path, root: Path):
     from .fixed35_execution import PACKAGE, PACKAGE_SHA256, SUBJECT_COMMIT
     verify_package(PACKAGE,PACKAGE_SHA256,SUBJECT_COMMIT)
     env=trusted_environment(Path(record['code_path']))
-    overlay=root/'platform.yaml'
-    overlay.write_text('services:\n  main:\n    platform: '+record.get('platform','linux/amd64')+
-        '\n    labels:\n      org.memweave.eval.run: '+run_id+
-        '\n    volumes:\n      - '+str(ledger.parent)+':/opt/memweave-eval-control:rw\n')
+    from .quota_authority import add_channel, start_authority
+    authority=start_authority(BASE/'fixed35-20261102/quota-authority-v1',ledger,env)
+    atomic_json(root/'quota-authority.json',authority,immutable=True)
     parallel=2*record['resources']['cpus']<=12 and 2*record['resources']['memory_mb']<=38000
     atomic_json(root/'run.json',{'run_id':run_id,'case_id':record['case_id'],'started_at':datetime.now(UTC).isoformat(),
         'status':'RUNNING','parallel_arms':parallel,'ledger':str(ledger),'arms':{}},immutable=True)
@@ -79,8 +82,26 @@ def run_pair(admission: Path, root: Path):
             run_id=run_id,plan=Path(record['runtime_plan']),deadline=MODEL_CUTOFF,resources=record['resources'],
             seconds=record['seconds'],host_scored=record.get('host_scored',False),
             episode_budget=record['episode_budget'],task_config=record.get('task_config'))
+        cfg['agents'][0]['kwargs']['evaluation_run_id']='fixed35-formal:'+cfg['agents'][0]['kwargs']['evaluation_run_id']
+        episode=cfg['agents'][0]['kwargs']['evaluation_run_id']
+        channel=add_channel(authority,arm=arm,episode=episode,max_output=8192,deadline=MODEL_CUTOFF,
+            episode_budget=record['episode_budget'])
+        overlay=root/(arm+'-platform.yaml')
+        overlay.write_text('services:\n  main:\n    platform: '+record.get('platform','linux/amd64')+
+            '\n    labels:\n      org.memweave.eval.run: '+run_id+
+            '\n    volumes:\n      - '+channel['host_path']+':/opt/memweave-eval-control:rw\n')
         cfg['environment']['extra_docker_compose']=[str(overlay)]
         cfg['agents'][0]['kwargs'].update(record.get('agent_options',{}))
+        cfg['agents'][0]['kwargs'].update(evaluation_quota_backend='ipc',
+            evaluation_quota_channel='/opt/memweave-eval-control')
+        if record.get('family')=='state':
+            aux={}
+            for role in ('user_simulator','official_judge'):
+                scope=add_channel(authority,arm=arm,episode=episode+(':judge'if role=='official_judge'else''),max_output=8192,
+                    deadline=1793661132. if role=='official_judge'else MODEL_CUTOFF,
+                    episode_budget=.4 if role=='official_judge'else record['episode_budget'],role=role)
+                aux[role]=scope['host_path']
+            cfg['agents'][0]['kwargs']['evaluation_aux_quota_channels']=aux
         if parallel:
             cfg['agents'][0]['kwargs']['evaluation_pair_barrier']=str(root/'start-barrier')
         if record.get('agent_import'):
@@ -90,7 +111,10 @@ def run_pair(admission: Path, root: Path):
         if len(results)!=1:
             raise RuntimeError('expected exactly one actual trial')
         path,result=next(iter(results.values()))
-        collection=collect_episode(path.parent,arm=arm,ledger=ledger)
+        aux=[]
+        if record['family']=='state':
+            aux=[Path(record['agent_options']['state_evaluator_output'])/path.parent.name]
+        collection=collect_episode(path.parent,arm=arm,ledger=ledger,auxiliary_roots=aux,expected_episode=episode)
         outcome={'arm':arm,'exit_code':code,'result_path':str(path),'result_sha256':file_digest(path),
             'exception':result.get('exception_info'),'verifier':result.get('verifier_result'),
             'collection':collection,'finished_at':datetime.now(UTC).isoformat()}

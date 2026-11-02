@@ -10,6 +10,15 @@ from .pi_agent import ExperimentPi
 
 
 class FreeEpisodePi(ExperimentPi):
+    async def exec_as_agent(self,environment,command,**kwargs):
+        if self.options.evaluation_fixture_quota_path and 'pi --print --mode json'in command:
+            kwargs['env']=dict(kwargs.get('env')or{},MEMWEAVE_EVAL_FIXTURE_DELAY_MS='1000')
+        if 'pi --print --mode json'in command and self._evaluation_task_config.get('fixture_drop_guard'):
+            kwargs['env']=dict(kwargs.get('env')or{},MEMWEAVE_EVAL_DROP_GUARD='1')
+        if 'pi --print --mode json'in command and self._evaluation_task_config.get('fixture_readonly'):
+            kwargs['env']=dict(kwargs.get('env')or{},MEMWEAVE_EVAL_READONLY_FIXTURE='1')
+        return await super().exec_as_agent(environment,command,**kwargs)
+
     async def install(self, environment):
         if not self.options.prepare_only or self.options.auth_path:
             raise ValueError('free episode requires preparation mode without credentials')

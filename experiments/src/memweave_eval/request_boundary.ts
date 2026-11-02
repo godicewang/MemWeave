@@ -40,6 +40,13 @@ export function attachBoundaries(pi:any) {
     prepared={boundary_id:randomUUID(),expected_task_id:task,boundary_source:'atomic_journal_before_context_transform'};
     const evidence=contentEvidence();
     if(evidence){
+      const original=Array.isArray(_event.messages)?_event.messages:[];
+      prepared.source_messages=original.map((m:any)=>({role:m.role,timestamp:m.timestamp??null,
+        sha256:hash(m),source_ref:evidence.put(m),tool_call_id:m.toolCallId??null,
+        parts:(Array.isArray(m.content)?m.content:[]).map((p:any)=>({type:p.type,id:p.id??null,
+          sha256:hash(p),arguments_sha256:p.type==='toolCall'?hash(p.arguments):null}))}));
+      const system=original.find((m:any)=>m.role==='system');
+      if(system)prepared.source_system_ref=evidence.put(system);
       const rule=path.join(os.homedir(),'.pi','memory','rule.md');
       if(fs.existsSync(rule))prepared.expected_rule_template_ref=evidence.put(fs.readFileSync(rule));
     }

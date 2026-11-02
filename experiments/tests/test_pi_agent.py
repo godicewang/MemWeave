@@ -191,6 +191,8 @@ def test_warm_install_has_no_network_installer_or_auth_in_preparation(tmp_path):
                 stdout = "v24.22.0\n1.4.0\n"
             if "id -u && id -g" in command:
                 stdout = "1000\n1000\n"
+            elif command.endswith("id -u"):
+                stdout = "1000\n"
             return SimpleNamespace(return_code=0, stdout=stdout, stderr="")
 
         async def upload_file(self, source, target):

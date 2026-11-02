@@ -24,6 +24,9 @@ def job_config(*,root:Path,task:Path,case_id,arm,run_id,plan:Path,deadline,
                task_config=None):
     if arm not in {'pi-native','pi-memweave'}:
         raise ValueError('unknown paired arm')
+    resources={k:resources[k]for k in ('cpus','memory_mb','storage_mb')if k in resources}
+    if not all(type(v)is int and v>0 for v in resources.values())or not {'cpus','memory_mb'}<=set(resources):
+        raise ValueError('positive integer CPU/memory resource limits required')
     name=case_id.lower()+'-'+arm+('-software' if prepare_only else '-canary' if canary else '')
     options={'version':'1.4.0','node_version':'24.22.0','variant':arm,
              'package_path':str(PACKAGE),'package_sha256':PACKAGE_SHA256,

@@ -13,6 +13,26 @@ NODE = os.environ.get("MEMWEAVE_EVAL_TEST_NODE") or shutil.which("node") or "nod
 GUARD = Path(__file__).parents[1] / "src/memweave_eval/fetch_guard.mjs"
 
 
+def test_settlement_rejection_preserves_reservation_and_safe_reason(tmp_path):
+    ledger=tmp_path/'quota.json';initialize(ledger,1.,time.time()+60)
+    trace=tmp_path/'trace.jsonl'
+    script="""import {installGuard} from GUARD;
+const f=installGuard({ledger:LEDGER,trace:TRACE,deadline:DEADLINE,variant:'fixture',quotaScript:QUOTA,
+fetchImpl:async()=>new Response('data: {"usage":{"prompt_tokens":100,"completion_tokens":20}}\\n\\ndata: [DONE]\\n\\n')});
+await(await f('https://api.deepseek.com/chat/completions',{method:'POST',body:JSON.stringify({model:'deepseek-flash',stream:true,max_tokens:10,messages:[]})})).text();
+"""
+    for key,value in {'GUARD':str(GUARD),'LEDGER':str(ledger),'TRACE':str(trace),'QUOTA':str(GUARD.with_name('budget_guard.py'))}.items():
+        script=script.replace(key,json.dumps(value))
+    script=script.replace('DEADLINE',str(time.time()+60))
+    result=subprocess.run([NODE,'--input-type=module','-e',script],capture_output=True,text=True,timeout=10,check=False)
+    assert result.returncode==0,result.stderr
+    events=[json.loads(line)for line in trace.read_text().splitlines()]
+    detail=next(e for e in events if e['event']=='quota_operation_rejected')
+    assert detail['operation']=='settle'and detail['error_class']=='ValueError'
+    assert detail['reason']=='usage outside reserved bounds; reservation retained'
+    assert next(iter(json.loads(ledger.read_text())['requests'].values()))['status']=='reserved'
+
+
 def test_fetch_bytes_split_usage_error_and_unknown_reservations(tmp_path):
     ledger = tmp_path / "quota.json"
     initialize(ledger, 29.0, time.time() + 60)

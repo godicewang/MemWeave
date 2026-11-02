@@ -8,7 +8,7 @@ if (!process.env.MEMWEAVE_EVAL_LEDGER) throw Error('Evaluation quota configurati
 attachGuard();
 if(process.env.MEMWEAVE_EVAL_SEALED==='1')disableZstd();
 if (process.platform==='linux') {
-  const node=process.env.MEMWEAVE_EVAL_QUOTA_BACKEND==='node';
+  const node=['node','ipc'].includes(process.env.MEMWEAVE_EVAL_QUOTA_BACKEND);
   const watchdog=spawn(node?process.execPath:'python3',[path.join(path.dirname(fileURLToPath(import.meta.url)),
     node?'container_deadline.mjs':'container_deadline.py'),String(process.pid),process.env.MEMWEAVE_EVAL_DEADLINE,
     process.env.MEMWEAVE_EVAL_TRACE],{detached:true,stdio:'ignore',env:{...process.env,NODE_OPTIONS:''}});

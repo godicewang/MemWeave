@@ -83,10 +83,12 @@ async def _check_once(environment, node: str, *, expected_offline=True):
         record["checks"] = checks.model_dump(mode="json")
         record["passed"] = bool(
             checks.model.ok and checks.model.status in (200, 401)
-            and (not checks.outside.ok if expected_offline else checks.outside.ok)
+            and (not checks.outside.ok if expected_offline else True)
         )
         record["model_endpoint"] = "reachable" if checks.model.ok else "unreachable"
-        record["general_internet"] = "blocked" if not checks.outside.ok else "reachable"
+        record["general_internet"] = ("blocked" if expected_offline else "probe_unreachable") if not checks.outside.ok else "reachable"
+        if not expected_offline and not checks.outside.ok:
+            record['public_probe_warning']='A single unreachable test URL does not establish an offline policy; declared public policy is unchanged'
     except Exception as exc:  # noqa: BLE001 -- record only a safe error category.
         record["probe_error_type"] = type(exc).__name__
     return record

@@ -63,14 +63,14 @@ export function requestSummary(payload, originalInstruction) {
 export function workspaceSummary(root='/app/interpreter') {
   let config={};try{config=JSON.parse(process.env.MEMWEAVE_EVAL_WORKSPACE??'{}');}catch{}
   root=config.root??root;
-  const files={};
+  const files={},file_status={};
   for (const name of (config.files??['src/spec.rs','src/main.rs','src/runtime.rs','src/decode.rs','src/types.rs','Cargo.toml'])) {
-    try { files[name]=hash(fs.readFileSync(path.join(root,name))); }
-    catch { files[name]=null; }
+    try { files[name]=hash(fs.readFileSync(path.join(root,name)));file_status[name]={status:'present'}; }
+    catch(error) { files[name]=null;file_status[name]={status:error?.code==='ENOENT'?'absent':'unreadable',error_class:error?.code??'Error'}; }
   }
   let cargo=null;
   try { cargo=fs.readFileSync(path.join(root,'Cargo.toml'),'utf8'); } catch {}
-  return {files, cargo}; // Small task-specific configuration; never source or answers.
+  return {files,file_status,cargo}; // Small task-specific configuration; never source or answers.
 }
 
 export function installGuard({ledger,trace,deadline,variant,quotaScript,credentialFile,fetchImpl=globalThis.fetch}) {
@@ -80,12 +80,20 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,credenti
   const originalInstruction=process.env.MEMWEAVE_EVAL_INSTRUCTION_PATH
     ? fs.readFileSync(process.env.MEMWEAVE_EVAL_INSTRUCTION_PATH,'utf8') : undefined;
   const quota = operation => {
+    const ipc=quotaScript.endsWith('/quota_ipc.mjs');
     const node=quotaScript.endsWith('.mjs');
-    const executable=node?'flock':'python3';
-    const args=node?['-w','2',ledger.replace(/\.[^/.]+$/,'.lock'),process.execPath,quotaScript,ledger,'--lock-held']:[quotaScript,ledger];
-    const result=spawnSync(executable,args,{input:JSON.stringify(operation),encoding:'utf8',timeout:4000,
+    const executable=ipc?process.execPath:node?'flock':'python3';
+    const args=ipc?[quotaScript,ledger]:node?['-w','2',ledger.replace(/\.[^/.]+$/,'.lock'),process.execPath,quotaScript,ledger,'--lock-held']:[quotaScript,ledger];
+    const result=spawnSync(executable,args,{input:JSON.stringify(operation),encoding:'utf8',timeout:ipc?13000:4000,
       env:{...process.env,NODE_OPTIONS:''}});
-    if (result.status !== 0) throw Error('Evaluation quota admission/settlement rejected');
+    if (result.status !== 0) {
+      let detail;try{detail=JSON.parse(result.stderr);}catch{}
+      const failure={operation:operation.action,exit_status:result.status,signal:result.signal??null,
+        error_class:detail?.error_class??result.error?.code??'QuotaSubprocessError',
+        reason:detail?.reason??'quota_subprocess_failed'};
+      record({event:'quota_operation_rejected',request_id:operation.id,...failure});
+      throw Object.assign(Error('Evaluation quota admission/settlement rejected'),{quota_failure:failure});
+    }
     return JSON.parse(result.stdout);
   };
   function authorized(input,init) {
@@ -133,10 +141,11 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,credenti
     catch (error) { record({event:'request_denied',request_id:id,reason:'quota_or_deadline'}); throw error; }
     const boundary=globalThis[Symbol.for('memweave.eval.requestBoundary')];
     const matched=boundary?.prepared_messages_sha256===hash(JSON.stringify(payload.messages??[]));
+    const workspace=workspaceSummary();
     record({event:'request_ready',request_id:id,...requestSummary(payload,originalInstruction),
       ...(matched?boundary:{boundary_error:'no_matching_provider_preparation'}),
-      ...(payloadRef?{payload_ref:payloadRef}:{}),workspace:workspaceSummary()});
-    evidence?.event('request_ready',{request_id:id,payload_ref:payloadRef,prepared_boundary:matched?boundary:null});
+      ...(payloadRef?{payload_ref:payloadRef}:{}),workspace});
+    evidence?.event('request_ready',{request_id:id,payload_ref:payloadRef,prepared_boundary:matched?boundary:null,workspace});
     const controller=new AbortController();
     const remaining=deadline*1000-Date.now();
     if (remaining<=0) {record({event:'request_expired',request_id:id});throw Error('Evaluation deadline');}
@@ -172,7 +181,8 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,credenti
       try {const billed=quota({action:'settle',id,input:usage.input,output:usage.output,
         cache_input:Number.isInteger(usage.cache_hit)?usage.cache_hit:0});settled=true;
         record({event:'budget_settled',request_id:id,charge_usd:billed.charge_usd});}
-      catch {record({event:'settlement_rejected',request_id:id});}
+      catch(error) {record({event:'settlement_rejected',request_id:id,
+        quota_failure:error?.quota_failure??{reason:'quota_response_not_valid_JSON'}});}
       record({event:'request_end',request_id:id,usage,settled,stream_done:done,response_model:responseModel});
       evidence?.event('provider_receipt',{request_id:id,usage,settled,stream_done:done,response_model:responseModel,chunks:chunkIndex});
     }

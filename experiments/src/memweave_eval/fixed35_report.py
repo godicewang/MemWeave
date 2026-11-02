@@ -50,7 +50,10 @@ def single_report(root:Path,output:Path|None=None):
         engineering['tools']={name:dict(value,error_rate=value['errors']/value['attempts']
             if value['attempts']and not value['unknown_results']else None)for name,value in collection['tools'].items()}
         behavior=grade_mab_trial(trial,contract,arm=arm)if admission['family']=='mab'else None
-        reward=behavior['native']['native_outcome']/100 if behavior else (outcome.get('verifier')or{}).get('rewards',{}).get('reward')
+        if contract.get('adapter_kind')=='readonly-before-first-change-v1':
+            from .fixed35_business import grade_readonly
+            behavior=grade_readonly(trial,contract,arm=arm)
+        reward=behavior['native']['native_outcome']/100 if admission['family']=='mab'else (outcome.get('verifier')or{}).get('rewards',{}).get('reward')
         row={'case_id':admission['case_id'],'task_id':admission['case_id'],'benchmark':admission['benchmark'],
             'variant_id':arm,'execution_status':'scored','native_reward':reward,
             'state_metrics':collection['state_metrics'],'engineering_metrics':engineering,
@@ -63,7 +66,7 @@ def single_report(root:Path,output:Path|None=None):
         def explicit(identity,score,reason=None,row=row):
             row['normalization_evidence'][identity]={'value':None if score is None else score/100,
                 'status':'unknown'if score is None else 'scored','reason':reason}
-        if behavior:
+        if admission['family']=='mab':
             explicit('S.common.protected_constraints',behavior['derived_action']['score'],
                 'MAB typed-action overlay: correct final answer AND exact one-value JSON schema AND correct file value')
             memory=behavior.get('memory',{})
@@ -71,6 +74,13 @@ def single_report(root:Path,output:Path|None=None):
                               ('S.case_v2.C4-three-window-checkpoints','three_evictions')]:
                 point=memory.get(field)or{}
                 explicit(old,point.get('score'),point.get('reason')or'controlled checkpoint evidence unavailable')
+        elif contract.get('adapter_kind')=='readonly-before-first-change-v1':
+            explicit('S.common.protected_constraints',behavior['common_constraint']['score'])
+            explicit('S.case_v2.C3-before-dependent-edit',behavior['plugin_memory']['score'])
+            for metric,field in [('S1.timely_write','timely_write'),('S1.retention','retention'),
+                                 ('S1.write_precision','write_precision'),('S1.pollution','pollution')]:
+                row['normalization_evidence'][metric]=dict(behavior[field],
+                    reason='Controlled READ_ONLY path records only; see parser coverage and exact case contract')
         normalized=normalize_trial_scores(row)
         metrics=[]
         assigned={m['metric_id']:m for m in contract['metric_matrix']}

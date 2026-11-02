@@ -71,3 +71,19 @@ MAB纠错适配使用预注册的有限实体/值字面关系与旧值失效、�
 控制结果保留全部版本：Slop v1缺uv、v2 Docker SDK/CLI架构不一致产生125且collected=0，不能视为空解成功；v3统一采用官方SDK实际原生架构后，已观察前阶段reference全通过、nop真实零分，剩余仍运行。WebArena公开镜像下载中断/HTML门禁分别留原始错误；不绕过访问控制，标准HTTP Range恢复仅在服务明确支持时继续。
 
 费用截至本检查点只有MAB环境两次真实canary USD0.000197208（峰值估算，非账单）；无正式benchmark actor。State专用工具仍不可用，未用Bash改State。
+
+### 14:38 UTC：统一额度写入权威（付费门禁修复）
+
+STATE canary两actor响应有完整HTTP200/usage/DONE，但原容器结算拒绝；原日志未保存底层异常，不能补猜异常类型。原6条真实请求均已对账，两个保守预留仅在独立CAS验证完整usage后精确结算，原失败轨迹不改，累计估算USD0.00227448。
+
+进一步免费实测证明Mac与Docker VM直接共写同一文件时，两个内核的flock未提供全局互斥：最大0.61的模拟账本，host获准3条、VM获准1条，最后仅存2条。即使一次小型CLI并发试验通过，也不能据此宣称全局硬闸正确。修复采用同一Docker VM中的额度服务作为唯一新增实验账本写入者，复用既有budget_guard.change和原账本、公式、预留/幂等语义；Mac辅助请求与所有actor均通过分scope的文件IPC进行准入/结算，actor不再挂载可写全局账本。不给actor Docker socket，不把模型凭据交给额度服务，不改变系统网络/安全设置。只为本次私有实验通道创建必要访问权限，服务与channel随本轮生命周期管理。
+
+新增IPC请求/响应须完整关联nonce、固定arm/episode/额度/截止和服务身份，缺服务、错误token、错误scope、重复/越界操作均在真实上游请求前拒绝。单VM权威保留操作审计、账本前后hash及心跳。先以独立模拟账本完成host/VM并发超额拒绝、无丢ID、非root真实Pi CLI和服务丢失零上游；再执行极短真实canary，不重复进行长正式运行。当前正式案例数仍0。
+
+### 15:49 UTC：额度权威与首个实际行为契约验收
+
+单VM额度服务免费压力测试完成5轮、每轮80次host/VM并发准入，获准ID与账本逐一对应；非root UID10001真实Pi CLI正例及丢守卫/丢服务负例均完成，负例零上游POST。最终离线回归393项通过；TypeScript类型及Rule资源校验通过。服务隔离正式work+simulator每臂USD7.99、official judge每臂USD1，preflight共享USD1，继续受native/plugin各9、总19与用户20硬上限约束；历史canary不重置。judge额度不能被actor提前占用。
+
+TB-04派生适配仅增加共同格式要求：若保存持久笔记，只读约束按`READ_ONLY <absolute path>`写明。原任务代码、只读文件、测试和原始reward不变。七个必需程序断言分别为三条活动State约束、三个文件hash保全，以及记录先于首个持久代码修改；缺证据不是false。对应正/负/缺失CAS夹具独立验证，夹具不算真实actor成绩。原verifier会恢复只读文件，因此另保留verifier前文件hash，避免原题reward掩盖只读约束破坏。原生只评价同样文件保全，不强制其使用State。
+
+软件预检TB-04双臂已通过；其他失败版本保留。公开环境外网探针超时仅属诊断，模型端点仍须可达；声明offline的环境仍须通过严格断网检查，不改变实际网络策略。两Marathon镜像身份差异仍禁止加载凭据，未擅自放宽。

@@ -33,9 +33,11 @@ export default function observe(pi: any) {
     });
   }
   function record(phase: string, call_id?: string) {
-    fs.appendFileSync(trace!,JSON.stringify({event:'workspace_checkpoint',phase,call_id,
+    const value={event:'workspace_checkpoint',phase,call_id,
       timestamp:new Date().toISOString(),variant:process.env.MEMWEAVE_EVAL_VARIANT,
-      workspace:workspaceSummary()})+'\n');
+      workspace:workspaceSummary()};
+    fs.appendFileSync(trace!,JSON.stringify(value)+'\n');
+    evidence?.event('workspace_checkpoint',value);
   }
   if(process.env.MEMWEAVE_EVAL_SEALED==='1'){
     const policy=process.env.MEMWEAVE_EVAL_POLICY_FILE;

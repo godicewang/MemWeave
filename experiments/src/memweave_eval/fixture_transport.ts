@@ -43,6 +43,7 @@ export default function fixture(pi:any) {
     if((init?.method??'GET').toUpperCase()==='GET')return deliver(JSON.stringify({data:[{
       id:'deepseek-flash',name:'DeepSeek V4.1 Flash',context_window:1000000,max_output_tokens:384000}]}),'application/json',init);
     calls++;
+    if(process.env.MEMWEAVE_EVAL_FIXTURE_DELAY_MS)await new Promise(resolve=>setTimeout(resolve,Number(process.env.MEMWEAVE_EVAL_FIXTURE_DELAY_MS)));
     if(process.env.MEMWEAVE_EVAL_HANG_FIXTURE==='1')return new Promise(()=>setInterval(()=>{},1000));
     const create=process.env.MEMWEAVE_EVAL_VARIANT==='pi-memweave' && calls===1;
     const domain=Boolean(process.env.MEMWEAVE_EVAL_DOMAIN_DESCRIPTOR) &&
@@ -52,11 +53,14 @@ export default function fixture(pi:any) {
     const command=process.env.MEMWEAVE_EVAL_EXECUTION_NEGATIVE==='1'?"node -e 'process.exit(0)'":
       "which python3 || true; command -v python3 || true; printf '%s\\n' 'python|perl' | grep -E 'python|perl'; cat > /tmp/cli-probe.c <<'EOF'\n"+
       "typedef struct Node node;\nnode *root;\nEOF\ncc -fsyntax-only /tmp/cli-probe.c && test -s /tmp/cli-probe.c";
-    const delta=domain?{role:'assistant',tool_calls:[{index:0,id:'cli-domain-read',type:'function',function:{name:domainProbe.name,arguments:JSON.stringify(domainProbe.arguments)}}]}:query?{role:'assistant',tool_calls:[{index:0,id:'cli-query',type:'function',function:{name:'bash',arguments:JSON.stringify({command})}}]}:create?{role:'assistant',tool_calls:[{index:0,id:'cli-create',type:'function',function:{
+    const readonly=process.env.MEMWEAVE_EVAL_READONLY_FIXTURE==='1';
+    const remember=readonly && process.env.MEMWEAVE_EVAL_VARIANT==='pi-memweave' && calls===2;
+    const change=readonly && calls===(process.env.MEMWEAVE_EVAL_VARIANT==='pi-memweave'?3:1);
+    const delta=remember?{role:'assistant',tool_calls:[{index:0,id:'cli-remember',type:'function',function:{name:'state_append',arguments:JSON.stringify({items:['types.py','DESIGN.md','__init__.py'].map(name=>({type:'fact',content:'READ_ONLY /app/app/'+name,evidence:{U1:'Explicit source constraint'}}))})}}]}:change?{role:'assistant',tool_calls:[{index:0,id:'cli-change',type:'function',function:{name:'write',arguments:JSON.stringify({path:'/app/app/events.py',content:fs.readFileSync('/app/app/events.py','utf8')+'\n# offline observer probe\n'})}}]}:domain?{role:'assistant',tool_calls:[{index:0,id:'cli-domain-read',type:'function',function:{name:domainProbe.name,arguments:JSON.stringify(domainProbe.arguments)}}]}:query?{role:'assistant',tool_calls:[{index:0,id:'cli-query',type:'function',function:{name:'bash',arguments:JSON.stringify({command})}}]}:create?{role:'assistant',tool_calls:[{index:0,id:'cli-create',type:'function',function:{
       name:'task_create',arguments:JSON.stringify({title:'CLI probe',goal:'Verify CLI State delivery',
         project_name:'probe',summary:'offline CLI smoke',keywords:['probe']})}}]}:{role:'assistant',content:'OK'};
     const frames=[{id:'cli-fixture',model:'deepseek-flash',choices:[{index:0,delta,finish_reason:null}]},
-      {id:'cli-fixture',choices:[{index:0,delta:{},finish_reason:(create||query||domain)?'tool_calls':'stop'}],
+      {id:'cli-fixture',choices:[{index:0,delta:{},finish_reason:(create||query||domain||remember||change)?'tool_calls':'stop'}],
       usage:{prompt_tokens:100,completion_tokens:50}}];
     return deliver(frames.map(f=>'data: '+JSON.stringify(f)+'\n\n').join('')+'data: [DONE]\n\n','text/event-stream',init);
   };

@@ -166,5 +166,11 @@ if __name__ == "__main__":
         print(json.dumps(result))
     except Exception as exc:  # noqa: BLE001 -- CLI must not disclose request bodies.
         # Never interpolate request bodies/credentials into errors.
-        print(type(exc).__name__, file=sys.stderr)
+        allowed={'invalid or existing quota','invalid request ID','unbounded output',
+            'duplicate request or deadline reached','global budget admission denied',
+            'equal episode budget reached','episode request limit reached','arm budget admission denied',
+            'usage outside reserved bounds; reservation retained','invalid confirmed cache usage',
+            'conflicting usage','unknown quota action','quota lock timeout'}
+        print(json.dumps({'error_class':type(exc).__name__,
+            'reason':str(exc)if str(exc)in allowed else 'quota_storage_or_protocol_failure'}),file=sys.stderr)
         raise SystemExit(2)

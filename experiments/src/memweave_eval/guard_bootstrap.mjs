@@ -12,6 +12,7 @@ export function attachGuard() {
     variant:process.env.MEMWEAVE_EVAL_VARIANT,
     credentialFile:process.env.MEMWEAVE_EVAL_CREDENTIAL_FILE,
     quotaScript:path.join(path.dirname(fileURLToPath(import.meta.url)),
+      process.env.MEMWEAVE_EVAL_QUOTA_BACKEND==='ipc'?'quota_ipc.mjs':
       process.env.MEMWEAVE_EVAL_QUOTA_BACKEND==='node'?'budget_guard.mjs':'budget_guard.py')});
   globalThis.fetch=guarded;
   globalThis[marker]={fetch:guarded,pid:process.pid};
