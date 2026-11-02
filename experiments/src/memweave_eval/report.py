@@ -338,6 +338,12 @@ def generate_report(root: Path) -> dict:
     summary = summarize(rows)
     summary['finance']=finance_summary(rows)
     attach_pair_columns(rows,summary['finance'])
+    from .normalized_scores import attach_normalized_scores
+    from .score_report import normalization_markdown, write_score_artifacts
+    for row in rows:
+        row['_normalization_source'] = {'file': str(root/'evidence-index.json'),
+            'sha256': file_digest(root/'evidence-index.json'), 'score_source': row.get('score_source')}
+    summary['normalized_scores'] = attach_normalized_scores(rows)
     summary["complete"] = (
         not invalid and not state.get("stop_reason") and all(r["success"] is not None for r in rows)
     )
@@ -350,14 +356,15 @@ def generate_report(root: Path) -> dict:
         ("comparison.csv", [dict(variant=k, **v) for k, v in summary["variants"].items()]),
     ]:
         stream = io.StringIO()
-        keys = list(dict.fromkeys(k for row in records for k in row))
+        # Per-metric explanations belong in the dedicated long CSV, not one giant cell.
+        keys = list(dict.fromkeys(k for row in records for k in row if k != 'normalized_scores'))
         writer = csv.DictWriter(stream, fieldnames=keys)
         writer.writeheader()
         for record in records:
             writer.writerow(
                 {
                     k: json.dumps(v, ensure_ascii=False) if isinstance(v, (dict, list)) else v
-                    for k, v in record.items()
+                    for k, v in record.items() if k in keys
                 }
             )
         (output / filename).write_text(stream.getvalue())
@@ -403,5 +410,7 @@ def generate_report(root: Path) -> dict:
                 lines.append(f"| {case['case_id']} | {case['value']} | {case['status']} | {case.get('reason') or ''} |")
             lines+=['','记忆项仅在实际证据驱逐后判定；State 交付、引用保全和后续业务成功均不单独证明因果采用。']
     lines += finance_markdown(rows,summary['finance'])
+    write_score_artifacts(output, rows, summary['normalized_scores'])
+    lines += normalization_markdown(rows, summary['normalized_scores'])
     (output / "report.md").write_text("\n".join(lines))
     return summary

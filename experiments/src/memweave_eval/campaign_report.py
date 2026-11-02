@@ -350,9 +350,20 @@ def generate_campaign_report(root: Path):
             path=Path(sources[0]);path=path if path.is_absolute()else contained(root,sources[0])
             agent=path.parent.parent.parent
         attach_finance(row,context_from_lock(lock),agent)
+        if agent is not None:
+            from .contract_evidence import task_contract_metrics
+            from .engineering_metrics import task_engineering_metrics
+            row['engineering_metrics'] = task_engineering_metrics(agent)
+            row['contract_metrics'] = task_contract_metrics(agent, enabled=row['variant_id']=='pi-memweave')
     summary = summarize(rows)
     summary['finance']=finance_summary(rows)
     attach_pair_columns(rows,summary['finance'])
+    from .normalized_scores import attach_normalized_scores
+    from .score_report import SCORE_COLUMNS, normalization_markdown, write_score_artifacts
+    for row in rows:
+        row['_normalization_source'] = {'file': str(root/'evidence-index.json'),
+            'sha256': file_digest(root/'evidence-index.json'), 'score_source': row.get('score_source')}
+    summary['normalized_scores'] = attach_normalized_scores(rows)
     blocked_attempt_rows = [
         dict(
             failure,
@@ -417,6 +428,7 @@ def generate_campaign_report(root: Path):
         *metric_columns(task_state_metrics([], None)).keys(),
         "state_metrics",
         *FINANCE_COLUMNS,
+        *SCORE_COLUMNS,
     ]
     with (root / "comparison.csv").open("w", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=columns, extrasaction="ignore")
@@ -460,5 +472,7 @@ def generate_campaign_report(root: Path):
             )
     text += metrics_markdown(rows)
     text += finance_markdown(rows,summary['finance'])
+    write_score_artifacts(root, rows, summary['normalized_scores'])
+    text += normalization_markdown(rows, summary['normalized_scores'])
     (root / "report.md").write_text("\n".join(text) + "\n")
     return summary

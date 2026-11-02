@@ -25,11 +25,18 @@ def main(argv=None) -> int:
     finance=sub.add_parser('finance-report',help='Write a new financial supplement without changing frozen reports')
     finance.add_argument('run_dir',type=Path)
     finance.add_argument('--output',type=Path,required=True)
+    scores=sub.add_parser('score-report',help='Write versioned raw/0–100 scores to a new directory, without model requests')
+    scores.add_argument('source',type=Path)
+    scores.add_argument('--output',type=Path,required=True)
     cases=sub.add_parser('score-cases',help='Score frozen offline cases with deterministic predicates')
     cases.add_argument('gold',type=Path)
     cases.add_argument('evidence',type=Path)
     args = parser.parse_args(argv)
     try:
+        if args.command=='score-report':
+            from .score_report import generate_score_report
+            print(json.dumps(generate_score_report(args.source,args.output),ensure_ascii=False,indent=2))
+            return 0
         if args.command=='finance-report':
             from .finance_report import generate_finance_supplement
             print(json.dumps(generate_finance_supplement(args.run_dir,args.output),ensure_ascii=False,indent=2))

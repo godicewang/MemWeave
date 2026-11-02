@@ -277,6 +277,10 @@ def test_offline_report_retains_blocked_and_unrun_rows(tmp_path):
     assert report["variants"]["pi-native"]["scored"] == 0
     assert report["pairs"]["missing"] == 49
     assert report["complete"] is False
+    assert report['normalized_scores']['by_variant']['pi-native']['common_product']['score'] is None
+    assert (tmp_path/'normalized-scores.csv').is_file()
+    assert (tmp_path/'normalized-weights.csv').is_file()
+    assert 'normalized_common_product_coverage' in (tmp_path/'comparison.csv').read_text()
 
 
 def test_campaign_deadline_and_shared_budget_prevent_new_job(tmp_path):

@@ -107,3 +107,7 @@ def test_wasm_reports_join_original_trials_and_frozen_gold(tmp_path):
     assert rows[0]["engineering_metrics"]["http_attempts"] == 0
     assert "固定行为检查点" in (tmp_path / "reports/report.md").read_text()
     assert "behavior_metrics" in (tmp_path / "reports/trials.csv").read_text()
+    assert "normalized_scores" in rows[0]
+    assert "normalized_scores" in json.loads((tmp_path / "reports/results.json").read_text())["summary"]
+    assert (tmp_path / "reports/normalized-scores.csv").is_file()
+    assert "原始计算方式" in (tmp_path / "reports/normalized-scores.md").read_text()
