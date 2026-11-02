@@ -15,6 +15,17 @@ def test_cumulative_session_copies_count_once_and_require_prefix(tmp_path):
         unique_sessions(tmp_path)
 
 
+def test_zero_tool_opportunities_require_complete_independent_execution_coverage():
+    from memweave_eval.fixed35_collection import known_zero_tools
+    assert known_zero_tools({},complete=False)=={}
+    known=known_zero_tools({},complete=True)
+    assert known['bash']['attempts']==0 and known['bash']['executions']==0
+    from memweave_eval.normalized_scores import normalize_trial_scores
+    scores=normalize_trial_scores({'engineering_metrics':{'tools':known}})
+    point=next(m for m in scores['metrics']if m['id']=='Q1.tool.bash.error_rate')
+    assert point['status']=='not_applicable'and point['score']is None
+
+
 def test_no_admission_without_frozen_real_preflight_and_contract():
     with pytest.raises(ValueError,match='missing admission'):
         validate_admission({'case_id':'MAB-01'})

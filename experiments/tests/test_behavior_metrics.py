@@ -36,6 +36,21 @@ def test_restore_keeps_missed_intents_and_does_not_require_search():
     assert result["metrics"]["restore_after_binding"]["value"] == 1
 
 
+def test_known_wrong_restore_is_failure_even_if_followup_action_evidence_missing():
+    result=run({'id':'restore','kind':'restore','targets':['correct']},
+        {'complete':True,'bound':'wrong','request_current':None,'action_passed':None})
+    assert result['metrics']['restore_end_to_end']['value']==0
+    assert result['metrics']['restore_after_binding']['not_applicable']==1
+
+
+@pytest.mark.parametrize('returned,expected',[(True,1),(False,0),(None,None)])
+def test_simple_interruption_can_require_a_separate_real_return_action(returned,expected):
+    result=run({'id':'s','kind':'route','allowed':['continue'],'simple':True,'return_opportunity_id':'return'},
+        {'complete':True,'route':'continue','created_ids':[],'create_attempts':0,
+            'answer_passed':True,'protected_unchanged':True,'return_action_passed':returned})
+    assert result['cases'][0]['value']==expected
+
+
 @pytest.mark.parametrize(
     "created,answer,expected", [([], True, 1), ([], False, 0), (["new"], True, 0)]
 )

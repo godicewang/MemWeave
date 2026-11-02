@@ -10,6 +10,18 @@ from .evidence_replay import read_object, replay_content
 from .finance_metrics import cache_metrics
 from .state_metrics import task_state_metrics
 
+TRACKED_TOOLS=('bash','edit','modify_fact','read','state_append','task_clarify','task_create','write')
+
+
+def known_zero_tools(tools,*,complete):
+    """Only a complete independent execution log establishes zero opportunities."""
+    result=dict(tools)
+    if complete:
+        for name in TRACKED_TOOLS:
+            result.setdefault(name,{'attempts':0,'successes':0,'errors':0,'unknown_results':0,
+                'executions':0,'error_classes':{},'duration_ms':{'samples':0,'p50':None,'p95':None,'max':None}})
+    return result
+
 
 def unique_sessions(trial: Path):
     groups=defaultdict(list)
@@ -87,15 +99,17 @@ def collect_episode(trial: Path, *, arm, ledger: Path,auxiliary_roots=(),expecte
         if set(requests)!=expected:
             raise ValueError('case ledger contains a request absent from the complete actor/auxiliary evidence set')
     tools=defaultdict(lambda:{'attempts':0,'successes':0,'errors':0,'unknown_results':0,
-        'durations':[],'error_classes':defaultdict(int)})
+        'durations':[],'executions':0,'error_classes':defaultdict(int)})
     calls={};ends={}
     for event in events:
-        if event['event'] not in {'tool_call','tool_execution_end','tool_result'}:
+        if event['event'] not in {'tool_call','tool_execution_start','tool_execution_end','tool_result'}:
             continue
         key=(event['producer_id'],event.get('call_id'))
         record=json.loads(read_object(locations[(event['producer_id'],event['sequence'])],event['record_ref']))
         if event['event']=='tool_call':
             calls[key]=event['tool']
+        elif event['event']=='tool_execution_start':
+            tools[event['tool']]['executions']+=1
         elif event['event']=='tool_execution_end' or key not in ends:
             ends[key]=record
     for key,name in calls.items():
@@ -130,9 +144,13 @@ def collect_episode(trial: Path, *, arm, ledger: Path,auxiliary_roots=(),expecte
     delivery=delivery_metrics(transport_records,actor_http,enabled=arm=='pi-memweave')
     from .fixed35_business import execution_boundaries
     boundary=execution_boundaries(trial,events)
+    tools=known_zero_tools(tools,complete=boundary['complete'])
+    from .fixed35_references import grade_known_references
+    references=grade_known_references(trial,events=events,locations=locations)
     return {'collection_complete':not unresolved and boundary['complete']and delivery['complete'],
         'transport_collection_complete':not unresolved,'execution_boundary_collection':boundary,'requests':len(requests),
         'delivery_metrics':delivery,
+        'known_reference_integrity':references,
         'actor_http_attempts':len(actor_http),'auxiliary_http_attempts':len(requests)-len(actor_http),
         'completed_unique_actor_agent_calls':len(qualified),
         'usage_assistant_returns':sum(e['event']=='assistant_return'for e in events),

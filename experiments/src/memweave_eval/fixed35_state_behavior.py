@@ -48,6 +48,12 @@ def _field(snapshot, table, key, field):
 def state_points(contract, *, initial, snapshots, conversation, calls, complete):
     """Pure predicates. Missing values stay unknown; a known violation stays failure."""
     case_id = contract['case_id']
+    targets={(r['entity_type'],r['record_key'])for r in contract['requirements']}
+    if case_id=='INT-05':targets.add(('bookings','BK-A07'))
+    initial_valid=isinstance(initial,dict)and all(isinstance(initial.get(table),dict)
+        and isinstance(initial[table].get(key),dict)for table,key in targets)
+    complete=complete is True and initial_valid and isinstance(snapshots,list)and bool(snapshots) \
+        and all(isinstance(s,dict)for s in snapshots)
     final = snapshots[-1] if snapshots else None
     values = {}
     for requirement in contract['requirements']:
@@ -132,16 +138,16 @@ def state_points(contract, *, initial, snapshots, conversation, calls, complete)
     return result
 
 
-def grade_state_trial(private: Path, contract):
+def grade_state_trial(private: Path, contract, *, arm=None):
     try:
-        return _grade_state_trial(private, contract)
+        return _grade_state_trial(private, contract, arm=arm)
     except (OSError, ValueError, KeyError, TypeError):
         return {'score': None, 'status': 'MISSING_EVIDENCE', 'collection_complete': False,
             'reason': 'STATE evidence is truncated, malformed, or cannot be read; repair before acceptance',
             'version': VERSION}
 
 
-def _grade_state_trial(private: Path, contract):
+def _grade_state_trial(private: Path, contract, *, arm):
     journal = private / 'domain-events.jsonl'
     paths = [journal, private / 'domain-events.mirror.jsonl', private / 'domain-events.start.json',
         private / 'domain-events.end.json', private / 'state-trajectory-original.json']
@@ -154,6 +160,8 @@ def _grade_state_trial(private: Path, contract):
     valid = isinstance(start.get('before'), dict) and isinstance(end.get('after'), dict) \
         and paths[1].read_bytes() == raw and end.get('complete') is True and end.get('fatal_error') is None \
         and end.get('sha256') == hashlib.sha256(raw).hexdigest() and end.get('calls') == len(calls)
+    valid &= all(isinstance(start.get(k), str) and bool(start[k]) and end.get(k) == start[k]
+        for k in ('case_id', 'arm', 'run_id'))
     identities = [c.get('call_id') for c in calls]
     valid &= all(isinstance(i, str) and i for i in identities) and len(identities) == len(set(identities))
     previous = start.get('before')
@@ -163,6 +171,7 @@ def _grade_state_trial(private: Path, contract):
         previous = row.get('after')
     valid &= previous == end.get('after') and start.get('case_id') == contract['case_id'] \
         and trajectory.get('task_id') == contract['task_id']
+    if arm is not None:valid &= start.get('arm') == arm
     if not valid:
         return {'score': None, 'status': 'MISSING_EVIDENCE', 'collection_complete': False,
             'reason': 'STATE journal identity, mirror, boundary chain, count or terminal hash mismatch', 'version': VERSION}

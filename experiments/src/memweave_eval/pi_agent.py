@@ -293,7 +293,7 @@ class ExperimentPi(Pi):
         if self.options.evaluation_deadline:
             evaluator = self._asset_root + '/evaluation'
             await self.exec_as_agent(environment, f'mkdir -p {shlex.quote(evaluator)}')
-            for filename in ('fetch_guard.mjs', 'content_evidence.mjs', 'guard_bootstrap.mjs', 'preload.mjs', 'budget_guard.py', 'quota_ipc.mjs', 'container_deadline.py', 'budget_guard.mjs', 'container_deadline.mjs', 'sealed_runtime.mjs', 'sealed_bash_env.sh', 'request_boundary.ts', 'checkpoint_observer.ts'):
+            for filename in ('fetch_guard.mjs', 'content_evidence.mjs', 'guard_bootstrap.mjs', 'preload.mjs', 'budget_guard.py', 'quota_ipc.mjs', 'container_deadline.py', 'budget_guard.mjs', 'container_deadline.mjs', 'sealed_runtime.mjs', 'sealed_bash_env.sh', 'request_boundary.ts', 'reference_source.ts', 'task_registry.mjs', 'checkpoint_observer.ts'):
                 await environment.upload_file(Path(__file__).with_name(filename), evaluator+'/'+filename)
             if self.options.prepare_only:
                 await environment.upload_file(Path(__file__).with_name('probe_request.mjs'),evaluator+'/probe_request.mjs')

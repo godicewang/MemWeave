@@ -45,6 +45,39 @@ def test_archive_or_window_removal_is_not_active_memory():
     assert active_text(rows)==['new']
 
 
+def test_multihop_current_chain_or_correct_derived_fact_both_accepted():
+    from memweave_eval.fixed35_mab import literal_snapshot
+    contract={'required_relation_sets':[
+        [['Bagratuni','Taipei']],[['Bagratuni','Christianity'],['Christianity','Taipei']]],
+        'forbidden_relations':[['Christianity','Jerusalem']]}
+    assert all(literal_snapshot(['Bagratuni Dynasty religion Christianity','Christianity origin Taipei'],contract).values())
+    assert all(literal_snapshot(['Bagratuni religion originated in Taipei'],contract).values())
+    assert not literal_snapshot(['Christianity origin Taipei'],contract)['required_relations']
+    assert not literal_snapshot(['Bagratuni religion Christianity','Christianity origin Jerusalem'],contract)['obsolete_relations_absent']
+    with pytest.raises(ValueError,match='nonempty'):
+        literal_snapshot([],{'required_relation_sets':[[]]})
+
+
+def test_all_eight_source_components_freeze_action_boundary_without_changing_prompts(tmp_path):
+    from memweave_eval.fixed35_mab import prepare_mab_components
+    for number in range(1,9):
+        identity=f'MAB-{number:02d}';task=tmp_path/'adapter/actor-tasks'/identity
+        (task/'steps/ingest-0001').mkdir(parents=True);(task/'steps/query').mkdir()
+        (task/'steps/ingest-0001/instruction.md').write_text('public original source')
+        (task/'steps/query/instruction.md').write_text('public original query')
+        (task/'task.toml').write_text('[[steps]]\nname="ingest-0001"\n[[steps]]\nname="query"\n')
+        private=tmp_path/'adapter/evaluator-only'/identity;private.mkdir(parents=True)
+        (private/'gold.json').write_text(json.dumps({'answers':['answer'],'selector':{'row':number,'context_sha256':'a'*64,'qa_id':'q'}}))
+    result=prepare_mab_components(tmp_path/'adapter',tmp_path/'out')
+    assert result['components']==8 and result['correction_components']==4 and result['paid_requests']==0
+    c=json.loads((tmp_path/'out/MAB-03.json').read_text())
+    assert c['query_stage_id']=='2'and c['action_observation']=='workspace-content-v2'
+    assert c['model_visible_changes']==[]and c['task_config']['workspace']['content_files']==['answer.json']
+    assert len(c['literal_memory']['required_relation_sets'])==2
+    assert json.loads((tmp_path/'out/manifest.json').read_text())['not_formal_admission']
+    with pytest.raises(FileExistsError):prepare_mab_components(tmp_path/'adapter',tmp_path/'out')
+
+
 @pytest.mark.parametrize('state_value,expected',[('Steve Jobs',100),('Satya Nadella',0),(None,None)])
 def test_real_content_format_to_action_and_current_memory_grade(tmp_path,state_value,expected):
     from memweave_eval.fixed35_mab import grade_mab_trial

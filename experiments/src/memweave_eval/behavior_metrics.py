@@ -84,7 +84,7 @@ def evaluate_behavior(gold: dict, evidence: dict) -> dict:
             known = obs.get("complete") is True and "bound" in obs
             bound = obs.get("bound") in case["targets"]
             values = [bound, obs.get("request_current"), obs.get("action_passed")]
-            value = all(values) if known and all(type(v) is bool for v in values) else None
+            value = False if known and any(v is False for v in values) else all(values) if known and all(type(v) is bool for v in values) else None
             add("restore_end_to_end", value)
             if known and bound:
                 add("restore_after_binding", value)
@@ -143,6 +143,8 @@ def evaluate_behavior(gold: dict, evidence: dict) -> dict:
                 )
             if case.get("simple"):
                 required = [obs.get("answer_passed"), obs.get("protected_unchanged")]
+                if case.get('return_opportunity_id'):
+                    required.append(obs.get('return_action_passed'))
                 simple = (
                     (not created and all(required))
                     if creation_known and all(type(v) is bool for v in required)
@@ -152,6 +154,7 @@ def evaluate_behavior(gold: dict, evidence: dict) -> dict:
                     simple = False
                 add("simple_no_create_and_complete", simple)
                 checks["simple_no_create_and_complete"] = simple
+                if case.get('return_opportunity_id'):checks['return_after_detour']=obs.get('return_action_passed')
                 attempts = obs.get("create_attempts")
                 add(
                     "unnecessary_create_attempt",

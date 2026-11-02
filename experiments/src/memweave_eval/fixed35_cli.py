@@ -19,6 +19,14 @@ def register(sub):
     state.add_argument('case_id',choices=[f'INT-0{i}'for i in range(1,6)])
     state.add_argument('--source',type=Path,required=True)
     state.add_argument('--output',type=Path,required=True)
+    task=commands.add_parser('task-checkpoints',help='Replay real Task checkpoint evidence with a frozen evaluator-only opportunity contract; no model calls')
+    task.add_argument('trial',type=Path)
+    task.add_argument('--contract',type=Path,required=True)
+    task.add_argument('--action-evidence',type=Path)
+    task.add_argument('--output',type=Path,required=True)
+    mab=commands.add_parser('mab-contracts',help='Freeze all eight evaluator-only MAB action/correction components; not formal admissions')
+    mab.add_argument('adapter',type=Path)
+    mab.add_argument('--output',type=Path,required=True)
     replay=commands.add_parser('replay',help='Verify exact request/tool evidence without model calls')
     replay.add_argument('root',type=Path)
     replay.add_argument('--transport',type=Path,required=True)
@@ -40,6 +48,19 @@ def register(sub):
 
 
 def execute(args):
+    if args.fixed35_command=='mab-contracts':
+        from .fixed35_mab import prepare_mab_components
+        return prepare_mab_components(args.adapter,args.output)
+    if args.fixed35_command=='task-checkpoints':
+        from .fixed35_task_behavior import grade_task_trial
+        from .storage import file_digest
+        actions=json.loads(args.action_evidence.read_text())if args.action_evidence else None
+        result=grade_task_trial(args.trial,json.loads(args.contract.read_text()),action_evidence=actions)
+        result['contract_sha256']=file_digest(args.contract)
+        result['action_evidence_sha256']=file_digest(args.action_evidence)if args.action_evidence else None
+        atomic_json(args.output,result,immutable=True)
+        return {'output':str(args.output),'paid_requests':0,'checkpoints':len(result['cases']),
+            'status':'EVIDENCE_REPLAY_NOT_A_NEW_ACTOR_RUN'}
     if args.fixed35_command=='state-contract':
         from .fixed35_state_behavior import state_contract
         record=state_contract(args.source,args.case_id)

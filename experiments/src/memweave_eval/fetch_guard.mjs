@@ -1,4 +1,4 @@
-// Common experimental transport observer. No prompt/response text is persisted.
+// Transport guard with summaries and opt-in evaluator-only content evidence.
 import fs from 'node:fs';
 import path from 'node:path';
 import {createHash, randomUUID} from 'node:crypto';
@@ -63,14 +63,22 @@ export function requestSummary(payload, originalInstruction) {
 export function workspaceSummary(root='/app/interpreter') {
   let config={};try{config=JSON.parse(process.env.MEMWEAVE_EVAL_WORKSPACE??'{}');}catch{}
   root=config.root??root;
-  const files={},file_status={};
+  const files={},file_status={},file_refs={};
   for (const name of (config.files??['src/spec.rs','src/main.rs','src/runtime.rs','src/decode.rs','src/types.rs','Cargo.toml'])) {
-    try { files[name]=hash(fs.readFileSync(path.join(root,name)));file_status[name]={status:'present'}; }
+    try {
+      const filename=path.resolve(root,name),bytes=fs.readFileSync(filename);
+      files[name]=hash(bytes);file_status[name]={status:'present'};
+      if((config.content_files??[]).includes(name)){
+        if(filename!==path.resolve(root)&&!filename.startsWith(path.resolve(root)+path.sep))throw Error('Content path escapes workspace');
+        if(fs.lstatSync(filename).isSymbolicLink()||bytes.length>65536)file_status[name].content_status='unsupported_link_or_size';
+        else file_refs[name]=contentEvidence()?.put(bytes)??null;
+      }
+    }
     catch(error) { files[name]=null;file_status[name]={status:error?.code==='ENOENT'?'absent':'unreadable',error_class:error?.code??'Error'}; }
   }
   let cargo=null;
   try { cargo=fs.readFileSync(path.join(root,'Cargo.toml'),'utf8'); } catch {}
-  return {files,file_status,cargo}; // Small task-specific configuration; never source or answers.
+  return {files,file_status,cargo,file_refs}; // Content only for explicitly frozen evaluator paths; never injected into a model.
 }
 
 export function installGuard({ledger,trace,deadline,variant,quotaScript,credentialFile,fetchImpl=globalThis.fetch}) {

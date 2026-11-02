@@ -44,6 +44,18 @@ def test_missing_or_unrendered_public_stage_cannot_be_admitted(tmp_path):
         slop_task({'upstream_case_id':'database_migration','pack_case_id':'SCB-02'},prompts,tmp_path/'out',base_image='image:tag',snapshot_excludes=[])
 
 
+def test_only_fixed_source_checkpoint_conditional_skip_excluded_original_counts_preserved():
+    value=dict(report(86,87),pytest_exit_code=0,problem_name='database_migration',checkpoint_name='checkpoint_3',
+        tests={'checkpoint_1-Regression':{'skipped':['test_foreign_keys_disabled_during_drop_column']}})
+    point=checkpoint_outcome(value)
+    assert point['score']==100 and point['passed']==point['total']==86
+    assert point['original_reported_total']==87 and point['original_all_reported_tests_score']==0
+    assert checkpoint_outcome(dict(value,tests={}))['score']==0
+    assert checkpoint_outcome(dict(value,tests={'checkpoint_1-Regression':{'skipped':['other_skip']}}))['score']==0
+    assert checkpoint_outcome({k:v for k,v in value.items()if k!='tests'})['score']is None
+    assert checkpoint_outcome(dict(value,checkpoint_name='checkpoint_2'))['score']==0
+
+
 def test_sdk_resource_adapter_labels_and_caps_only_the_owned_create(tmp_path):
     from types import SimpleNamespace
 

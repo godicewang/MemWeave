@@ -17,6 +17,9 @@ class FreeEpisodePi(ExperimentPi):
             kwargs['env']=dict(kwargs.get('env')or{},MEMWEAVE_EVAL_DROP_GUARD='1')
         if 'pi --print --mode json'in command and self._evaluation_task_config.get('fixture_readonly'):
             kwargs['env']=dict(kwargs.get('env')or{},MEMWEAVE_EVAL_READONLY_FIXTURE='1')
+        if 'pi --print --mode json'in command and self._evaluation_task_config.get('fixture_task_routes'):
+            mode=self._evaluation_task_config['fixture_task_routes']
+            kwargs['env']=dict(kwargs.get('env')or{},MEMWEAVE_EVAL_TASK_ROUTES_FIXTURE='multi'if mode=='multistage'else'1')
         return await super().exec_as_agent(environment,command,**kwargs)
 
     async def install(self, environment):

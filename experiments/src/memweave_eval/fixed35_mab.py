@@ -7,11 +7,55 @@ from __future__ import annotations
 
 import json
 import re
+import tomllib
 from pathlib import Path
 
 from .evidence_replay import read_object, replay_content
 from .fixed35 import checkpoint_verdict
 from .fixed35_adapters import normalize_mab, score_mab
+from .storage import atomic_json, file_digest
+
+MAB_RELATIONS={
+    'MAB-01':{'required_relation_sets':[[['Microsoft','Steve Jobs']]],
+        'forbidden_relations':[['Microsoft','Satya Nadella']]},
+    'MAB-02':{'required_relation_sets':[[['Bagratuni','Taipei']],
+        [['Bagratuni','Christianity'],['Christianity','Taipei']]],
+        'forbidden_relations':[['Christianity','Jerusalem']]},
+    'MAB-03':{'required_relation_sets':[[['Christian Abbiati','Philippines']],
+        [['Christian Abbiati','cornerback'],['cornerback','field hockey'],['field hockey','Philippines']]],
+        'forbidden_relations':[['Christian Abbiati','goalkeeper'],['cornerback','American football'],['field hockey','England']]},
+    'MAB-05':{'required_relation_sets':[[['New York Times','Ancient Greek']]],
+        'forbidden_relations':[['New York Times','English']]},
+}
+
+
+def prepare_mab_components(adapter:Path,output:Path):
+    """Freeze evaluator components, not admissions or claims of C1/C4 coverage."""
+    output.mkdir(parents=True,exist_ok=False);records=[]
+    for number in range(1,9):
+        identity=f'MAB-{number:02d}';task=adapter/'actor-tasks'/identity
+        config=tomllib.loads((task/'task.toml').read_text());steps=config['steps']
+        if not steps or steps[-1]['name']!='query':raise ValueError('fixed final query step missing')
+        gold_path=adapter/'evaluator-only'/identity/'gold.json';gold=json.loads(gold_path.read_text())
+        instructions=[task/'steps'/s['name']/'instruction.md'for s in steps]
+        contract={'version':'fixed35-mab-business-20261102-v2','case_id':identity,
+            'answers':gold['answers'],'selector':gold['selector'],'gold_sha256':file_digest(gold_path),
+            'action_observation':'workspace-content-v2','query_stage_id':str(len(steps)),
+            'source_instruction_path':str(instructions[0]),'source_instruction_sha256':file_digest(instructions[0]),
+            'instruction_sha256':{s['name']:file_digest(p)for s,p in zip(steps,instructions,strict=True)},
+            'literal_memory':MAB_RELATIONS.get(identity),
+            'task_config':{'workspace':{'root':'/app','files':['answer.json'],'content_files':['answer.json']}},
+            'model_visible_changes':[],
+            'component_status':'IMPLEMENTED_SOURCE_FROZEN_NOT_ADMITTED',
+            'remaining':['complete case metric matrix and paid runtime canary',
+                'three actual eviction checkpoints where assigned; no filler or assumed eviction',
+                'book-specific valuable-evidence retention oracle where assigned']}
+        atomic_json(output/(identity+'.json'),contract,immutable=True)
+        records.append({'case_id':identity,'contract_sha256':file_digest(output/(identity+'.json')),
+            'literal_correction_component':identity in MAB_RELATIONS,'query_stage_id':contract['query_stage_id']})
+    atomic_json(output/'manifest.json',{'components':records,'real_model_calls':0,
+        'not_formal_admission':True},immutable=True)
+    return {'components':8,'correction_components':len(MAB_RELATIONS),'paid_requests':0,'output':str(output)}
 
 
 def active_text(journal):
@@ -47,7 +91,11 @@ def literal_snapshot(texts, contract):
     values=[normalize_mab(t)for t in texts]
     def has(parts):
         return any(all(re.search(r'(?<!\w)'+re.escape(normalize_mab(p))+r'(?!\w)',v)for p in parts)for v in values)
-    return {'required_relations':all(has(p)for p in contract['required_relations']),
+    alternatives=contract.get('required_relation_sets',[contract.get('required_relations')])
+    if not isinstance(alternatives,list)or not alternatives or any(not isinstance(group,list)or not group
+            or any(not isinstance(parts,list)or not parts or any(not isinstance(p,str)or not p.strip()for p in parts)for parts in group)for group in alternatives):
+        raise ValueError('nonempty finite relation alternatives required')
+    return {'required_relations':any(all(has(parts)for parts in group)for group in alternatives),
             'obsolete_relations_absent':not any(has(p)for p in contract.get('forbidden_relations',[]))}
 
 
@@ -112,13 +160,40 @@ def grade_mab_trial(trial:Path,contract,*,arm):
             key=event['producer_id'],event['sequence'];records[key]=event;locations[key]=store
     events=sorted(records.values(),key=lambda e:(e['timestamp'],e['producer_id'],e['sequence']))
     texts=None;before=None;action_seen=False;evictions=[];boundaries=set();first_action_correct=None
-    original=Path(contract['source_instruction_path']).read_text()
+    source=Path(contract['source_instruction_path'])
+    if contract.get('source_instruction_sha256')and file_digest(source)!=contract['source_instruction_sha256']:
+        raise ValueError('frozen original MAB source instruction changed')
+    original=source.read_text()
     source_seen=False
-    projection={}
+    projection={};before_calls={};workspace_v2=contract.get('action_observation')=='workspace-content-v2'
+    previous_action_hash=None;initial_action_observed=False
     for event in events:
         key=event['producer_id'],event['sequence'];store=locations[key]
         if event['event']=='memory_projection_boundary':
             projection[event['boundary_id']]=json.loads(read_object(store,event['metadata_ref']))
+        if workspace_v2 and event['event']=='task_registry_checkpoint'and event.get('phase')=='before_tool':
+            state=event.get('binding')or{}
+            if state.get('journal_ref'):
+                rows=[json.loads(line)for line in read_object(store,state['journal_ref']).decode().splitlines()]
+                before_calls[event['call_id']]=(active_text(rows),True)
+            elif state.get('status')=='NO_BOUND_TASK':before_calls[event['call_id']]=([],True)
+            else:before_calls[event['call_id']]=(None,None)
+        if workspace_v2 and event['event']=='workspace_checkpoint'and event.get('stage_id')==contract.get('query_stage_id'):
+            workspace=event.get('workspace')or{};files=workspace.get('files')or{}
+            if 'answer.json'in files:
+                current_hash=files['answer.json']
+                status=workspace.get('file_status',{}).get('answer.json',{})
+                if event.get('phase')=='agent_start'and not initial_action_observed:
+                    initial_action_observed=status.get('status')=='absent'and current_hash is None
+                if event.get('phase')in {'tool_end','tool_result'}and initial_action_observed and current_hash!=previous_action_hash:
+                    action_seen=True;texts,before=before_calls.get(event.get('call_id'),(None,None))
+                    ref=workspace.get('file_refs',{}).get('answer.json')
+                    if ref and ref.get('sha256')==current_hash:
+                        try:first_action_correct=bool(score_mab('',contract['answers'],json.loads(read_object(store,ref)))['typed_action'])
+                        except ValueError:first_action_correct=False
+                    else:first_action_correct=None
+                    break
+                previous_action_hash=current_hash
         if event['event']=='request_ready':
             boundary=event.get('prepared_boundary')or{}
             ref=boundary.get('expected_journal_ref')
@@ -158,7 +233,7 @@ def grade_mab_trial(trial:Path,contract,*,arm):
         elif event['event']=='tool_call':
             value=json.loads(read_object(store,event['record_ref']))
             path=(value.get('input')or{}).get('path')
-            if event['tool']in {'write','edit'} and path in {'/app/answer.json','answer.json'}:
+            if not workspace_v2 and event['tool']in {'write','edit'} and path in {'/app/answer.json','answer.json'}:
                 action_seen=True
                 if event['tool']=='write':
                     try:

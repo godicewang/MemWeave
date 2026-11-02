@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import {spawnSync}from'node:child_process';
 export default function fixture(pi:any) {
-  let calls=0;
+  let calls=0,originalTask:string|null=null;
   const networkFetch=globalThis.fetch;
   const queued=new Map<string,{body:string,type:string}>();
   const server=http.createServer((request,response)=>{
@@ -43,6 +43,13 @@ export default function fixture(pi:any) {
     if((init?.method??'GET').toUpperCase()==='GET')return deliver(JSON.stringify({data:[{
       id:'deepseek-flash',name:'DeepSeek V4.1 Flash',context_window:1000000,max_output_tokens:384000}]}),'application/json',init);
     calls++;
+    const body=JSON.parse(init.body);
+    for(const message of body.messages??[]){
+      if(message.role!=='tool'||typeof message.content!=='string')continue;
+      try{const value=JSON.parse(message.content.replace(/^\[(?:task_[^:\]]+:)?[UTAR]\d+\]\s*/,''));
+        for(const item of Array.isArray(value)?value:[value])if(item.goal==='Verify CLI State delivery'&&typeof item.task_id==='string')originalTask=item.task_id;
+      }catch{}
+    }
     if(process.env.MEMWEAVE_EVAL_FIXTURE_DELAY_MS)await new Promise(resolve=>setTimeout(resolve,Number(process.env.MEMWEAVE_EVAL_FIXTURE_DELAY_MS)));
     if(process.env.MEMWEAVE_EVAL_HANG_FIXTURE==='1')return new Promise(()=>setInterval(()=>{},1000));
     const create=process.env.MEMWEAVE_EVAL_VARIANT==='pi-memweave' && calls===1;
@@ -56,11 +63,29 @@ export default function fixture(pi:any) {
     const readonly=process.env.MEMWEAVE_EVAL_READONLY_FIXTURE==='1';
     const remember=readonly && process.env.MEMWEAVE_EVAL_VARIANT==='pi-memweave' && calls===2;
     const change=readonly && calls===(process.env.MEMWEAVE_EVAL_VARIANT==='pi-memweave'?3:1);
-    const delta=remember?{role:'assistant',tool_calls:[{index:0,id:'cli-remember',type:'function',function:{name:'state_append',arguments:JSON.stringify({items:['types.py','DESIGN.md','__init__.py'].map(name=>({type:'fact',content:'READ_ONLY /app/app/'+name,evidence:{U1:'Explicit source constraint'}}))})}}]}:change?{role:'assistant',tool_calls:[{index:0,id:'cli-change',type:'function',function:{name:'write',arguments:JSON.stringify({path:'/app/app/events.py',content:fs.readFileSync('/app/app/events.py','utf8')+'\n# offline observer probe\n'})}}]}:domain?{role:'assistant',tool_calls:[{index:0,id:'cli-domain-read',type:'function',function:{name:domainProbe.name,arguments:JSON.stringify(domainProbe.arguments)}}]}:query?{role:'assistant',tool_calls:[{index:0,id:'cli-query',type:'function',function:{name:'bash',arguments:JSON.stringify({command})}}]}:create?{role:'assistant',tool_calls:[{index:0,id:'cli-create',type:'function',function:{
+    const routes=Boolean(process.env.MEMWEAVE_EVAL_TASK_ROUTES_FIXTURE)&&process.env.MEMWEAVE_EVAL_VARIANT==='pi-memweave';
+    let route=calls===3?{name:'task_create',id:'route-distractor',args:{title:'Independent diagnostics',goal:'Investigate separate telemetry diagnostics',project_name:'other',summary:'independent fixture distractor',keywords:['telemetry']}}:
+      calls===4?{name:'task_find',id:'route-find',args:{query:'Verify CLI State delivery',limit:3}}:
+      calls===5?{name:'task_resume',id:'route-resume',args:{task_id:originalTask}}:
+      calls===6?{name:'write',id:'route-action',args:{path:'/app/app/events.py',content:fs.readFileSync('/app/app/events.py','utf8')+'\n# offline observer probe\n'}}:null;
+    let routed=routes&&calls>=3;
+    const fixtureStage=Number(process.env.MEMWEAVE_EVAL_STAGE_ID);
+    const ephemeral=process.env.MEMWEAVE_EVAL_TASK_ROUTES_FIXTURE==='multi'&&fixtureStage===4;
+    if(routes&&process.env.MEMWEAVE_EVAL_TASK_ROUTES_FIXTURE==='multi'){
+      const stage=fixtureStage;
+      routed=stage===1?calls>=3:true;
+      route=stage===2&&calls===1?{name:'task_create',id:'route-distractor',args:{title:'Independent diagnostics',goal:'Investigate separate telemetry diagnostics',project_name:'other',summary:'independent fixture distractor',keywords:['telemetry']}}:
+        stage===3&&calls===1?{name:'task_find',id:'route-find',args:{query:'Verify CLI State delivery',limit:3}}:
+        stage===3&&calls===2?{name:'task_resume',id:'route-resume',args:{task_id:originalTask}}:
+        stage===3&&calls===3?{name:'memory_read',id:'route-read',args:{items:[{ref:'U1'}],max_total_chars:1000}}:
+        (stage===3&&calls===4||stage===5&&calls===1)?{name:'write',id:stage===5?'return-action':'route-action',args:{path:'/app/app/events.py',content:fs.readFileSync('/app/app/events.py','utf8')+'\n# offline observer probe\n'}}:null;
+    }
+    if(routes&&route?.name==='task_resume'&&!originalTask)throw Error('Real Task creation/search result missing from actual context');
+    const delta=ephemeral?{role:'assistant',content:'12'}:routed?(route?{role:'assistant',tool_calls:[{index:0,id:route.id,type:'function',function:{name:route.name,arguments:JSON.stringify(route.args)}}]}:{role:'assistant',content:'OK'}):remember?{role:'assistant',tool_calls:[{index:0,id:'cli-remember',type:'function',function:{name:'state_append',arguments:JSON.stringify({items:['types.py','DESIGN.md','__init__.py'].map(name=>({type:'fact',content:'READ_ONLY /app/app/'+name,evidence:{U1:'Explicit source constraint'}}))})}}]}:change?{role:'assistant',tool_calls:[{index:0,id:'cli-change',type:'function',function:{name:'write',arguments:JSON.stringify({path:'/app/app/events.py',content:fs.readFileSync('/app/app/events.py','utf8')+'\n# offline observer probe\n'})}}]}:domain?{role:'assistant',tool_calls:[{index:0,id:'cli-domain-read',type:'function',function:{name:domainProbe.name,arguments:JSON.stringify(domainProbe.arguments)}}]}:query?{role:'assistant',tool_calls:[{index:0,id:'cli-query',type:'function',function:{name:'bash',arguments:JSON.stringify({command})}}]}:create?{role:'assistant',tool_calls:[{index:0,id:'cli-create',type:'function',function:{
       name:'task_create',arguments:JSON.stringify({title:'CLI probe',goal:'Verify CLI State delivery',
         project_name:'probe',summary:'offline CLI smoke',keywords:['probe']})}}]}:{role:'assistant',content:'OK'};
     const frames=[{id:'cli-fixture',model:'deepseek-flash',choices:[{index:0,delta,finish_reason:null}]},
-      {id:'cli-fixture',choices:[{index:0,delta:{},finish_reason:(create||query||domain||remember||change)?'tool_calls':'stop'}],
+      {id:'cli-fixture',choices:[{index:0,delta:{},finish_reason:!ephemeral&&(routed?Boolean(route):(create||query||domain||remember||change))?'tool_calls':'stop'}],
       usage:{prompt_tokens:100,completion_tokens:50}}];
     return deliver(frames.map(f=>'data: '+JSON.stringify(f)+'\n\n').join('')+'data: [DONE]\n\n','text/event-stream',init);
   };

@@ -114,7 +114,7 @@ Switch原评分器符号链接复制基础设施的独立修正版v4控制完成
 
 ### 等待明确数据外发授权期间的独立工程
 
-继续免费工作，不重试被拒绝的DeepSeek请求。Slop actor采用官方固定renderer的8/5/5个公开阶段，完整Pi与同一持久Session/工作区，每阶段按官方snapshot忽略规则交接源码；隐藏测试/solutions不进入actor。独立官方eval-snapshot后评分保留所有阶段与回归，整题主分为全阶段AND，partial为阶段通过率等权均值；缺报告/infra_failure不当0。为官方SDK没有资源字段的问题，仅在单次eval进程对Docker create传入两臂相同2CPU/8192MiB与本次run标签，不修改上游源码/断言；实际HostConfig写入审计，独立watchdog只清理该标签。资源适配须重新控制验收。
+继续免费工作，不重试被拒绝的DeepSeek请求。Slop actor采用官方固定renderer的8/5/5个公开阶段，完整Pi与同一持久Session/工作区，每阶段按官方snapshot忽略规则交接源码；隐藏测试/solutions不进入actor。独立官方eval-snapshot后评分保留所有阶段与回归，整题主分为全阶段AND，partial为阶段通过率等权均值；缺报告/infra_failure不当0。为官方SDK没有资源字段的问题，仅在单次eval进程对本次Docker SDK/CLI创建注入两臂相同2CPU/8192MiB与本次run标签，不修改上游源码/断言；实际HostConfig写入审计，独立watchdog只清理该标签。资源适配须重新控制验收。
 
 公平调度使用现有case runner，工作池11CPU/38000MiB，资源只按冻结任务及verifier上限预留。普通可承载配对同时跑，WDM/Ruby不可双开则顺序；顺序臂起跑顺序按case ID哈希事先固定，报表仍固定native/plugin顺序。最迟起跑时间同时考虑整case actor预算、顺序第一臂verifier时间、两臂setup和容器硬截止；不在临近截止时只给第二臂缩水预算。队列默认仅dry-run，显式执行还必须有ADMITTED状态及与冻结评估器、软件plan一致的已结算真实canary证据。缺服务/缺授权/缺真实证据均不得加载真实运行入口。
 
@@ -131,3 +131,33 @@ STATE后置评分改为现有配对runner的host阶段：StatePi.run只完成真
 恢复完整回归时发现一项测试自身竞态：故障测试直接写JSON，后台线程可能先读到空文件，得到JSONDecodeError而非预期identity ValueError。测试改为与真实IPC相同的partial→rename发布，不改运行时错误处理。最终本阶段全量427项通过、受影响Ruff/TypeScript/Rule资源校验通过。Slop受资源限制的控制因断线中断，v3六项通过；退出容器已归档清理，v4复用六项已核验控制继续其余30项，不改旧结果。
 
 真实模型外发确认仍待用户回复，禁止重试被拒绝请求。费用仍6 settled、USD0.00227448、reserved0；正式配对0。固定原截止不延期，后续排程仍须满足两臂完整同预算及验证余量，不能以短demo代替35题或长程资格。
+
+### 20:04 UTC：Task/引用与原始验证器离线验收
+
+当前评分入口版本为`fixed35-score-20261102-v3`。本节是实现进度，不是35题实验完成报告。真实DeepSeek仍未重试，正式配对仍为0；累计只有本轮先前6次已结算canary，峰值价格估算USD0.00227448、未结算预留0，所有本节模型响应均来自假provider，模拟账本金额不计真实费用。
+
+Task评估侧在agent起末及每个工具前后记录持久Goal/journal与index的hash/CAS、绑定及版本。部分创建、重定向路径、缺快照都不能默认作空清单；创建后删除仍算发生过创建。检索以查询当时语料与原始顺序/原始分数判定，后创建目标不得进入召回gold。T2要求正确绑定、真实HTTP请求中的State版本及独立业务动作检查，不能用预期注入元数据代替实际交付。T4保护预先指定的Goal/F/D投影，允许无关笔记变化，并可AND随后返回工作的独立动作检查。
+
+真实Pi CLI免费五阶段夹具完成：先结束A，再结束独立B，查回恢复A，回答一次短问题，再返回A。原生9、插件12次模拟provider返回，各自一个Session；Task T1/T2/T3/T4和返回动作检查均通过。加入实际`memory_read(U1)`后另一个版本为原生9、插件13次模拟返回，引用源于工具调用前公开Session绑定与原始记录，校验Task范围、不可变entry/session、Unicode范围、内容和截断标志。读取真实原件的完整范围1/1通过。以上不是模型行为能力成绩，不属于35题数量。正例前还保留两个负夹具：未完成交互中即切换再恢复A返回`RESUME_SOURCE_MISSING`，不修改插件恢复契约来迁就夹具。
+
+免费原件暴露两处离线解析缺陷：State实际content是文本part数组；公开`tool_result`的content在顶层而`tool_execution_end`在result内。两处均通过实际SDK形状回归修复，仅重算同一CAS，首版错误分析仍保留。Task CLI可通过`--action-evidence`关联多项独立程序断言；fixture标记必须保留，实际case report拒绝fixture Task契约。引用实现目前仅覆盖已知完整U/A纯文本请求范围；state_read历史项、图片、多模态、缺原件的其他Session及token池裁剪仍需相应独立oracle，不能据此宣称引用全类型或Window选择策略已经全部验收。
+
+MAB八题已生成evaluator-only v2组件，公共问题/原上下文字节不改。四道纠错题允许正确推导结论或完整多跳链：Bagratuni→Christianity→Taipei、Christian Abbiati→cornerback→field hockey→Philippines均不能误判为过时链。仍是有限规范化字面解析，不是通用自由文本语义证明。首个文件变化按实际工具后CAS取证，支持Bash写文件；前置State须来自同一动作前边界，最终改对不能抹掉首次错误。没有采到必要文件内容则缺证据，不能推断失败或成功。
+
+Slop资源控制v5完成18阶段×reference/nop共36项，实际HostConfig均为2CPU/8192MiB，已确认停止。发现上游database_migration的checkpoint_1测试`test_foreign_keys_disabled_during_drop_column`明确只限1–2阶段，而runner在3–5仍将它的skip计入total。固定源测试hash为`59568d555215b985f90da89e3a9d072565c6fd1fc73c826a214b8207cc148f9c`。本包按已确认的“全部适用测试”另列派生严格分，仅排除这一个已证条件不适用项；原86/87、原始严格0和全部原JSON不改，未知skip不自动排除。派生严格分不冒充上游默认可配置pass_policy或官方榜单分。
+
+无调用的工具只有在完整独立Pi执行日志确认后，才记录attempts=0；成功/错误率分母0为无机会，不给100。execute()未开始时没有执行耗时分母；日志不完整仍是unknown，不能补0。新的完整离线回归454项通过，`npm run check`资源/类型/单元/集成共276项通过，受影响Ruff与diff检查通过；live真实API、官方付费judge及发布验收未运行。
+
+|家族|数量|已完成的无付费部分|尚未完成／未准入|
+|---|---:|---|---|
+|TB4|12|全部原题reference/nop与双臂完整Pi软件预检；TB-04 C3及已知约束指标贯通|其余11题的具体业务gold、故障/恢复/引用/跨窗机会与完整指标适用契约|
+|Slop|3|全部18公开阶段持久Session/源码交接、官方入口与36项资源控制、后评分接线|逐阶段State重要结论/纠错/保全gold及正式配对准入|
+|STATE|5|原domain程序控制5/5；逐题业务AND、公开工具IPC、host后置官方judge入口|INT-04同权威冲突overlay；State层纠错/及时性gold；新额度权威下真实actor/辅助请求canary|
+|Switch|2|原题控制与复制symlink修复；T1–T4真实工具采集/程序提取器的免费验证|两个选题实际检索种子、阶段用户意图overlay与首个关键业务动作oracle/完整actor接线|
+|Interrupt|3|固定选择/原源码保留|官方资产下载不完整/访问门禁；浏览器环境、60%回放协议、具体业务检查点均未准入|
+|MAB|8|固定split/row/context/QA；原QA与文件动作；四个有限字面纠错组件；两臂CLI|书籍专属有价值信息gold、三次真实驱逐及快照；隔离压力Window参数仍未确认|
+|Marathon|2|原起点、原验证器正反控制及双臂完整Pi软件预检|长程业务/记忆gold与完整执行；Ruby配对资源须顺序|
+
+通用缺项还包括Q2受控无效输入/原子性/幂等机会的全包调度、Q3独立的完整渲染Rule预期、Q4完整Window选择/所有引用类型的gold，以及若干S1/S2跨窗口语义检查点。不能以通用函数/fixture存在视为这些选题已实现或测得通过。
+
+五个本项目千次成功资格仍为0（NOT_RUN），不把mock、HTTP重试、模拟用户、judge或输入token折算千次。按冻结公平调度，WDM最迟完整配对起跑18:26:12 UTC、Ruby16:46:12，均已过；普通1800秒与TB-04的900秒计划也须遵守相应最迟起跑，不能缩短另一臂或擅自延长20:20:12模型截止/23:42:12用户硬截止。当前35题全包不能在原条件下交付真实分数；剩余实现与权限阻塞分别列明，而不把所有未完成都归因于授权。

@@ -50,6 +50,8 @@ def test_int05_requires_both_quotes_then_withdrawal_and_unchanged_state():
         conversation=None, calls=[], complete=True)
     assert result['score'] is None and not result['collection_complete']
     assert grade(complete=False)['score'] is None
+    assert grade(after=[None])['score'] is None
+    assert grade(before={},after=[{}])['score'] is None
 
 
 def test_int01_clarification_must_precede_user_reply_and_any_preview():
@@ -87,9 +89,9 @@ def test_distinct_other_state_behavior_positive_negative_missing(case, conversat
     assert result['score'] is None and not result['collection_complete']
 
 
-def fixture_files(folder):
+def fixture_files(folder,arm='pi-native'):
     c = contract(); before = initial()
-    row = {'case_id': 'INT-05', 'run_id': 'test', 'arm': 'pi-native',
+    row = {'case_id': 'INT-05', 'run_id': 'test', 'arm': arm,
         'before': before, 'after': before, 'call_id':'one', 'name':'get_booking',
         'arguments': {'booking_id':'BK-A07'}, 'result': {}, 'conversation_turn':0}
     raw = (json.dumps(row) + '\n').encode()
@@ -107,6 +109,7 @@ def fixture_files(folder):
 def test_journal_mirror_count_hash_chain_and_trajectory_identity(tmp_path):
     c = fixture_files(tmp_path)
     assert grade_state_trial(tmp_path, c)['score'] == 100
+    assert grade_state_trial(tmp_path, c,arm='pi-memweave')['score'] is None
     for name in ['domain-events.mirror.jsonl', 'domain-events.end.json', 'state-trajectory-original.json']:
         path = tmp_path/name; old = path.read_bytes(); path.write_text('{}')
         assert grade_state_trial(tmp_path, c)['score'] is None
@@ -123,6 +126,9 @@ def test_state_program_grade_reaches_existing_report_without_official_judge_scor
     trial = tmp_path/'native-trial'; trial.mkdir()
     private_trial = private/trial.name; private_trial.mkdir()
     c = fixture_files(private_trial)
+    plugin=tmp_path/'plugin-trial';plugin.mkdir()
+    plugin_private=private/plugin.name;plugin_private.mkdir()
+    fixture_files(plugin_private,arm='pi-memweave')
     outer = {'adapter_kind':'state-business-v1','state_business':c,
         'metric_matrix':[{'metric_id':m['id'],'design_status':'PLANNED' if m['id']=='S.common.protected_constraints' else 'DESIGN_NA',
             'reason':'fixed test-only applicability','opportunity_ids':['state-program']}for m in catalogue()['metrics']]}
@@ -133,7 +139,7 @@ def test_state_program_grade_reaches_existing_report_without_official_judge_scor
     collection = {'tools':{},'state_metrics':{},'cache':{},'estimated_usd':0,'collection_complete':True}
     outcome = {'result_path':str(trial/'result.json'),'collection':collection,'exception':None,'verifier':None}
     (tmp_path/'pair-result.json').write_text(json.dumps({'arms':[
-        dict(outcome, arm='pi-native'),dict(outcome,arm='pi-memweave')]}))
+        dict(outcome, arm='pi-native'),dict(outcome,arm='pi-memweave',result_path=str(plugin/'result.json'))]}))
     result = single_report(tmp_path,tmp_path/'output')
     assert result['collection_accepted']
     report = json.loads((tmp_path/'output/results.json').read_text())

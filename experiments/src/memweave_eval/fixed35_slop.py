@@ -40,7 +40,7 @@ def slop_task(case,prompts:Path,output:Path,*,base_image,snapshot_excludes):
     return {'case_id':case['pack_case_id'],'problem':name,'task_path':str(task),
         'stages':[s['name']for s in steps],'prompt_sha256':{p.name:file_digest(p)for p in files},
         'public_inputs_only':True,'original_scoring':'pinned official eval-snapshot for every checkpoint',
-        'verifier_resource_policy':'same2 CPU/8192 MiB caps injected only into Docker SDK create kwargs; upstream official scoring untouched; owned-run watchdog',
+        'verifier_resource_policy':'same2 CPU/8192 MiB caps on owned Docker SDK/CLI controller; actual HostConfig verified; upstream tests untouched; owned-run watchdog',
         'actor_resources':config['environment'],'total_actor_seconds':1800,
         'model_visible_adaptations':['full native Pi interface','persistent Session and workspace across checkpoints',
             'common cumulative case time cap; official rendered prompt bytes unchanged']}
@@ -66,9 +66,24 @@ def checkpoint_outcome(report):
     s,n=sum(passed.values()),sum(total.values())
     if n==0 or type(report['pytest_collected'])is not int or report['pytest_collected']<=0:
         return {'score':None,'status':'REPAIR_REQUIRED','reason':'no actual tests collected'}
-    return {'score':100*int(s==n and report['pytest_exit_code']==0),'partial_score':100*s/n,
-        'passed':s,'total':n,'collected':report['pytest_collected'],'status':'SCORED',
-        'raw_formula':'all original checkpoint and applicable regression test groups must pass'}
+    skipped=[]
+    if report.get('problem_name')=='database_migration'and report.get('checkpoint_name')in {'checkpoint_3','checkpoint_4','checkpoint_5'}:
+        groups=report.get('tests')
+        if not isinstance(groups,dict):return {'score':None,'status':'MISSING_EVIDENCE','reason':'per-test skip evidence required for fixed applicable-test contract'}
+        for group,counts in groups.items():
+            for identity in counts.get('skipped',[]):
+                if group=='checkpoint_1-Regression'and identity=='test_foreign_keys_disabled_during_drop_column':
+                    skipped.append((group,identity))
+        if len(skipped)>1:return {'score':None,'status':'INVALID','reason':'duplicate fixed skipped test'}
+    effective=n-len(skipped)
+    if effective<s or effective<=0:return {'score':None,'status':'INVALID','reason':'inconsistent applicable test denominator'}
+    return {'score':100*int(s==effective and report['pytest_exit_code']==0),'partial_score':100*s/effective,
+        'passed':s,'total':effective,'collected':report['pytest_collected'],'status':'SCORED',
+        'original_reported_passed':s,'original_reported_total':n,'original_reported_partial_score':100*s/n,
+        'original_all_reported_tests_score':100*int(s==n and report['pytest_exit_code']==0),
+        'source_conditional_skips':skipped,'mapping_version':'fixed35-slop-applicable-tests-v2',
+        'score_channel':'derived strict all applicable checkpoints; original reported counts retained unchanged',
+        'raw_formula':'all original checkpoint and applicable regression groups AND; only pinned checkpoint-1/2-only test excluded at checkpoints3-5'}
 
 
 def sequential_outcome(reports,expected_stages):
@@ -79,15 +94,19 @@ def sequential_outcome(reports,expected_stages):
     # A known failure proves the whole strict outcome failed even if another
     # checkpoint is missing, but collection is still rejected until repaired.
     failed=any(p.get('score')==0 for p in points.values())
+    original=[p.get('original_all_reported_tests_score')for p in points.values()]
     return {'score':0 if failed else 100 if complete else None,
         'partial_score':sum(p['partial_score']for p in points.values())/len(points)if complete and all(p['partial_score']is not None for p in points.values())else None,
         'status':'SCORED'if complete else'REPAIR_REQUIRED','collection_complete':complete,
-        'checkpoints':points,'aggregation':'strict AND over every fixed checkpoint; partial is equal-checkpoint mean'}
+        'checkpoints':points,'original_all_reported_tests_AND':0 if 0 in original else 100 if all(v==100 for v in original)else None,
+        'aggregation':'derived strict AND over every fixed applicable checkpoint; partial is equal-checkpoint mean; original counts separate'}
 
 
 def evaluate_trial(trial:Path,*,problem,stages,runner,environment,sources,output:Path,deadline,env,expected_image,cpus=2,memory_mb=8192,fixture_only=False):
     if problem not in PROBLEMS or stages!=[f'checkpoint_{i}'for i in range(1,PROBLEMS[problem]+1)]:
         raise ValueError('Slop fixed checkpoint sequence mismatch')
+    if problem=='database_migration'and file_digest(Path(sources)/problem/'tests/test_checkpoint_1.py')!='59568d555215b985f90da89e3a9d072565c6fd1fc73c826a214b8207cc148f9c':
+        raise ValueError('fixed conditional skip source changed; do not infer applicability from a new verifier')
     output.mkdir(parents=True,exist_ok=False);reports={};evidence={}
     for index,stage in enumerate(stages,1):
         artifacts=trial/'steps'/stage/'artifacts'
@@ -143,7 +162,7 @@ def evaluate_trial(trial:Path,*,problem,stages,runner,environment,sources,output
         reports[stage]=json.loads(report.read_text())if report.exists()else None
         evidence[stage]={'exit_code':exit_code,'report':str(report),'sha256':file_digest(report)if report.exists()else None}
     result=dict(sequential_outcome(reports,stages),problem=problem,source_evidence=evidence,
-        verifier='official pinned Slop eval-snapshot, no LLM judge',fixture_scores_included=fixture_only)
+        verifier='original pinned Slop eval-snapshot, no LLM judge; applicable strict score and original reported counts separate',fixture_scores_included=fixture_only)
     atomic_json(output/'official-outcome.json',result,immutable=True)
     return result
 
@@ -168,6 +187,6 @@ def score_pair(root:Path,output:Path,*,fixture_only=False):
             deadline=1793661132.,env=env,expected_image=config['image_id'],fixture_only=fixture_only)
     with ThreadPoolExecutor(max_workers=2)as pool:arms=dict(pool.map(score,['pi-native','pi-memweave']))
     record={'case_id':admission['case_id'],'arms':arms,'fixture_scores_included':fixture_only,
-        'version':'fixed35-slop-official-20261102-v1','admission_sha256':file_digest(root/'admission.json')}
+        'version':'fixed35-slop-applicable-20261102-v2','admission_sha256':file_digest(root/'admission.json')}
     atomic_json(output/'pair-official-outcomes.json',record,immutable=True)
     return output/'pair-official-outcomes.json'

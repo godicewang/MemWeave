@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261102-v2'
+VERSION='fixed35-score-20261102-v3'
 
 
 def weighted_profile(metrics,profile,*,allowed_ids=None):
@@ -65,7 +65,7 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
         if contract.get('adapter_kind')=='state-business-v1':
             from .fixed35_state_behavior import grade_state_trial
             private=Path(admission['agent_options']['state_evaluator_output'])/trial.name
-            behavior=grade_state_trial(private,contract['state_business'])
+            behavior=grade_state_trial(private,contract['state_business'],arm=arm)
         reward=behavior['native']['native_outcome']/100 if admission['family']=='mab'else (outcome.get('verifier')or{}).get('rewards',{}).get('reward')
         if admission['family']=='slop':
             behavior=official['arms'][arm];reward=behavior['score']/100 if behavior['score']is not None else None
@@ -84,9 +84,17 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             'finance':{'cache_metrics':collection['cache']},'normalization_evidence':{},
             'collection':collection,'original_exception':outcome['exception'],'case_behavior':behavior}
         if admission['family']=='state':row['official_llm_judged_result']=row_official
+        if contract.get('task_behavior')and arm=='pi-memweave':
+            from .fixed35_task_behavior import grade_task_trial
+            if contract['task_behavior'].get('fixture_only')is not False:
+                raise ValueError('actual-case Task contract must explicitly reject fixture scores')
+            row['behavior_metrics']=grade_task_trial(trial,contract['task_behavior'])
+            row['task_behavior']=row['behavior_metrics']
         if delivery:
             for name in ('state_latest_at_prepare','provider_delivery_integrity'):
                 row['contract_metrics'][name]=delivery[name]
+        if contract.get('reference_contract')=='known-complete-text-v1':
+            row['contract_metrics']['reference_integrity']=collection.get('known_reference_integrity',{})
         row['_normalization_cost_pair']={'native':pair['arms'][0]['collection']['estimated_usd'],
             'plugin':pair['arms'][1]['collection']['estimated_usd'],
             'compatible':all(a['collection']['collection_complete']for a in pair['arms'])}
@@ -125,6 +133,11 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             if spec['design_status']=='DESIGN_NA'or arm=='pi-native'and item['applicability']=='plugin':
                 item.update(score=None,status='DESIGN_NA',reason='Plugin-only metric in native mode'
                     if arm=='pi-native'and item['applicability']=='plugin'else spec['reason'])
+            elif original_id.startswith('Q1.tool.')and '.duration.'in original_id and \
+                    collection.get('execution_boundary_collection',{}).get('complete')is True and \
+                    collection['tools'].get(original_id.split('.')[2],{}).get('executions')==0:
+                item.update(score=None,status='CONDITIONAL_NO_OPPORTUNITY',
+                    reason='complete independent execution log proves this tool execute() never started; no execution latency denominator')
             elif item['status']=='not_applicable':
                 item.update(status='CONDITIONAL_NO_OPPORTUNITY',design_reason=spec.get('conditional_na'))
             elif item['status'] in {'unknown','partial'}:

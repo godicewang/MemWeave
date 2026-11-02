@@ -1,4 +1,4 @@
-// Read-only evaluation boundary. Hashes/IDs only; never injects context or saves State bodies.
+// Read-only evaluation boundary; optional CAS evidence stays outside model context and runtime State.
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
