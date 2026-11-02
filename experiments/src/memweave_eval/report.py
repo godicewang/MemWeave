@@ -205,6 +205,12 @@ def summarize(rows: list[dict]) -> dict:
 
 def generate_report(root: Path) -> dict:
     lock = json.loads((root / "experiment.lock.json").read_text())
+    if lock.get('schema_version')==3:
+        from .fixed35_report import single_report
+        if (root/'reports/results.json').exists():
+            result=json.loads((root/'reports/results.json').read_text())
+            return {'complete':True,'collection_accepted':result['collection_accepted'],'report':str(root/'reports')}
+        return single_report(root)
     if lock.get('schema_version') == 2:
         from .campaign_report import generate_campaign_report
         return generate_campaign_report(root)

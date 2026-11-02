@@ -19,9 +19,21 @@ def register(sub):
     replay.add_argument('root',type=Path)
     replay.add_argument('--transport',type=Path,required=True)
     replay.add_argument('--output',type=Path,required=True)
+    run=commands.add_parser('run',help='Run an admitted case through the existing paired Harbor/Pi path')
+    run.add_argument('admission',type=Path)
+    run.add_argument('--output',type=Path,required=True)
+    report=commands.add_parser('report',help='Recompute offline into a new explicit output directory')
+    report.add_argument('root',type=Path)
+    report.add_argument('--output',type=Path,required=True)
 
 
 def execute(args):
+    if args.fixed35_command=='report':
+        from .fixed35_report import single_report
+        return single_report(args.root,args.output)
+    if args.fixed35_command=='run':
+        from .fixed35_campaign import run_pair
+        return run_pair(args.admission,args.output)
     if args.fixed35_command=='sources':
         args.output.mkdir(parents=True,exist_ok=False)
         record=prepare_source_manifest(args.design,args.sources,args.output/'sources.json')

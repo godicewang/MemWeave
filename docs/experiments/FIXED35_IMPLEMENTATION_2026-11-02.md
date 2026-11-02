@@ -50,7 +50,7 @@ C4须三个真实驱逐及对应快照，中间遗失即失败，不以无意义
 
 MAB八个独立上下文使用原数据4096-token自然句子分块（2/9/67/33/17/33/33/33块），通过Harbor持久Session逐块输入，仅末尾查询所选QA。原始substring score独立保留，strict answer和answer.json写文件为DERIVED动作指标。答案只在evaluator-only目录。八题共用同一已验证、按ID冻结的Python容器；原MAB无Pi官方容器，故此为明确接口/环境适配。
 
-STATE仍调用固定源码domain环境、用户模拟器、state-requirements判定与官方judge提示。完整Pi接口超出上游domain-only工具集合，标DERIVED；只公开domain schema与鉴权tool端点，task_summary/requirements和后续模拟器信息不进actor。短生命周期host端点关闭后保留镜像工具日志和前后业务状态。模拟用户和judge使用相同原子总账、独立角色，不走默认Azure配置。官方LLM judge分与程序行为分分列。
+STATE仍调用固定源码domain环境、用户模拟器、state-requirements判定与官方judge提示。完整Pi接口超出上游domain-only工具集合，标DERIVED；只公开domain schema与本case工具通道，task_summary/requirements和后续模拟器信息不进actor。临时HTTP回调因本机容器到Mac连接关闭未通过免费预检，改用已经验证的双向共享目录IPC，不修改网络/安全设置。通道只含真实工具请求及其返回，完整业务前后快照、模拟用户/官方judge输入输出只在actor挂载外的evaluator-only目录。模拟用户和judge使用相同原子总账、独立角色，不走默认Azure配置。官方LLM judge分与程序行为分分列。
 
 Switch原始Dockerfile在排除/usr/sbin后调用useradd，实测构建127。独立副本仅改为现有/usr/sbin/useradd；原始checkout、指令、16步骤、grader和测试不变。TB-02/TB-09只准入按内容hash审查的本地服务Compose：无host ports、host mounts、特权或主机网络，不改系统设置。
 
@@ -59,3 +59,15 @@ Switch原始Dockerfile在排除/usr/sbin后调用useradd，实测构建127。独
 Slop使用额外冻结的官方runner af5a9cbc311605b5cceb80200ca9832bdff2d7b1及其uv.lock；只用eval-snapshot/tools入口运行题目测试，不直接pytest。其CLI依赖曾尝试初始化用户mini-swe-agent目录，被沙箱拒绝后经工具审批允许默认空目录初始化；没有创建凭据或修改网络/安全设置。
 
 截至13:20 UTC仍无付费调用。已观察365项回归、TypeScript类型检查与Rule资源校验通过；MAB真实CLI假provider双臂并发及CAS重放通过。Mirror只作为原始证据恢复源；fixture通过不记为actor行为通过。
+
+### 14:20 UTC实施检查点（尚未正式运行）
+
+新增现有CLI的`fixed35 run`，仍调用Harbor的完整Pi而不另建Agent Loop。逐案例准入冻结task/运行时/gold/映射hash、评估器代码快照、两臂同资源/累计时间/额度；具备主机侧起跑屏障和随runner释放的临时caffeinate。多阶段采集按producer/sequence和request ID去重，累积Session副本须字节前缀一致，只选择最长原件用于统计，不能把Harbor归档复制当新调用。State在工具提交后及实际请求准备边界保存评估侧内容寻址证据；真实CLI两阶段免费测试已证明Session延续及这条采集链路。
+
+自动单案例report同时导出原始口径、百分制、s/f/u/n、公式、原因和权重；旧fixture ID改用明确F35 ID，fixture不参与actor得分。研究映射仍需逐案例冻结为执行契约。空或遗漏完整期望集合不能通过采集验收；不存在证据不得用默认false/空列表充当已知情况。当前缺失仍阻止验收，修复及例外政策按上文处理。
+
+MAB纠错适配使用预注册的有限实体/值字面关系与旧值失效、写入先后、首次动作共同检查，明确不是通用自由文本语义判断。MAB-03已核对真实链：Christian Abbiati→cornerback→field hockey→Philippines；不能误用较旧American football。MAB-01旧/新CEO都在原第一输入块；默认N=200不能保证三次驱逐。已提出仅隔离评测实例N=8/B=2与自然句子分块的派生压力配置请求，等待明确选择，尚未修改生产默认值或启动依赖该选择的正式MAB配对。
+
+控制结果保留全部版本：Slop v1缺uv、v2 Docker SDK/CLI架构不一致产生125且collected=0，不能视为空解成功；v3统一采用官方SDK实际原生架构后，已观察前阶段reference全通过、nop真实零分，剩余仍运行。WebArena公开镜像下载中断/HTML门禁分别留原始错误；不绕过访问控制，标准HTTP Range恢复仅在服务明确支持时继续。
+
+费用截至本检查点只有MAB环境两次真实canary USD0.000197208（峰值估算，非账单）；无正式benchmark actor。State专用工具仍不可用，未用Bash改State。

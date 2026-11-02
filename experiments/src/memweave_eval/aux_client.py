@@ -9,12 +9,13 @@ from pathlib import Path
 
 class GuardedAuxClient:
     def __init__(self, *, ledger, trace, evidence, auth, arm, case_id, run_id, deadline,
-                 role, node='node', max_output=8192):
+                 role, node='node', max_output=8192,episode_budget=None):
         if role not in {'user_simulator','official_judge','preflight'}:
             raise ValueError('unregistered auxiliary role')
         self.options={'ledger': str(ledger),'trace': str(trace),'evidence': str(evidence),'auth': str(auth),
                           'arm': arm,'case_id': case_id,'run_id': run_id,'deadline': deadline,'role': role}
         self.node,self.max_output=node,max_output
+        self.episode_budget=episode_budget
 
     @property
     def provider_name(self):return 'deepseek'
@@ -30,6 +31,7 @@ class GuardedAuxClient:
                  MEMWEAVE_EVAL_CASE_ID=o['case_id'],MEMWEAVE_EVAL_RUN_ID=o['run_id'],
                  MEMWEAVE_EVAL_DEADLINE=str(o['deadline']),MEMWEAVE_EVAL_ROLE=o['role'],
                  MEMWEAVE_EVAL_MAX_OUTPUT=str(self.max_output))
+        env['MEMWEAVE_EVAL_EPISODE_BUDGET']=str(self.episode_budget or 0)
         payload={'messages':messages,'max_tokens':min(max_tokens,self.max_output),
                  'temperature':temperature,'json':json_mode}
         result=subprocess.run([self.node,str(Path(__file__).with_name('aux_request.mjs'))],

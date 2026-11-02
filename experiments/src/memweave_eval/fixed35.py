@@ -44,7 +44,22 @@ def checkpoint_verdict(contract, evidence):
                            for i in required}}
 
 
-def aggregate_metric(rows):
+def aggregate_metric(rows, *, expected_cases=None):
+    rows=list(rows)
+    observed={(row['benchmark'],row['case_id'])for row in rows}
+    omitted=[]
+    if expected_cases is not None:
+        expected_cases=list(expected_cases)
+        expected={(row['benchmark'],row['case_id']):row for row in expected_cases}
+        if len(expected)!=len(expected_cases):
+            raise ValueError('duplicate frozen expected case')
+        if observed-set(expected):
+            raise ValueError('metric row outside frozen expected case set')
+        for identity in set(expected)-observed:
+            row=expected[identity]
+            omitted.append(identity)
+            rows.append({**row,'score':None,'status':'DESIGN_NA' if row.get('design_status')=='DESIGN_NA' else 'NOT_RUN',
+                         'reason':row.get('reason') or 'Expected metric row absent'})
     groups = defaultdict(list)
     counts = {'valid_cases': 0, 'eligible_cases': 0, 'design_na': 0, 'missing': 0, 'excluded': 0, 'not_run': 0}
     identities = set()
@@ -79,7 +94,9 @@ def aggregate_metric(rows):
                   for name, values in sorted(groups.items())}
     return {'score': sum(b['score'] for b in benchmarks.values())/len(benchmarks) if benchmarks else None,
             'benchmarks': benchmarks, **counts,
-            'collection_accepted': counts['missing'] == counts['excluded'] == counts['not_run'] == 0,
+            'collection_accepted': bool(rows) and expected_cases is not None
+                and counts['missing'] == counts['excluded'] == counts['not_run'] == 0,
+            'expected_set_verified':expected_cases is not None,'omitted_rows':sorted(omitted),
             'aggregation': 'equal_cases_within_benchmark_then_equal_available_benchmarks',
             'version': VERSION}
 

@@ -45,15 +45,18 @@ export default function fixture(pi:any) {
     calls++;
     if(process.env.MEMWEAVE_EVAL_HANG_FIXTURE==='1')return new Promise(()=>setInterval(()=>{},1000));
     const create=process.env.MEMWEAVE_EVAL_VARIANT==='pi-memweave' && calls===1;
+    const domain=Boolean(process.env.MEMWEAVE_EVAL_DOMAIN_DESCRIPTOR) &&
+      calls===(process.env.MEMWEAVE_EVAL_VARIANT==='pi-memweave'?2:1);
+    const domainProbe=domain?JSON.parse(fs.readFileSync(process.env.MEMWEAVE_EVAL_DOMAIN_DESCRIPTOR!,'utf8')).probe:null;
     const query=process.env.MEMWEAVE_EVAL_SEALED==='1' && calls===(process.env.MEMWEAVE_EVAL_VARIANT==='pi-memweave'?2:1);
     const command=process.env.MEMWEAVE_EVAL_EXECUTION_NEGATIVE==='1'?"node -e 'process.exit(0)'":
       "which python3 || true; command -v python3 || true; printf '%s\\n' 'python|perl' | grep -E 'python|perl'; cat > /tmp/cli-probe.c <<'EOF'\n"+
       "typedef struct Node node;\nnode *root;\nEOF\ncc -fsyntax-only /tmp/cli-probe.c && test -s /tmp/cli-probe.c";
-    const delta=query?{role:'assistant',tool_calls:[{index:0,id:'cli-query',type:'function',function:{name:'bash',arguments:JSON.stringify({command})}}]}:create?{role:'assistant',tool_calls:[{index:0,id:'cli-create',type:'function',function:{
+    const delta=domain?{role:'assistant',tool_calls:[{index:0,id:'cli-domain-read',type:'function',function:{name:domainProbe.name,arguments:JSON.stringify(domainProbe.arguments)}}]}:query?{role:'assistant',tool_calls:[{index:0,id:'cli-query',type:'function',function:{name:'bash',arguments:JSON.stringify({command})}}]}:create?{role:'assistant',tool_calls:[{index:0,id:'cli-create',type:'function',function:{
       name:'task_create',arguments:JSON.stringify({title:'CLI probe',goal:'Verify CLI State delivery',
         project_name:'probe',summary:'offline CLI smoke',keywords:['probe']})}}]}:{role:'assistant',content:'OK'};
     const frames=[{id:'cli-fixture',model:'deepseek-flash',choices:[{index:0,delta,finish_reason:null}]},
-      {id:'cli-fixture',choices:[{index:0,delta:{},finish_reason:(create||query)?'tool_calls':'stop'}],
+      {id:'cli-fixture',choices:[{index:0,delta:{},finish_reason:(create||query||domain)?'tool_calls':'stop'}],
       usage:{prompt_tokens:100,completion_tokens:50}}];
     return deliver(frames.map(f=>'data: '+JSON.stringify(f)+'\n\n').join('')+'data: [DONE]\n\n','text/event-stream',init);
   };

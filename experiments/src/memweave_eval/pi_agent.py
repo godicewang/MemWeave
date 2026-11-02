@@ -51,6 +51,7 @@ class PiExperimentOptions(PiOptions):
     evaluation_canary: bool = False
     evaluation_request_limit: int | None = None
     evaluation_episode_budget: float | None = None
+    evaluation_pair_barrier: str | None = None
     runtime_plan: str | None = None
     runtime_plan_sha256: str | None = None
     prepare_only: bool = False
@@ -406,7 +407,7 @@ if(a.length!==EXPECTED || s.length!==EXPECTED)throw Error('CLI guard missing or 
 if(e.some(x=>x.event==='sealed_tool_rejected'))throw Error('Harmless query rejected');
 fs.renameSync('/logs/agent/cli-request-trace.jsonl','/logs/agent/cli-positive-trace.jsonl');
 fs.renameSync('/logs/agent/cli-fake-upstream.jsonl','/logs/agent/cli-positive-upstream.jsonl');
-""".replace('EXPECTED',str((2 if self.options.variant=='pi-memweave' else 1)+(1 if self._evaluation_sealed else 0)))
+""".replace('EXPECTED',str((2 if self.options.variant=='pi-memweave' else 1)+(1 if self._evaluation_sealed else 0)+(1 if getattr(self,'_evaluation_domain_descriptor',None) else 0)))
         await self.exec_as_agent(environment,'node --input-type=module -e '+shlex.quote(validate),timeout_sec=20)
         if self._evaluation_sealed:
             await self.exec_as_agent(environment,command,timeout_sec=120,env={'MEMWEAVE_EVAL_EXECUTION_NEGATIVE':'1'})
@@ -511,7 +512,10 @@ positive:true,lost_guard_upstream_requests:0,actual_cli_pid_deadline:true}));
         self._agent_started = time.monotonic()
         self._evaluation_stage=getattr(self,'_evaluation_stage',0)+1
         if not hasattr(self,'_episode_started_unix'):
-            self._episode_started_unix=time.time()
+            from .pair_barrier import paired_start
+            self._episode_started_unix=await paired_start(
+                Path(self.options.evaluation_pair_barrier) if self.options.evaluation_pair_barrier else None,
+                self.options.variant)
         try:
             if self.options.evaluation_canary:
                 instruction='Reply only OK. Do not call any tools. This is a connectivity canary.'

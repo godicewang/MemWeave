@@ -31,3 +31,5 @@ if(sent!==0)throw Error('disabled legacy detour leaked');
     originals=[json.loads(read_object(tmp_path/'contents',e['record_ref']))for e in events]
     assert originals[0]['input']['facts']==['scope A: 5 ms']
     assert originals[2]['result']['content'][0]['text']=='state_version: 3'
+    snapshots=[e for e in data['events']if e['event']=='state_after_tool']
+    assert snapshots[0]['state']['status']=='SESSION_CONTEXT_UNAVAILABLE'

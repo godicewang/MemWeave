@@ -1,0 +1,120 @@
+"""Fixed-case admissions use the existing Harbor/Pi runner and its quota guard."""
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
+from pathlib import Path
+
+from .fixed35_collection import collect_episode
+from .fixed35_execution import BASE, MODEL_CUTOFF, job_config
+from .runner import execute_harbor, trial_results, verify_package
+from .storage import atomic_json, file_digest
+from .suites import task_digest
+
+
+def trusted_environment(code: Path):
+    env={k:v for k,v in os.environ.items()if k in {'PATH','HOME','LANG','LC_ALL','TERM','TMPDIR'}}
+    env.update(DOCKER_HOST='unix:///Users/godice/.colima/memweave-eval/docker.sock',
+        DOCKER_CONFIG=str(BASE/'tools/docker-config'),PYTHONPATH=str(code/'experiments/src')+
+        ':/tmp/memweave-35-20261102/deps',HARBOR_TELEMETRY='0',DO_NOT_TRACK='1')
+    env['PATH']=str(BASE/'tools/native/bin')+':'+str(BASE/'tools/bin')+':'+env['PATH']
+    return env
+
+
+def validate_admission(record):
+    for key in ('case_id','benchmark','task_path','task_sha256','runtime_plan','runtime_plan_sha256',
+                'code_path','contract_path','contract_sha256','resources','seconds','episode_budget',
+                'preflight_evidence'):
+        if key not in record:
+            raise ValueError('missing admission field '+key)
+    if not record['preflight_evidence']:
+        raise ValueError('no preflight evidence')
+    for source in record['preflight_evidence']:
+        if not Path(source).is_file():
+            raise ValueError('preflight evidence absent')
+    if task_digest(Path(record['task_path']))!=record['task_sha256']:
+        raise ValueError('admitted task changed')
+    for key in ('runtime_plan','contract_path'):
+        expected=record['runtime_plan_sha256' if key=='runtime_plan' else 'contract_sha256']
+        if file_digest(Path(record[key]))!=expected:
+            raise ValueError('admitted evaluator input changed')
+    if not 0 < record['seconds'] <= 2700 or record['episode_budget'] < .31:
+        raise ValueError('invalid bounded episode policy')
+
+
+def run_pair(admission: Path, root: Path):
+    record=json.loads(admission.read_text());validate_admission(record)
+    if time.time()>=MODEL_CUTOFF:
+        raise TimeoutError('global actor cutoff reached')
+    root.mkdir(parents=True,exist_ok=False)
+    atomic_json(root/'admission.json',record,immutable=True)
+    atomic_json(root/'experiment.lock.json',{'schema_version':3,'protocol':'fixed35',
+        'admission_sha256':file_digest(root/'admission.json'),'evaluator_version':'fixed35-score-20261102-v1'},immutable=True)
+    run_id=root.name
+    ledger=BASE/'budgets/fixed35-20261102/quota.json'
+    account=json.loads(ledger.read_text())
+    if account['maximum_usd']!=19 or account['arm_limits']!={'pi-native':9.,'pi-memweave':9.,'preflight':1.}:
+        raise ValueError('unexpected fixed35 global budget')
+    from .fixed35_execution import PACKAGE, PACKAGE_SHA256, SUBJECT_COMMIT
+    verify_package(PACKAGE,PACKAGE_SHA256,SUBJECT_COMMIT)
+    env=trusted_environment(Path(record['code_path']))
+    overlay=root/'platform.yaml'
+    overlay.write_text('services:\n  main:\n    platform: '+record.get('platform','linux/amd64')+
+        '\n    labels:\n      org.memweave.eval.run: '+run_id+
+        '\n    volumes:\n      - '+str(ledger.parent)+':/opt/memweave-eval-control:rw\n')
+    parallel=2*record['resources']['cpus']<=12 and 2*record['resources']['memory_mb']<=38000
+    atomic_json(root/'run.json',{'run_id':run_id,'case_id':record['case_id'],'started_at':datetime.now(UTC).isoformat(),
+        'status':'RUNNING','parallel_arms':parallel,'ledger':str(ledger),'arms':{}},immutable=True)
+    watch=subprocess.Popen([sys.executable,'-m','memweave_eval.deadline_watchdog',str(root),run_id,
+        str(MODEL_CUTOFF),str(1793661732.)],env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True)
+    sleep_guard=subprocess.Popen(['caffeinate','-i','-w',str(os.getpid())],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+
+    def arm_run(arm):
+        cfg=job_config(root=root,task=Path(record['task_path']),case_id=record['case_id'],arm=arm,
+            run_id=run_id,plan=Path(record['runtime_plan']),deadline=MODEL_CUTOFF,resources=record['resources'],
+            seconds=record['seconds'],host_scored=record.get('host_scored',False),
+            episode_budget=record['episode_budget'],task_config=record.get('task_config'))
+        cfg['environment']['extra_docker_compose']=[str(overlay)]
+        cfg['agents'][0]['kwargs'].update(record.get('agent_options',{}))
+        if parallel:
+            cfg['agents'][0]['kwargs']['evaluation_pair_barrier']=str(root/'start-barrier')
+        if record.get('agent_import'):
+            cfg['agents'][0]['import_path']=record['agent_import']
+        code=execute_harbor(cfg,root,env,time.monotonic()+max(60,1793661732.-time.time()),20.)
+        results=trial_results(root/'harbor'/cfg['job_name'])
+        if len(results)!=1:
+            raise RuntimeError('expected exactly one actual trial')
+        path,result=next(iter(results.values()))
+        collection=collect_episode(path.parent,arm=arm,ledger=ledger)
+        outcome={'arm':arm,'exit_code':code,'result_path':str(path),'result_sha256':file_digest(path),
+            'exception':result.get('exception_info'),'verifier':result.get('verifier_result'),
+            'collection':collection,'finished_at':datetime.now(UTC).isoformat()}
+        atomic_json(root/(arm+'-collected.json'),outcome,immutable=True)
+        print(json.dumps({'case_id':record['case_id'],'arm':arm,'status':'TERMINAL',
+            'requests':collection['requests'],'estimated_usd':collection['estimated_usd'],
+            'exception':outcome['exception']},ensure_ascii=False),flush=True)
+        return outcome
+    try:
+        if parallel:
+            with ThreadPoolExecutor(max_workers=2)as pool:
+                arms=list(pool.map(arm_run,['pi-native','pi-memweave']))
+        else:
+            arms=[arm_run(a)for a in ('pi-native','pi-memweave')]
+        atomic_json(root/'pair-result.json',{'case_id':record['case_id'],'arms':arms,'finished_at':datetime.now(UTC).isoformat()},immutable=True)
+        from .fixed35_report import single_report
+        report=single_report(root)
+        atomic_json(root/'run.json',{'status':'TERMINAL','case_id':record['case_id'],
+            'run_id':run_id,'arms':arms,'report':report,'finished_at':datetime.now(UTC).isoformat()})
+        return {'root':str(root),'case_id':record['case_id'],'arms':len(arms)}
+    finally:
+        check=subprocess.run(['docker','ps','--filter','label=org.memweave.eval.run='+run_id,
+            '--format','{{.ID}}'],env=env,capture_output=True,text=True,timeout=15,check=False)
+        if check.returncode==0 and not check.stdout.strip():
+            (root/'.watchdog-stop').touch();watch.wait(timeout=20)
+            atomic_json(root/'cleanup.json',{'confirmed_stopped':True,'at':datetime.now(UTC).isoformat()},immutable=True)
+        sleep_guard.terminate();sleep_guard.wait(timeout=10)

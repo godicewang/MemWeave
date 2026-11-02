@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import {createHash} from 'node:crypto';
 import {workspaceSummary} from './fetch_guard.mjs';
-import {attachBoundaries} from './request_boundary.ts';
+import {attachBoundaries,captureCommittedState} from './request_boundary.ts';
 import {attachGuard,guardReady} from './guard_bootstrap.mjs';
 import {contentEvidence} from './content_evidence.mjs';
 
@@ -55,6 +55,9 @@ export default function observe(pi: any) {
   const after=Number(process.env.MEMWEAVE_EVAL_PROGRESS_AFTER ?? 80);
   pi.on('message_end',(event: any)=>{
     if(event.message?.role!=='assistant' || typeof event.message.usage!=='object')return;
+    if(evidence)evidence.event('assistant_return',{
+      boundary_id:(globalThis as any)[Symbol.for('memweave.eval.requestBoundary')]?.boundary_id??null,
+      record_ref:evidence.put(event.message)});
     returns++;
     if(after>0 && !sent && returns>=after) {
       sent=true;
@@ -64,8 +67,13 @@ export default function observe(pi: any) {
       pi.sendUserMessage('请简短汇报进度，然后继续完成刚才的任务。',{deliverAs:'steer'});
     }
   });
-  pi.on('tool_execution_end',(event:any)=>{
+  pi.on('tool_execution_end',(event:any,ctx:any)=>{
     record('tool_end',event.toolCallId);
+    if(evidence && ['task_create','task_resume','state_append','append_fact','append_decision',
+      'modify_fact','archive_fact','archive_decision','state_archive'].includes(event.toolName)){
+      evidence.event('state_after_tool',{call_id:event.toolCallId,tool:event.toolName,
+        state:captureCommittedState(ctx)});
+    }
     if(!['memory_read','state_read'].includes(event.toolName))return;
     const text=(event.result?.content??[]).filter((p:any)=>p.type==='text').map((p:any)=>p.text).join('\n');
     let value:any;try{value=JSON.parse(text);}catch{}

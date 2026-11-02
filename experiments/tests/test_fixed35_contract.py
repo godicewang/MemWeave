@@ -74,3 +74,16 @@ def test_selection_rejects_duplicate_source_case_even_under_different_labels():
     with pytest.raises(ValueError):
         validate_selection(selection, expected_count=2)
     assert selection == original
+
+
+def test_collection_acceptance_requires_nonempty_frozen_complete_expected_set():
+    assert aggregate_metric([])['collection_accepted'] is False
+    expected=[{'benchmark':'b','case_id':'one'},{'benchmark':'b','case_id':'two'}]
+    row={'benchmark':'b','case_id':'one','score':100,'status':'SCORED'}
+    partial=aggregate_metric([row],expected_cases=expected)
+    assert partial['not_run']==1 and partial['omitted_rows']==[('b','two')]
+    assert partial['collection_accepted'] is False
+    assert aggregate_metric([row],expected_cases=expected[:1])['collection_accepted'] is True
+    assert aggregate_metric([row])['collection_accepted'] is False
+    with pytest.raises(ValueError):
+        aggregate_metric([row],expected_cases=expected[:1]*2)
