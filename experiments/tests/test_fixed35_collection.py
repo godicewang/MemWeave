@@ -37,6 +37,7 @@ def test_long_qualification_counts_only_successful_unique_main_api_returns():
     response={'http_status':200,'stream_done':True,'successful_finish':True,'assistant_payload_present':True,
         'provider_error':False,'usage':{'prompt_tokens':100,'completion_tokens':1}}
     assert qualified_actor_calls({'main':request},{'main':response})==['main']
+    assert qualified_actor_calls({'main':request},{'main':response},fixture_control=True)==[]
     for change in [{'http_status':500},{'successful_finish':False},{'assistant_payload_present':False},
         {'provider_error':True},{'usage':{'prompt_tokens':0,'completion_tokens':0}},{'stream_done':False}]:
         assert qualified_actor_calls({'main':request},{'main':dict(response,**change)})==[]

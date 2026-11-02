@@ -97,7 +97,7 @@ def validate_admission(record):
     validate_case_design(json.loads(Path(record['contract_path']).read_text()))
     validate_episode_policy(record)
     allowed={'state_source_path','state_selector','evaluation_host_ledger','state_evaluator_output',
-        'evaluation_judge_deadline'}
+        'evaluation_judge_deadline','evaluation_state_overlay'}
     if set(record.get('agent_options',{}))-allowed:
         raise ValueError('case options may not replace frozen model, guard, output, time, or variant policy')
 

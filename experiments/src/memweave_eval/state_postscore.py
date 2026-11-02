@@ -1,6 +1,7 @@
 """Official STATE judges run after Harbor's actor phase, on the same quota authority."""
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -17,6 +18,9 @@ def score_state_trial(options,trial:Path,*,scorer=None,judge_factory=None,client
     output=private/'state-official-scores.json'
     if output.exists():raise ValueError('official STATE output already exists; use a versioned rescore, never overwrite')
     before=file_digest(original)
+    trajectory=json.loads(original.read_text())
+    if trajectory.get('fixture_only')is True or trajectory.get('metadata',{}).get('fixture_only')is True:
+        raise ValueError('fixture-only STATE trajectory cannot be sent to the paid official judge')
     source=Path(options['state_source_path']);domain_name,_=options['state_selector'].split('/',1)
     client=client_factory(ledger=options['evaluation_host_ledger'],trace=private/'official_judge-transport.jsonl',
         evidence=private/'official_judge-content',auth=options['auth_path'],arm=options['variant'],

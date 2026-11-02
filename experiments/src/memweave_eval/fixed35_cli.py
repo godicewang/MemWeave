@@ -19,6 +19,13 @@ def register(sub):
     state.add_argument('case_id',choices=[f'INT-0{i}'for i in range(1,6)])
     state.add_argument('--source',type=Path,required=True)
     state.add_argument('--output',type=Path,required=True)
+    state.add_argument('--overlay',choices=['equal-authority-conflict-v1','equal-authority-conflict-v2'])
+    conflict=commands.add_parser('state-conflict',help='Replay the selected INT-04 typed-authority overlay; no paid judge')
+    conflict.add_argument('trial',type=Path)
+    conflict.add_argument('--private',type=Path,required=True)
+    conflict.add_argument('--contract',type=Path,required=True)
+    conflict.add_argument('--arm',choices=['pi-native','pi-memweave'],required=True)
+    conflict.add_argument('--output',type=Path,required=True)
     switch=commands.add_parser('switch-contract',help='Bind selected Switch source stages and original tests; evaluator-only component, not Task admission')
     switch.add_argument('case_id',choices=['INT-06','INT-07'])
     switch.add_argument('--source',type=Path,required=True)
@@ -52,12 +59,19 @@ def register(sub):
     report.add_argument('root',type=Path)
     report.add_argument('--output',type=Path,required=True)
     report.add_argument('--official-outcomes',type=Path)
+    report.add_argument('--fixture-control',action='store_true',help='Explicitly label offline fake-provider control reports; rejected by real pack scoring')
     package=commands.add_parser('pack-report',help='Report the complete frozen 35-case matrix')
     package.add_argument('manifest',type=Path)
     package.add_argument('--output',type=Path,required=True)
 
 
 def execute(args):
+    if args.fixed35_command=='state-conflict':
+        from .state_conflict import grade_conflict_trial
+        result=grade_conflict_trial(args.trial,args.private,json.loads(args.contract.read_text()),arm=args.arm)
+        atomic_json(args.output,result,immutable=True)
+        return {'output':str(args.output),'paid_requests':0,'collection_complete':result['collection_complete'],
+            'fixture_only':result.get('fixture_only'),'status':'DERIVED_TYPED_AUTHORITY_PROTOCOL'}
     if args.fixed35_command=='switch-contract':
         from .fixed35_switch import switch_contract
         result=switch_contract(args.source,args.case_id)
@@ -92,7 +106,11 @@ def execute(args):
             'status':'EVIDENCE_REPLAY_NOT_A_NEW_ACTOR_RUN'}
     if args.fixed35_command=='state-contract':
         from .fixed35_state_behavior import state_contract
-        record=state_contract(args.source,args.case_id)
+        if getattr(args,'overlay',None):
+            if args.case_id!='INT-04':raise ValueError('equal-authority overlay is bound to selected INT-04')
+            from .state_conflict import conflict_contract
+            record=conflict_contract(args.source,state_records=args.overlay.endswith('v2'))
+        else:record=state_contract(args.source,args.case_id)
         atomic_json(args.output,record,immutable=True)
         return {'case_id':args.case_id,'output':str(args.output),'paid_requests':0,
             'status':'PROGRAM_ORACLE_COMPONENT_NOT_A_MODEL_RESULT'}
@@ -104,7 +122,8 @@ def execute(args):
         return pack_report(args.manifest,args.output)
     if args.fixed35_command=='report':
         from .fixed35_report import single_report
-        return single_report(args.root,args.output,getattr(args,'official_outcomes',None))
+        return single_report(args.root,args.output,getattr(args,'official_outcomes',None),
+            fixture_control=getattr(args,'fixture_control',False))
     if args.fixed35_command=='run':
         from .fixed35_campaign import run_pair
         return run_pair(args.admission,args.output)

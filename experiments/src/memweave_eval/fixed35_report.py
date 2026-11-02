@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261102-v4'
+VERSION='fixed35-score-20261102-v5'
 
 
 def weighted_profile(metrics,profile,*,allowed_ids=None):
@@ -36,7 +36,7 @@ def metric_alias(identity):
     return identity
 
 
-def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=None):
+def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=None,*,fixture_control=False):
     admission=json.loads((root/'admission.json').read_text())
     contract=json.loads(Path(admission['contract_path']).read_text())
     if file_digest(Path(admission['contract_path']))!=admission['contract_sha256']:
@@ -47,6 +47,8 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
         raise ValueError('matching actual Slop verifier outcomes required; fixture scores rejected')
     for outcome in pair['arms']:
         arm=outcome['arm'];collection=outcome['collection'];trial=Path(outcome['result_path']).parent
+        if collection.get('fixture_control')and not fixture_control:
+            raise ValueError('fake-provider collection requires explicit fixture-control report')
         agents=[p.parent for p in trial.rglob('request-trace.jsonl')]
         agent=max(agents,key=lambda p:(p/'request-trace.jsonl').stat().st_size)if agents else None
         engineering=task_engineering_metrics(agent)if agent else {}
@@ -66,6 +68,12 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             from .fixed35_state_behavior import grade_state_trial
             private=Path(admission['agent_options']['state_evaluator_output'])/trial.name
             behavior=grade_state_trial(private,contract['state_business'],arm=arm)
+        if contract.get('adapter_kind')=='state-equal-authority-v1':
+            from .state_conflict import grade_conflict_trial
+            private=Path(admission['agent_options']['state_evaluator_output'])/trial.name
+            behavior=grade_conflict_trial(trial,private,contract['state_business'],arm=arm)
+            if behavior.get('fixture_only')and not fixture_control:
+                raise ValueError('fake-provider overlay evidence requires explicit fixture-control report; never an actual score')
         reward=behavior['native']['native_outcome']/100 if admission['family']=='mab'else (outcome.get('verifier')or{}).get('rewards',{}).get('reward')
         if admission['family']=='slop':
             behavior=official['arms'][arm];reward=behavior['score']/100 if behavior['score']is not None else None
@@ -84,6 +92,9 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             'finance':{'cache_metrics':collection['cache']},'normalization_evidence':{},
             'collection':collection,'original_exception':outcome['exception'],'case_behavior':behavior}
         if admission['family']=='state':row['official_llm_judged_result']=row_official
+        if contract.get('adapter_kind')=='state-equal-authority-v1':
+            from .state_conflict import common_checkpoint_rows
+            row['derived_behavior_checkpoints']=common_checkpoint_rows(behavior,arm=arm)
         if contract.get('task_behavior')and arm=='pi-memweave':
             from .fixed35_task_behavior import grade_task_trial
             if contract['task_behavior'].get('fixture_only')is not False:
@@ -124,6 +135,9 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             if admission['case_id']in {'INT-01','INT-02'}:
                 explicit('S.case_v2.C8-missing',behavior['score'],
                     'Finite English clarification parser, actual domain actions and all protected-state checks; not a general semantic classifier')
+        elif contract.get('adapter_kind')=='state-equal-authority-v1':
+            explicit('S.common.protected_constraints',behavior['followthrough']['score'],
+                'Source required cancellation fields AND original lookup ordering AND all other fields at every observed domain boundary')
         normalized=normalize_trial_scores(row)
         metrics=[]
         assigned={m['metric_id']:m for m in contract['metric_matrix']}
@@ -151,6 +165,9 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             if contract.get('adapter_kind')=='state-business-v1'and not behavior['collection_complete']and original_id in {
                     'S.common.protected_constraints','S.case_v2.C8-missing'}and item['status']!='DESIGN_NA':
                 item['collection_status']='REPAIR_REQUIRED'
+            if contract.get('adapter_kind')=='state-equal-authority-v1'and not behavior['collection_complete']and original_id in {
+                    'S.common.protected_constraints','S.case_v2.C8-conflict'}and item['status']!='DESIGN_NA':
+                item['collection_status']='REPAIR_REQUIRED'
             item['opportunity_ids']=spec['opportunity_ids'];item['mapping_version']=VERSION
             metrics.append(item)
         row['normalized_metrics']=metrics
@@ -167,7 +184,7 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
         'rows':rows,'collection_accepted':all(r['collection']['collection_complete'] for r in rows)
             and (official is None or all(p['collection_complete']for p in official['arms'].values()))
             and not any(m.get('collection_status')=='REPAIR_REQUIRED'for r in rows for m in r['normalized_metrics']),
-        'fixture_scores_included':False,'official_outcomes_sha256':file_digest(official_outcomes)if official_outcomes else None,
+        'fixture_scores_included':fixture_control,'official_outcomes_sha256':file_digest(official_outcomes)if official_outcomes else None,
         'contract_sha256':admission['contract_sha256'],'contract_version':contract['version']}
     atomic_json(output/'results.json',result,immutable=True)
     columns=['case_id','arm','metric_id','meaning','raw','raw_formula','score','status','score_formula',
@@ -181,6 +198,13 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                     'raw_formula':m.get('raw_formula'),'score':m['score'],'status':m['status'],
                     'score_formula':m.get('score_formula'),'weight':json.dumps(m['weights']), 'reason':m.get('reason'),
                     **{k:m.get(k)for k in ('support_s','support_f','support_u','support_n','mapping_version')}})
+    derived=[dict(m,case_id=row['case_id'],arm=row['variant_id'])for row in rows for m in row.get('derived_behavior_checkpoints',[])]
+    if derived:
+        with (output/'derived-behavior.csv').open('w',newline='')as stream:
+            fields=['case_id','arm','id','meaning','applicability','raw','raw_formula','score','score_formula','status','mapping_version',
+                'weights','weight_reason','support_s','support_f','support_u','support_n','evidence_coverage','collection_complete']
+            writer=csv.DictWriter(stream,fieldnames=fields,extrasaction='ignore');writer.writeheader()
+            writer.writerows(dict(m,score='-'if m['status']=='DESIGN_NA'else m['score'],weights=json.dumps(m['weights']))for m in derived)
     text=['# 固定案例配对报告',f"\n案例：{admission['case_id']}；评分版本：{VERSION}。原始结果、派生行为与采集验收分别保留。\n",
           '|变体|指标|含义与原公式|原始值|百分制|状态/原因|','|---|---|---|---|---|---|']
     for row in rows:
@@ -188,6 +212,14 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             if m['status']=='diagnostic' or m['status']=='DESIGN_NA':continue
             values=[row['variant_id'],m['id'],str(m.get('meaning',''))+' / '+str(m.get('raw_formula','')),
                 json.dumps(m['raw'],ensure_ascii=False),str(m['score']),m['status']+': '+str(m.get('reason'))]
+            text.append('| '+' | '.join(v.replace('|','\\|').replace('\n',' ')for v in values)+' |')
+    if derived:
+        text.extend(['','## 派生案例的共同程序检查点','',
+            '共同检查点在两臂按同一程序判定；State条目仅插件适用，原生为设计NA。权重0，不替代原170行的State/记忆指标，不并入既有加权总分。fixture控制不作为模型成绩。','',
+            '|变体|指标|含义与原公式|原始值|百分制|状态|','|---|---|---|---|---|---|'])
+        for item in derived:
+            values=[item['arm'],item['id'],item['meaning']+' / '+item['raw_formula'],str(item['raw']),
+                '-'if item['status']=='DESIGN_NA'else str(item['score']),item['status']]
             text.append('| '+' | '.join(v.replace('|','\\|').replace('\n',' ')for v in values)+' |')
     (output/'report.md').write_text('\n'.join(text)+'\n')
     return {'complete':True,'collection_accepted':result['collection_accepted'],'report':str(output),'rows':len(rows)}

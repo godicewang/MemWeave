@@ -42,7 +42,8 @@ def unique_sessions(trial: Path):
     return chosen
 
 
-def qualified_actor_calls(requests,responses):
+def qualified_actor_calls(requests,responses,*,fixture_control=False):
+    if fixture_control:return []
     result=[]
     for identity,payload in requests.items():
         response=responses.get(identity,{})
@@ -57,7 +58,7 @@ def qualified_actor_calls(requests,responses):
     return result
 
 
-def collect_episode(trial: Path, *, arm, ledger: Path,auxiliary_roots=(),expected_episode=None):
+def collect_episode(trial: Path, *, arm, ledger: Path,auxiliary_roots=(),expected_episode=None,fixture_control=False):
     records={};requests={};responses={};locations={}
     stores=list(trial.rglob('request-content'))
     for private in auxiliary_roots:
@@ -78,6 +79,7 @@ def collect_episode(trial: Path, *, arm, ledger: Path,auxiliary_roots=(),expecte
     transport={};transport_records=[]
     actor_http=set()
     transport_paths=list(trial.rglob('request-trace.jsonl'))
+    if fixture_control:transport_paths.extend(trial.rglob('cli-request-trace.jsonl'))
     actor_paths=set(transport_paths)
     for private in auxiliary_roots:transport_paths.extend(private.rglob('*-transport.jsonl'))
     for path in transport_paths:
@@ -139,7 +141,7 @@ def collect_episode(trial: Path, *, arm, ledger: Path,auxiliary_roots=(),expecte
         return values
     usage=totals(actor_http);all_usage=totals(requests)
     known_usage={'input_tokens':sum(r['input']for r in settled),'output_tokens':sum(r['output']for r in settled)}
-    qualified=qualified_actor_calls({i:requests[i]for i in actor_http},responses)
+    qualified=qualified_actor_calls({i:requests[i]for i in actor_http},responses,fixture_control=fixture_control)
     from .fixed35_delivery import delivery_metrics
     delivery=delivery_metrics(transport_records,actor_http,enabled=arm=='pi-memweave')
     from .fixed35_business import execution_boundaries
@@ -148,6 +150,7 @@ def collect_episode(trial: Path, *, arm, ledger: Path,auxiliary_roots=(),expecte
     from .fixed35_references import grade_known_references
     references=grade_known_references(trial,events=events,locations=locations)
     return {'collection_complete':not unresolved and boundary['complete']and delivery['complete'],
+        'fixture_control':fixture_control,
         'transport_collection_complete':not unresolved,'execution_boundary_collection':boundary,'requests':len(requests),
         'delivery_metrics':delivery,
         'known_reference_integrity':references,

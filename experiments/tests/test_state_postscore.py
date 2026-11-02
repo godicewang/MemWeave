@@ -27,3 +27,13 @@ def test_host_judge_has_separate_deadline_and_preserves_actor_original(tmp_path)
         score_state_trial(options,trial,scorer=scorer,judge_factory=lambda c:('task','ux'),client_factory=client)
     with pytest.raises(ValueError,match='scoped quota'):
         score_state_trial(dict(options,evaluation_aux_quota_channels={}),trial,client_factory=client)
+
+
+@pytest.mark.parametrize('marker',[{'fixture_only':True},{'metadata':{'fixture_only':True}}])
+def test_fake_actor_never_constructs_a_paid_judge_client(tmp_path,marker):
+    private=tmp_path/'private/trial';private.mkdir(parents=True)
+    (private/'state-trajectory-original.json').write_text(json.dumps({'task_id':'fixture',**marker}))
+    def forbidden(**kwargs):raise AssertionError('paid client must not be constructed')
+    with pytest.raises(ValueError,match='fixture-only'):
+        score_state_trial({'state_evaluator_output':str(tmp_path/'private'),
+            'evaluation_aux_quota_channels':{'official_judge':'scoped-mock'}},tmp_path/'trial',client_factory=forbidden)

@@ -9,6 +9,7 @@ import copy
 import json
 import sys
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field
 
@@ -38,6 +39,7 @@ class StatePiOptions(PiExperimentOptions):
     state_evaluator_output:str
     evaluation_judge_deadline:float
     evaluation_aux_quota_channels:dict[str,str]=Field(default_factory=dict)
+    evaluation_state_overlay:Literal['equal-authority-conflict-v1','equal-authority-conflict-v2']|None=None
 
 
 class StatePi(ExperimentPi):
@@ -66,7 +68,17 @@ class StatePi(ExperimentPi):
         self._state_task=TaskDefinition.load(source/'state_bench/domains'/domain_name/'tasks'/(task_id+'.json'))
         self._state_data,_=load_task_environment(self._domain,self._state_task)
         self._state_environment=self._domain.environment_class(self._state_data.deep_copy(),now=self._state_task.now)
-        self._backend=DomainBackend(self._state_environment,self._private_output/'domain-events.jsonl',
+        backend_environment=self._state_environment
+        overlay_tools=[]
+        if self.options.evaluation_state_overlay:
+            if domain_name!='travel'or task_id!='47-adversarial_conflicting_cabin_claim'or self.options.evaluation_case_id!='INT-04':
+                raise ValueError('equal-authority overlay is bound to selected INT-04')
+            from .state_conflict import TOOL, ConflictEnvironment, conflict_contract
+            self._overlay_contract=conflict_contract(source,state_records=self.options.evaluation_state_overlay.endswith('v2'))
+            backend_environment=ConflictEnvironment(self._state_environment)
+            overlay_tools=[TOOL]
+            (self._private_output/'overlay-contract.json').write_text(json.dumps(self._overlay_contract))
+        self._backend=DomainBackend(backend_environment,self._private_output/'domain-events.jsonl',
             self.logs_dir/'domain-exchange',{
             'run_id':self.options.evaluation_run_id,'case_id':self.options.evaluation_case_id,
             'arm':self.options.variant})
@@ -74,7 +86,7 @@ class StatePi(ExperimentPi):
         self._evaluation_domain_descriptor=self._asset_root+'/evaluation/domain.json'
         self._evaluation_extra_extensions=[self._asset_root+'/evaluation/domain_tools.ts']
         descriptor={'exchange':'/logs/agent/domain-exchange','token':self._backend.token,
-                    'tools':self._domain.tool_schemas,
+                    'tools':self._domain.tool_schemas+overlay_tools,
                     'system_prompt':self._domain.agent_system_prompt.format(now=self._state_task.now,user_id=self._state_task.user_id)}
         if self.options.prepare_only:
             descriptor['probe']=({'name':'get_customer','arguments':{'customer_id':self._state_task.user_id}}
@@ -100,6 +112,8 @@ class StatePi(ExperimentPi):
         try:
             if self.options.prepare_only or self.options.evaluation_canary:
                 return await super().run(instruction,environment,context)
+            if self.options.evaluation_state_overlay:
+                return await self._run_overlay(environment,context)
             from state_bench.agents.base import BaseAgent
             from state_bench.orchestrator import run_task
             loop=asyncio.get_running_loop();owner=self
@@ -156,3 +170,24 @@ class StatePi(ExperimentPi):
                 'status':'ACTOR_TERMINAL_JUDGE_PENDING','trajectory':'state-trajectory-original.json'}))
         finally:
             if getattr(self,'_backend',None):self._backend.close()
+
+    async def _run_overlay(self,environment,context):
+        from state_bench.schemas import StateDiff, Trajectory
+        from state_bench.scoring import compute_efficiency
+        initial=copy.deepcopy(self._state_environment.get_full_snapshot())
+        prompt=self._overlay_contract['public_prompt']
+        self._backend.metadata.update(conversation_turn=0,actor_stage=1)
+        text=await self._turn(prompt,environment,context,0)
+        calls=[{k:r[k]for k in ('name','arguments','result')}for r in self._backend.calls]
+        conversation=[{'role':'user','content':prompt},{'role':'assistant','content':text,'tool_calls':calls}]
+        trajectory=Trajectory(task_id=self._state_task.task_id,user_id=self._state_task.user_id,
+            task_summary=self._state_task.task_summary,conversation=conversation,
+            state_diff=StateDiff.compute(initial,self._state_environment.get_full_snapshot()),
+            efficiency=compute_efficiency(conversation,calls),metadata={
+                'derived_protocol':self._overlay_contract['overlay_version'],
+                'fixture_only':self.options.prepare_only,
+                'user_interface':'typed deterministic customer resolution; no LLM user simulator',
+                'original_domain_and_requirements_unchanged':True})
+        trajectory.save(self._private_output/'state-trajectory-original.json')
+        (self._private_output/'state-actor-status.json').write_text(json.dumps({'status':'ACTOR_TERMINAL_JUDGE_PENDING',
+            'trajectory':'state-trajectory-original.json','derived_protocol':self._overlay_contract['overlay_version']}))
