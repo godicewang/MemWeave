@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import {gitWorktrees} from './workspace_git.mjs';
 import {treeProjection}from'./tree_projection.mjs';
+import {artifactSnapshot}from'./artifact_snapshot.mjs';
 import path from 'node:path';
 import {createHash, randomUUID} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
@@ -84,6 +85,7 @@ export function workspaceSummary(root='/app/interpreter') {
   for(const [name,definition]of Object.entries(config.projection_trees??{}))
     trees[name]=treeProjection(path.resolve(root,definition.path),definition);
   return {files,file_status,cargo,file_refs,
+    ...(config.artifact_files?{artifacts:artifactSnapshot(root,config.artifact_files,bytes=>contentEvidence()?.put(bytes))}:{}),
     ...(config.projection_trees?{tree_projections:trees}:{}),
     ...(config.worktrees?{git_worktrees:gitWorktrees(root,config.worktrees)}:{})}; // No evaluator metadata enters a model.
 }

@@ -37,6 +37,8 @@ v4之后新增[INT-04同权威冲突与State纠错v5离线验收](experiments/FI
 
 后续[独立生命周期判定](experiments/LIFECYCLE_ORACLE_EXTENSION_2026-11-03.md)补显式restart及真实Pi本地HTTP证据；[源题保护gold](experiments/SOURCE_PROTECTION_GOLD_2026-11-03.md)补TB-08／LONG-03／LONG-04的受控源材料检查点与11个真实CLI免费控制。均为评估实现验收，不是正式模型成绩。
 
+[WDM输出工件组件](experiments/WDM_ARTIFACT_ORACLE_2026-11-03.md)进一步独立检查LONG-02的几何／数组／二值格式契约；保留原始光学验收，不将格式控制当作完整题目成绩。
+
 2026-10-25 用户确认启动模式与本机宿主解耦：同一 Pi 配置目录，TUI 启动选择启用/未启用并显示状态，未启用恢复全局自动压缩且仅保留启动接线；详细行为以 Rule 技术稿 §14 与 PACKAGING.md 启动模式节为准，取代早期对启动框禁用时不恢复压缩的约定。
 
 | 文档 | 权威范围 |

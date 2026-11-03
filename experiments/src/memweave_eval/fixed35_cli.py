@@ -15,6 +15,10 @@ def register(sub):
     sources.add_argument('design',type=Path)
     sources.add_argument('--sources',type=Path,required=True)
     sources.add_argument('--output',type=Path,required=True)
+    wdm=commands.add_parser('wdm-contract',help='Freeze source-bound LONG-02 output artifact predicates; no model calls or admission')
+    wdm.add_argument('--design',type=Path,required=True)
+    wdm.add_argument('--source',type=Path,required=True)
+    wdm.add_argument('--output',type=Path,required=True)
     state=commands.add_parser('state-contract',help='Freeze evaluator-only program predicates for a pinned STATE case; no model calls')
     state.add_argument('case_id',choices=[f'INT-0{i}'for i in range(1,6)])
     state.add_argument('--source',type=Path,required=True)
@@ -92,6 +96,12 @@ def register(sub):
 
 
 def execute(args):
+    if args.fixed35_command=='wdm-contract':
+        from .wdm_artifact import wdm_contract
+        case=next(c for c in read_design(args.design)['selection']['cases']if c['pack_case_id']=='LONG-02')
+        result=wdm_contract(case,args.source,args.output)
+        return {'case_id':'LONG-02','version':result['version'],'paid_requests':0,'not_formal_admission':True,
+            'output':str(args.output),'required_assertions':result['required_assertions']}
     if args.fixed35_command=='source-protection-tasks':
         from .source_protection import derive_protection
         case=next(c for c in read_design(args.design)['selection']['cases']if c['pack_case_id']==args.case_id)
