@@ -72,6 +72,11 @@ def validate_case_design(contract):
             raise ValueError('structural design NA requires an explicit frozen reason')
 
 
+def validate_adapter_observers(record,contract):
+    if contract.get('adapter_kind')=='warranty-source-v1'and record.get('agent_import')!='memweave_eval.warranty_pi:WarrantyPi':
+        raise ValueError('warranty admission requires its read-only sidecar evidence wrapper; final files alone do not prove empty history')
+
+
 def validate_episode_policy(record):
     declared=tomllib.loads((Path(record['task_path'])/'task.toml').read_text()).get('agent',{}).get('timeout_sec')
     seconds=record['seconds'];budget=record['episode_budget']
@@ -103,7 +108,8 @@ def validate_admission(record):
         expected=record['runtime_plan_sha256' if key=='runtime_plan' else 'contract_sha256']
         if file_digest(Path(record[key]))!=expected:
             raise ValueError('admitted evaluator input changed')
-    validate_case_design(json.loads(Path(record['contract_path']).read_text()))
+    contract=json.loads(Path(record['contract_path']).read_text())
+    validate_adapter_observers(record,contract);validate_case_design(contract)
     validate_episode_policy(record)
     allowed={'state_source_path','state_selector','evaluation_host_ledger','state_evaluator_output',
         'evaluation_judge_deadline','evaluation_state_overlay'}

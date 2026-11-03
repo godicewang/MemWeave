@@ -15,6 +15,17 @@ def register(sub):
     sources.add_argument('design',type=Path)
     sources.add_argument('--sources',type=Path,required=True)
     sources.add_argument('--output',type=Path,required=True)
+    warranty=commands.add_parser('warranty-tasks',help='Bind TB-02 portal source gold and a shared claim-recording schema; no models or admission')
+    warranty.add_argument('--design',type=Path,required=True)
+    warranty.add_argument('--source',type=Path,required=True)
+    warranty.add_argument('--runtime-task',type=Path,required=True)
+    warranty.add_argument('--output',type=Path,required=True)
+    warranty_replay=commands.add_parser('warranty',help='Replay real signed final/first portal decisions and pre-submission State')
+    warranty_replay.add_argument('trial',type=Path)
+    warranty_replay.add_argument('--contract',type=Path,required=True)
+    warranty_replay.add_argument('--arm',choices=['pi-native','pi-memweave'],required=True)
+    warranty_replay.add_argument('--fixture-control',action='store_true')
+    warranty_replay.add_argument('--output',type=Path,required=True)
     fk=commands.add_parser('slop-fk-tasks',help='Derive SCB-02 source FK correction checkpoints; no model calls or admission')
     fk.add_argument('--design',type=Path,required=True)
     fk.add_argument('--source',type=Path,required=True)
@@ -123,6 +134,21 @@ def register(sub):
 
 
 def execute(args):
+    if args.fixed35_command=='warranty-tasks':
+        from .warranty_gold import freeze_contract
+        design=read_design(args.design);case=next(c for c in design['selection']['cases']if c['pack_case_id']=='TB-02')
+        matrix=[r for r in applicability_matrix(design)if r['case_id']=='TB-02']
+        for row in matrix:
+            if row['metric_id']=='S.common.protected_constraints':
+                row.update(design_status='PLANNED',opportunity_ids=['20-source-claim-decisions'],reason='Mean of 20 signed claim-specific multi-assertion checkpoints; original all-or-nothing reward remains separate')
+        result=freeze_contract(case,args.source,args.runtime_task,args.output,metric_matrix=matrix)
+        return {'case_id':result['case_id'],'task_path':result['task_path'],'paid_requests':0,'not_formal_admission':True}
+    if args.fixed35_command=='warranty':
+        from .warranty_gold import grade_trial
+        result=grade_trial(args.trial,json.loads(args.contract.read_text()),arm=args.arm)
+        if result['fixture_only']and not args.fixture_control:raise ValueError('Warranty fixture requires explicit fixture-control')
+        atomic_json(args.output,result,immutable=True)
+        return {'case_id':result['case_id'],'output':str(args.output),'fixture_only':result['fixture_only'],'collection_complete':result['collection_complete'],'paid_requests':0}
     if args.fixed35_command=='slop-fk-tasks':
         from .slop_fk_gold import freeze_contract
         design=read_design(args.design);case=next(c for c in design['selection']['cases']if c['pack_case_id']=='SCB-02')

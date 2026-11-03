@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261103-v20'
+VERSION='fixed35-score-20261103-v21'
 
 
 def mark_checkpoint_collection(metrics,points):
@@ -102,6 +102,10 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             behavior=grade_wdm_trial(trial,contract)
             if behavior['fixture_only']and not fixture_control:
                 raise ValueError('fake-provider WDM artifacts require explicit fixture-control reporting')
+        if contract.get('adapter_kind')=='warranty-source-v1':
+            from .warranty_gold import grade_trial
+            behavior=grade_trial(trial,contract,arm=arm)
+            if behavior['fixture_only']and not fixture_control:raise ValueError('Warranty source fixture cannot enter real results')
         if contract.get('adapter_kind')=='interrupt-final-source-v1':
             from .interrupt_source_gold import grade_capture
             capture_path=Path(admission['browser_evaluator_output'])/trial.name/'final.json'
@@ -144,6 +148,12 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             'collection':collection,'original_exception':outcome['exception'],'case_behavior':behavior}
         if admission['family']=='state':row['official_llm_judged_result']=row_official
         if admission['family']=='slop':row['slop_score_channels']=slop_channels
+        if contract.get('adapter_kind')=='warranty-source-v1':
+            from .warranty_gold import checkpoint_rows
+            row['warranty_component']=behavior;row['derived_behavior_checkpoints']=checkpoint_rows(behavior)
+            native=behavior.get('native_source_trace',{})
+            row['behavior_metrics']={'native_metrics':{'passed':native['passed'],'total':native['total'],
+                'unit':native['unit'],'source_sha256':native['source_sha256']}if native.get('status')=='SCORED'else{}}
         if contract.get('adapter_kind')=='slop-fk-source-v1':
             from .slop_fk_gold import checkpoint_rows, grade_trial
             component=grade_trial(trial,contract,arm=arm,official_outcome=official['arms'][arm])
@@ -221,6 +231,9 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             row['derived_behavior_checkpoints']=checkpoint_rows(behavior)
             explicit('S.common.protected_constraints',behavior['checkpoint']['score'],
                 'LONG-02 source geometry/NPY/binary output assertions AND; excludes optical quality and minimum-feature DRC')
+        elif contract.get('adapter_kind')=='warranty-source-v1':
+            explicit('S.common.protected_constraints',behavior['common_metric']['score'],
+                'Fixed mean over 20 independently ANDed source claim decisions; first submissions and State are separate supplement rows')
         elif contract.get('adapter_kind')=='interrupt-final-source-v1':
             explicit('S.common.protected_constraints',behavior['goal_checkpoint']['score'],
                 'Pinned final source DOM constraints only; not temporal State correction or transient-action safety. INT-10 requires active-filter evidence beyond native URL matching.')
@@ -289,6 +302,8 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                 'F35.C3-before-dependent-edit':behavior['plugin']})
         if contract.get('adapter_kind')=='wdm-artifact-v1':
             mark_checkpoint_collection(metrics,{'S.common.protected_constraints':behavior['checkpoint']})
+        if contract.get('adapter_kind')=='warranty-source-v1':
+            mark_checkpoint_collection(metrics,{'S.common.protected_constraints':behavior['common_metric']})
         if contract.get('adapter_kind')=='interrupt-final-source-v1':
             mark_checkpoint_collection(metrics,{'S.common.protected_constraints':behavior['goal_checkpoint']})
         if contract.get('adapter_kind')=='slop-fk-source-v1':
@@ -311,6 +326,7 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
         'rows':rows,'collection_accepted':all(r['collection']['collection_complete'] for r in rows)
             and (official is None or all(p['collection_complete']for p in official['arms'].values()))
             and all(r.get('slop_fk_component',{}).get('collection_complete',True)for r in rows)
+            and all(r.get('warranty_component',{}).get('collection_complete',True)for r in rows)
             and not any(m.get('collection_status')=='REPAIR_REQUIRED'for r in rows for m in r['normalized_metrics']),
         'fixture_scores_included':fixture_control,'official_outcomes_sha256':file_digest(official_outcomes)if official_outcomes else None,
         'contract_sha256':admission['contract_sha256'],'contract_version':contract['version']}

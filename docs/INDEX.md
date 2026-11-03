@@ -55,6 +55,8 @@ v4之后新增[INT-04同权威冲突与State纠错v5离线验收](experiments/FI
 
 [Interrupt资产阻塞核验](experiments/INTERRUPT_ENVIRONMENT_STATUS_2026-11-03.md)区分公开病毒扫描提示、实际Drive下载配额和shopping镜像体积；恢复控制已结束，旧部分文件未改动，不绕过访问限制。
 
+[保修队列源gold](experiments/WARRANTY_SOURCE_GOLD_2026-11-03.md)补TB-02的20项签名最终／首次提交和4项中途记录，明确校准零事件与缺证据、实际Pi／portal软件控制及未确定宿主控制状态；不将fixture当正式成绩。
+
 2026-10-25 用户确认启动模式与本机宿主解耦：同一 Pi 配置目录，TUI 启动选择启用/未启用并显示状态，未启用恢复全局自动压缩且仅保留启动接线；详细行为以 Rule 技术稿 §14 与 PACKAGING.md 启动模式节为准，取代早期对启动框禁用时不恢复压缩的约定。
 
 | 文档 | 权威范围 |
