@@ -31,6 +31,7 @@ def test_complete_mathematical_zero_opportunities_never_turn_into_structural_des
     assert result['collection_accepted']
     assert all(r['status']=='CONDITIONAL_NO_OPPORTUNITY'and r['score']is None and r['collection_accepted']for r in result['aggregates'])
     assert all(r['mathematical_na']==3 for r in result['aggregates'])
+    assert all(r['status']=='CONDITIONAL_NO_OPPORTUNITY'for r in result['matched_common_aggregates'])
 
 
 @pytest.mark.parametrize('complete',[None,False])
@@ -64,6 +65,16 @@ def test_common_pair_uses_same_scored_intersection_and_keeps_missing_coverage():
         assert arm['score'] is None and arm['coverage']==0
     assert result['totals']['pi-memweave']['plugin_memory']['score'] is None
     assert result['totals']['pi-native']['common_product']['score']==75
+
+
+def test_score_label_without_a_value_is_not_a_matched_common_measurement():
+    registry,expected,rows=setup_rows();registry[0]['weights']={'common_product':1,'plugin_memory':1}
+    rows[-1]=dict(rows[-1],score=None)
+    result=package_metrics(rows,expected,registry)
+    pair=next(p for p in result['comparisons']if p['case_id']=='c')
+    assert pair['matched_metric_ids']==[]
+    assert all(t['score']is None and t['coverage']==0 for t in pair['arms'].values())
+    assert all(t['status']=='MISSING_EVIDENCE'for t in result['matched_common_aggregates'])
 
 
 def test_existing_cli_writes_all_35_rows_even_with_no_run_reports(tmp_path):
@@ -119,6 +130,17 @@ def test_irreparable_exception_is_shared_and_never_design_na():
     rows[-1].pop('repair_attempts')
     with pytest.raises(ValueError,match='requires reason and attempted repairs'):
         package_metrics(rows,expected,registry)
+
+
+def test_all_common_collection_exceptions_remain_exceptions_with_case_reasons():
+    registry,expected,rows=setup_rows();registry[0]['weights']={'common_product':1,'plugin_memory':1}
+    rows=[dict(r,status='EXCLUDED_UNCOLLECTABLE',score=None,reason='original and mirror unavailable',
+        repair_attempts=['validated both captured sources'])if r['arm']=='pi-memweave'else r for r in rows]
+    result=package_metrics(rows,expected,registry)
+    assert not result['collection_accepted']
+    assert all(r['status']=='EXCLUDED_UNCOLLECTABLE'and len(r['excluded_cases'])==3
+        for r in result['matched_common_aggregates'])
+    assert all(t['score']is None for t in result['matched_common_totals'].values())
 
 
 def test_unresolved_design_blocks_acceptance_even_if_a_numeric_result_exists():

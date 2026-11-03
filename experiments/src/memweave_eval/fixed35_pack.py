@@ -121,7 +121,8 @@ def package_metrics(rows,expected,registry):
                 common_ids.remove(identity)
                 exclusions[identity]={'status':status,'reasons':[r.get('reason')for r in pair if r['status']==status],
                     'repair_attempts':[r.get('repair_attempts')for r in pair if r['status']==status]}
-        scored_pair={i for i in common_ids if all(next(r for r in selected[a]if r['metric_id']==i)['status']=='SCORED'for a in selected)}
+        scored_pair={i for i in common_ids if all(any(r['metric_id']==i and r['status']=='SCORED'and r.get('score')is not None
+            for r in selected[a])for a in selected)}
         comparison={'case_id':case,'eligible_metric_ids':sorted(common_ids),'matched_metric_ids':sorted(scored_pair),
             'excluded_metrics':exclusions,'arms':{}}
         for arm,items in selected.items():
@@ -136,12 +137,19 @@ def package_metrics(rows,expected,registry):
         if metric.get('applicability','all')!='all'or metric['mapping']=='diagnostic':continue
         eligible_cases={c['case_id']for c in comparisons if metric['id']in c['eligible_metric_ids']}
         matched_cases={c['case_id']for c in comparisons if metric['id']in c['matched_metric_ids']}
+        exclusions={c['case_id']:c['excluded_metrics'][metric['id']]for c in comparisons
+            if metric['id']in c['excluded_metrics']}
+        empty_status=next((status for status in ('EXCLUDED_UNCOLLECTABLE','CONDITIONAL_NO_OPPORTUNITY')
+            if any(e['status']==status for e in exclusions.values())),'DESIGN_NA')
         for arm in ('pi-native','pi-memweave'):
             subset=[r for r in complete if r['arm']==arm and r['metric_id']==metric['id']and r['case_id']in matched_cases]
             specs=[e for e in expected if e['arm']==arm and e['metric_id']==metric['id']and e['case_id']in eligible_cases]
             value=aggregate_metric(subset,expected_cases=specs)
+            if not eligible_cases and empty_status=='CONDITIONAL_NO_OPPORTUNITY':
+                value['collection_accepted']=True  # exclusions above require explicit complete evidence
             matched_aggregates.append(dict(value,arm=arm,metric_id=metric['id'],
-                status='DESIGN_NA'if not eligible_cases else'SCORED'if eligible_cases==matched_cases else'MISSING_EVIDENCE'))
+                status=empty_status if not eligible_cases else'SCORED'if eligible_cases==matched_cases else'MISSING_EVIDENCE',
+                excluded_cases=exclusions))
     matched_totals={arm:profile_with_classes([r for r in matched_aggregates if r['arm']==arm],registry,'common_product')
         for arm in ('pi-native','pi-memweave')}
     return {'rows':complete,'aggregates':aggregates,'totals':totals,'case_totals':case_totals,'comparisons':comparisons,
@@ -180,7 +188,7 @@ def pack_report(manifest:Path,output:Path):
                         status='SCORED'if metric['status']=='scored'else'DIAGNOSTIC'if metric['status']=='diagnostic'else metric['status'],
                         collection_complete=metric.get('collection_status')!='REPAIR_REQUIRED'))
     result=package_metrics(rows,expected,registry)
-    result.update(version='fixed35-pack-20261102-v2',manifest_sha256=file_digest(manifest),source_sha256=source_hashes,
+    result.update(version='fixed35-pack-20261103-v3',manifest_sha256=file_digest(manifest),source_sha256=source_hashes,
         aggregation='valid cases equally within benchmark, then valid benchmark means equally; no test-count weighting')
     output.mkdir(parents=True,exist_ok=False);atomic_json(output/'results.json',result,immutable=True)
     with (output/'metrics.csv').open('w',newline='')as stream:
