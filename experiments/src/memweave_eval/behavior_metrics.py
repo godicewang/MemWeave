@@ -98,17 +98,25 @@ def evaluate_behavior(gold: dict, evidence: dict) -> dict:
             route_correct = (
                 obs.get("route") in case["allowed"] if known and "route" in obs else None
             )
-            checks = {"route_correct": route_correct}
+            required=case.get('required_route_checks',[])
+            if not isinstance(required,list)or any(not isinstance(n,str)or not n for n in required) \
+                or len(set(required))!=len(required):raise ValueError('invalid required route checks')
+            values=[route_correct]
+            for name in required:
+                program=obs.get('program_route_checks');check=program.get(name,{})if isinstance(program,dict)else{}
+                refs=check.get('evidence_ids')if isinstance(check,dict)else None
+                value=check.get('passed')if isinstance(check,dict)and type(check.get('passed'))is bool \
+                    and isinstance(refs,list)and refs and all(isinstance(ref,str)and ref for ref in refs)else None
+                checks['route_program:'+name]=value;values.append(value)
+            route_correct=False if False in values else True if all(v is True for v in values)else None
+            checks["route_correct"] = route_correct
             add("route_correct", route_correct)
             if creation_known and created:
                 correct = (
                     route_correct and len(created) == 1 and obs.get("goal_scope_correct") is True
                 )
-                correct = (
-                    correct
-                    if len(created) != 1 or type(obs.get("goal_scope_correct")) is bool
-                    else None
-                )
+                correct = (False if route_correct is False or len(created)!=1 else
+                    correct if type(obs.get("goal_scope_correct")) is bool else None)
                 add("create_precision", correct)
                 checks["correct_persistent_creation"] = correct
                 add("extra_created_objects", len(created) - 1)

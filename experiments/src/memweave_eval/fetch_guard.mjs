@@ -1,5 +1,6 @@
 // Transport guard with summaries and opt-in evaluator-only content evidence.
 import fs from 'node:fs';
+import {gitWorktrees} from './workspace_git.mjs';
 import path from 'node:path';
 import {createHash, randomUUID} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
@@ -78,7 +79,8 @@ export function workspaceSummary(root='/app/interpreter') {
   }
   let cargo=null;
   try { cargo=fs.readFileSync(path.join(root,'Cargo.toml'),'utf8'); } catch {}
-  return {files,file_status,cargo,file_refs}; // Content only for explicitly frozen evaluator paths; never injected into a model.
+  return {files,file_status,cargo,file_refs,
+    ...(config.worktrees?{git_worktrees:gitWorktrees(root,config.worktrees)}:{})}; // No evaluator metadata enters a model.
 }
 
 export function installGuard({ledger,trace,deadline,variant,quotaScript,credentialFile,fetchImpl=globalThis.fetch}) {
@@ -98,7 +100,7 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,credenti
       let detail;try{detail=JSON.parse(result.stderr);}catch{}
       const failure={operation:operation.action,exit_status:result.status,signal:result.signal??null,
         error_class:detail?.error_class??result.error?.code??'QuotaSubprocessError',
-        reason:detail?.reason??'quota_subprocess_failed'};
+        reason:detail?.reason??'quota_subprocess_failed',phase:detail?.phase??null};
       record({event:'quota_operation_rejected',request_id:operation.id,...failure});
       throw Object.assign(Error('Evaluation quota admission/settlement rejected'),{quota_failure:failure});
     }

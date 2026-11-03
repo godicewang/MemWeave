@@ -133,7 +133,9 @@ def extract_task_opportunity(gold,records,*,action_evidence=None):
             legal_candidate_count=sum(c in available and c not in candidates[:i]for i,c in enumerate(candidates))if available is not None else None)
     if gold['kind']=='restore':
         action=action_evidence or{}
-        critical=next((r for r in calls if r.get('tool')in gold['critical_tools']),None)
+        critical=next((r for r in calls if r.get('tool')in gold['critical_tools']and
+            (gold.get('critical_boundary')!='program_action_call_id'or
+             r.get('call_id')==action.get('first_action_call_id'))),None)
         before=next((r for r in boundaries if critical and r.get('phase')=='before_tool'and r.get('call_id')==critical['call_id']),None)
         bound=(before or{}).get('binding',{}).get('task_id')
         if before and before.get('binding',{}).get('status')in {'NO_BOUND_TASK','CAPTURED'}:obs['bound']=bound
@@ -152,6 +154,8 @@ def extract_task_opportunity(gold,records,*,action_evidence=None):
                 obs['request_current']=len(delivered)==1 and delivered[0]=={
                     'task_id':bound,'version':b['expected_version_at_prepare']}and b['expected_task_id']==bound
         if complete and critical is None:obs.update(bound=None,request_current=False,action_passed=False)
+        if gold.get('critical_boundary')=='program_action_call_id'and action.get('first_action_call_id')and critical is None:
+            obs.update(complete=False,reason='program action is not linked to an observed permitted tool call')
         return obs
     if gold['kind']!='route':raise ValueError('unsupported Task opportunity kind')
     if complete and initial is not None and final is not None:
@@ -168,6 +172,12 @@ def extract_task_opportunity(gold,records,*,action_evidence=None):
             target=[t for t in final if t['task_id']in created]
             obs['goal_scope_correct']=len(target)==1 and target[0].get('goal_sha256')==gold.get('goal_sha256') \
                 and target[0].get('workspace')==gold.get('workspace')if all(k in gold for k in ('goal_sha256','workspace'))else None
+            if gold.get('closed_set_route_id'):
+                from .fixed35_switch_probes import route_marker
+                projections=[t.get('_projection')for t in target]
+                obs['goal_scope_correct']=(len(target)==1 and route_marker(projections[0].get('Goal'))==gold['closed_set_route_id']) \
+                    if all(isinstance(p,dict)for p in projections)else None
+                obs['goal_scope_oracle']='explicit closed-set source route identity; not a general free-text Goal judgment'
             action=action_evidence or{}
             obs['before_deadline']=action.get('creation_before_dependency')if type(action.get('creation_before_dependency'))is bool else None
             if gold.get('creation_deadline')=='first_critical_action_or_episode_end'and isinstance(gold.get('critical_tools'),list):
@@ -192,7 +202,7 @@ def extract_task_opportunity(gold,records,*,action_evidence=None):
     return obs
 
 
-def grade_task_trial(trial,contract,*,action_evidence=None):
+def load_task_records(trial):
     events,locations=case_events(trial);records=[]
     for index,event in enumerate(events):
         row=dict(event,_order=index)
@@ -208,6 +218,11 @@ def grade_task_trial(trial,contract,*,action_evidence=None):
                     raw=read_object(locations[(event['producer_id'],event['sequence'])],task['journal_ref'])
                     task['_projection']=journal_projection([json.loads(line)for line in raw.decode().splitlines()])
         records.append(row)
+    return events,records
+
+
+def grade_task_trial(trial,contract,*,action_evidence=None):
+    events,records=load_task_records(trial)
     observations={g['id']:extract_task_opportunity(g,records,
         action_evidence=(action_evidence or{}).get(g['id']))for g in contract['opportunities']}
     specifications={g['id']:g for g in contract['opportunities']}

@@ -34,6 +34,7 @@ export function contentEvidence(root=process.env.MEMWEAVE_EVAL_CONTENT_STORE) {
     const body={schema_version:1,producer_id:producer,sequence:++sequence,previous_sha256:previous,
       run_id:process.env.MEMWEAVE_EVAL_RUN_ID??null,case_id:process.env.MEMWEAVE_EVAL_CASE_ID??null,
       stage_id:process.env.MEMWEAVE_EVAL_STAGE_ID??null,
+      execution_invocation_id:process.env.MEMWEAVE_EVAL_INVOCATION_ID??null,
       arm:process.env.MEMWEAVE_EVAL_BUDGET_ARM??process.env.MEMWEAVE_EVAL_VARIANT??null,
       role:process.env.MEMWEAVE_EVAL_ROLE??'actor',event:kind,
       timestamp:new Date().toISOString(),monotonic_ns:process.hrtime.bigint().toString(),...data};

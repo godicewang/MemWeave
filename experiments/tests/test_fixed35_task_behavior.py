@@ -115,6 +115,24 @@ def test_task_restore_requires_actual_state_delivery_and_every_program_action_ch
     result,_=score(gold,unobserved,action);assert result['metrics']['restore_end_to_end']['unknown']==1
 
 
+def test_source_probe_critical_boundary_uses_observed_file_commit_not_an_earlier_unrelated_command():
+    gold={'id':'T2','kind':'restore','stage_id':'4','targets':['task_old'],
+        'critical_tools':['bash','write'],'critical_boundary':'program_action_call_id','required_checkers':['artifact']}
+    action={'first_action_call_id':'commit','program_checks':[{'checker_id':'artifact','call_id':'commit',
+        'passed':True,'evidence_sha256':'c'*64}]}
+    prepare={'stage_id':'4','event':'request_ready','_order':2,
+        'prepared_boundary':{'expected_task_id':'task_old','expected_version_at_prepare':3},
+        '_delivered_state':[{'task_id':'task_old','version':3}]}
+    rows=protocol([registry('agent_start',[task()]),tool('bash','read-other',order=1),reply('read-other',value={}),
+        prepare,registry('before_tool',[task()],call='commit',order=3),tool('bash','commit',order=4),
+        reply('commit',value={}),registry('agent_end',[task()],order=8)])
+    result,_=score(gold,rows,action)
+    assert result['metrics']['restore_end_to_end']['value']==1
+    action['first_action_call_id']='not-observed'
+    result,_=score(gold,rows,action)
+    assert result['metrics']['restore_end_to_end']['unknown']==1
+
+
 def test_independent_goal_create_and_deadline_require_durable_objects():
     gold={'id':'T3','kind':'route','stage_id':'4','allowed':['create'],'must_create':True,
         'goal_sha256':'a'*64,'workspace':'scope'}

@@ -70,7 +70,8 @@ def job_config(*,root:Path,task:Path,case_id,arm,run_id,plan:Path,deadline,
     if control:agent={'name':control,'resume_trajectory':True}
     cfg={'job_name':name,'jobs_dir':str(root/'harbor'),'n_attempts':1,
          'n_concurrent_trials':concurrency,'quiet':True,'retry':{'max_retries':0},
-         'environment':{'type':'docker','delete':True},'agents':[agent],
+         'environment':{'type':'docker','delete':True,
+            **{'override_'+key:value for key,value in resources.items()}},'agents':[agent],
          'tasks':[{'path':str(task)}]}
     if prepare_only or canary or host_scored:
         cfg['verifier']={'disable':True}

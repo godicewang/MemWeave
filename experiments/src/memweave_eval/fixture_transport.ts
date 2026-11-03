@@ -2,8 +2,33 @@
 import fs from 'node:fs';
 import http from 'node:http';
 import {spawnSync}from'node:child_process';
+export function fixtureContentText(value:any):string {
+  return typeof value==='string'?value:Array.isArray(value)?value.filter(v=>v?.type==='text'&&typeof v.text==='string')
+    .map(v=>v.text).join('\n'):'';
+}
+export function resolveFixtureArguments(value:any,taskIds:Map<string,string>,latestRef:string|null,readRef:string|null=null):any {
+  if(Array.isArray(value))return value.map(v=>resolveFixtureArguments(v,taskIds,latestRef,readRef));
+  if(!value||typeof value!=='object')return value;
+  if('$task_route'in value){
+    if(Object.keys(value).length!==1||!taskIds.has(value.$task_route))throw Error('Observed Task route ID unavailable');
+    return taskIds.get(value.$task_route);
+  }
+  if('$latest_user_origin'in value){
+    const match=latestRef?.match(/^(?:(task_[^:]+):)?(U[1-9][0-9]*)$/);
+    if(Object.keys(value).length!==1||value.$latest_user_origin!==true||!match)throw Error('Observed latest user reference unavailable');
+    return {ref:match[2],...(match[1]?{task_id:match[1]}:{})};
+  }
+  const result:any={};
+  for(const [key,part]of Object.entries(value)){
+    if(key==='$latest_user_ref'&&!latestRef)throw Error('Observed latest user reference unavailable');
+    if(key==='$latest_read_ref'&&!readRef)throw Error('Observed successful read alias unavailable');
+    result[key==='$latest_user_ref'?latestRef!:key==='$latest_read_ref'?readRef!:key]=resolveFixtureArguments(part,taskIds,latestRef,readRef);
+  }
+  return result;
+}
 export default function fixture(pi:any) {
   let calls=0,originalTask:string|null=null;
+  const taskIds=new Map<string,string>();
   const networkFetch=globalThis.fetch;
   const queued=new Map<string,{body:string,type:string}>();
   const server=http.createServer((request,response)=>{
@@ -44,10 +69,24 @@ export default function fixture(pi:any) {
       id:'deepseek-flash',name:'DeepSeek V4.1 Flash',context_window:1000000,max_output_tokens:384000}]}),'application/json',init);
     calls++;
     const body=JSON.parse(init.body);
+    let latestRef:string|null=null,readRef:string|null=null;
     for(const message of body.messages??[]){
-      if(message.role!=='tool'||typeof message.content!=='string')continue;
-      try{const value=JSON.parse(message.content.replace(/^\[(?:task_[^:\]]+:)?[UTAR]\d+\]\s*/,''));
+      const text=fixtureContentText(message.content);
+      if(message.role==='user'){
+        const label=text.match(/^\[((?:task_[^:\]]+:)?U\d+)\]/);if(label)latestRef=label[1];
+      }
+      if(message.role!=='tool')continue;
+      try{const value=JSON.parse(text.replace(/^\[(?:task_[^:\]]+:)?[UTAR]\d+\]\s*/,''));
         for(const item of Array.isArray(value)?value:[value])if(item.goal==='Verify CLI State delivery'&&typeof item.task_id==='string')originalTask=item.task_id;
+        const visit=(item:any)=>{
+          if(!item||typeof item!=='object')return;
+          if(typeof item.goal==='string'&&typeof item.task_id==='string'){
+            const marker=item.goal.match(/^ROUTE ([a-z0-9-]+)$/m);
+            if(marker&&!taskIds.has(marker[1]))taskIds.set(marker[1],item.task_id);
+          }
+          if(item.status==='ok'&&typeof item.resolved_ref==='string'&&/^[UAR][1-9][0-9]*$/.test(item.resolved_ref))readRef=item.resolved_ref;
+          for(const nested of Object.values(item))visit(nested);
+        };visit(value);
       }catch{}
     }
     if(process.env.MEMWEAVE_EVAL_FIXTURE_DELAY_MS)await new Promise(resolve=>setTimeout(resolve,Number(process.env.MEMWEAVE_EVAL_FIXTURE_DELAY_MS)));
@@ -82,7 +121,8 @@ export default function fixture(pi:any) {
     }
     if(routes&&route?.name==='task_resume'&&!originalTask)throw Error('Real Task creation/search result missing from actual context');
     const scenario=process.env.MEMWEAVE_EVAL_SCENARIO_PATH?JSON.parse(fs.readFileSync(process.env.MEMWEAVE_EVAL_SCENARIO_PATH,'utf8')):null;
-    const scripted=(scenario?.stages?.[String(fixtureStage)]??scenario?.steps)?.[calls-1];
+    const rawScripted=(scenario?.stages?.[String(fixtureStage)]??scenario?.steps)?.[calls-1];
+    const scripted=rawScripted?{...rawScripted,arguments:resolveFixtureArguments(rawScripted.arguments,taskIds,latestRef,readRef)}:null;
     if(scenario&&!scripted)throw Error('Offline scenario has no response at this request');
     const delta=scripted?(scripted.tool?{role:'assistant',tool_calls:[{index:0,id:'scenario-'+calls,type:'function',function:{name:scripted.tool,arguments:JSON.stringify(scripted.arguments)}}]}:{role:'assistant',content:scripted.text}):ephemeral?{role:'assistant',content:'12'}:routed?(route?{role:'assistant',tool_calls:[{index:0,id:route.id,type:'function',function:{name:route.name,arguments:JSON.stringify(route.args)}}]}:{role:'assistant',content:'OK'}):remember?{role:'assistant',tool_calls:[{index:0,id:'cli-remember',type:'function',function:{name:'state_append',arguments:JSON.stringify({items:['types.py','DESIGN.md','__init__.py'].map(name=>({type:'fact',content:'READ_ONLY /app/app/'+name,evidence:{U1:'Explicit source constraint'}}))})}}]}:change?{role:'assistant',tool_calls:[{index:0,id:'cli-change',type:'function',function:{name:'write',arguments:JSON.stringify({path:'/app/app/events.py',content:fs.readFileSync('/app/app/events.py','utf8')+'\n# offline observer probe\n'})}}]}:domain?{role:'assistant',tool_calls:[{index:0,id:'cli-domain-read',type:'function',function:{name:domainProbe.name,arguments:JSON.stringify(domainProbe.arguments)}}]}:query?{role:'assistant',tool_calls:[{index:0,id:'cli-query',type:'function',function:{name:'bash',arguments:JSON.stringify({command})}}]}:create?{role:'assistant',tool_calls:[{index:0,id:'cli-create',type:'function',function:{
       name:'task_create',arguments:JSON.stringify({title:'CLI probe',goal:'Verify CLI State delivery',
@@ -92,6 +132,15 @@ export default function fixture(pi:any) {
       usage:{prompt_tokens:100,completion_tokens:50}}];
     return deliver(frames.map(f=>'data: '+JSON.stringify(f)+'\n\n').join('')+'data: [DONE]\n\n','text/event-stream',init);
   };
-  globalThis.fetch=fake;
-  if(process.env.MEMWEAVE_EVAL_DROP_GUARD==='1')pi.on('before_provider_request',()=>{globalThis.fetch=fake;});
+  const diagnosed=async(input:any,init:any)=>{
+    try{return await fake(input,init);}catch(error:any){
+      const allowed=['Observed Task route ID unavailable','Observed latest user reference unavailable',
+        'Observed successful read alias unavailable','Offline scenario has no response at this request','Guard credential broker missing'];
+      fs.appendFileSync('/logs/agent/cli-fixture-failures.jsonl',JSON.stringify({event:'fixture_failure',
+        stage_id:process.env.MEMWEAVE_EVAL_STAGE_ID??null,reason:allowed.includes(error?.message)?error.message:'fixture_transport_error',
+        error_class:error?.name??'Error',real_model_requests:0})+'\n');throw error;
+    }
+  };
+  globalThis.fetch=diagnosed;
+  if(process.env.MEMWEAVE_EVAL_DROP_GUARD==='1')pi.on('before_provider_request',()=>{globalThis.fetch=diagnosed;});
 }

@@ -27,6 +27,17 @@ def test_fixed_jobs_keep_real_pi_full_subject_and_harbor_resume(tmp_path):
         assert options['auth_path'].endswith('/auth.json')
 
 
+def test_requested_resources_are_enforced_by_public_harbor_overrides_not_only_logged(tmp_path):
+    plan=tmp_path/'runtime-assets.json';plan.write_text('{}')
+    cfg=job_config(root=tmp_path,task=tmp_path/'source-default-four-cpus',case_id='INT-06',arm='pi-native',
+        run_id='free',plan=plan,deadline=3000,prepare_only=True,
+        resources={'cpus':1,'memory_mb':2048,'storage_mb':10240})
+    environment=JobConfig.model_validate(cfg).environment
+    assert environment.override_cpus==1
+    assert environment.override_memory_mb==2048
+    assert environment.override_storage_mb==10240
+
+
 def test_long_episode_uses_frozen_source_timeout_not_an_unrelated_45_minute_cap(tmp_path):
     from memweave_eval.fixed35_campaign import validate_episode_policy
     (tmp_path/'task.toml').write_text('[agent]\ntimeout_sec=28800\n')

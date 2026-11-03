@@ -35,8 +35,11 @@ def readonly_checkpoint(required_paths,texts,initial,observations,*,changed_boun
     return checkpoint_verdict({'id':'F35.C3.readonly-before-first-change-v2','required_assertions':list(checks)},checks)
 
 
-def execution_boundaries(trial,events):
+def execution_boundaries(trial,events,*,stage_id=None):
     """Cross-check workspace hooks against independent Pi stdout call/end records."""
+    from .execution_capture import scoped_execution_boundaries
+    scoped_result=scoped_execution_boundaries(trial,events,stage_id=stage_id)
+    if scoped_result is not None:return scoped_result
     expected=set();completed=set();errors=[];terminal=True;sources=list(trial.rglob('pi.txt'))
     if not sources:errors.append('independent_Pi_execution_log_missing')
     for source in sources:
@@ -68,7 +71,8 @@ def execution_boundaries(trial,events):
     if starts and ends and starts[0]['timestamp']>ends[-1]['timestamp']:errors.append('boundary_order_invalid')
     if None in expected|completed|observed:errors.append('call_identity_missing')
     return {'complete':not errors,'reasons':errors,'expected_tool_calls':len(expected),
-        'completed_tool_calls':len(completed),'post_tool_snapshots':len(post),'terminal_execution_observed':terminal}
+        'completed_tool_calls':len(completed),'post_tool_snapshots':len(post),'terminal_execution_observed':terminal,
+        'scope':'legacy-call-id-set-without-invocation-binding'}
 
 
 def memory_rate(values):

@@ -65,18 +65,22 @@ def serve(root:Path,service_id):
             config=json.loads(source.read_text());identity=source.stem
             if not re.fullmatch(r'[a-f0-9]{32}',identity)or config['service_id']!=service_id:
                 raise ValueError('invalid private quota scope')
+            if config.get('protocol')!=2:raise ValueError('unsupported private quota protocol')
             channel=channels/identity
             ready=channel/'ready.json'
-            if not ready.exists():write_json(ready,{'service_id':service_id,'channel_id':identity})
+            if not ready.exists():write_json(ready,{'service_id':service_id,'channel_id':identity,'protocol':2})
             for incoming in sorted((channel/'requests').glob('*.json')):
                 nonce=incoming.stem;response=channel/'responses'/incoming.name
                 if response.exists():continue
                 before=hashlib.sha256(ledger.read_bytes()).hexdigest()
                 request={}
                 try:
-                    if not re.fullmatch(r'[a-f0-9-]{36}',nonce)or incoming.is_symlink()or incoming.stat().st_size>32768:
+                    payload=incoming.with_suffix('.payload')
+                    if not re.fullmatch(r'[a-f0-9-]{36}',nonce)or incoming.is_symlink()or incoming.stat().st_size!=0:
                         raise ValueError('invalid_quota_IPC_request')
-                    parsed=json.loads(incoming.read_text())
+                    if payload.is_symlink()or not 0<payload.stat().st_size<=32768:
+                        raise ValueError('invalid_quota_IPC_payload')
+                    parsed=json.loads(payload.read_text())
                     if not isinstance(parsed,dict):raise TypeError('invalid_quota_IPC_object')
                     request=parsed
                     if request.get('nonce')!=nonce:raise ValueError('request_nonce_mismatch')

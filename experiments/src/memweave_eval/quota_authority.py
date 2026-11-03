@@ -73,7 +73,7 @@ def add_channel(authority,*,arm,episode,max_output,deadline,episode_budget=None,
     channel.mkdir()
     for name in ('requests','responses'):
         directory=channel/name;directory.mkdir();directory.chmod(0o1777)
-    client={'service_id':authority['service_id'],'channel_id':identity,'token':secrets.token_hex(32)}
+    client={'service_id':authority['service_id'],'channel_id':identity,'token':secrets.token_hex(32),'protocol':2}
     atomic_json(channel/'client.json',client,immutable=True);(channel/'client.json').chmod(0o644)
     config={**client,'arm':arm,'episode':episode,'id_prefix':episode+':'+arm+':',
         'max_output':max_output,'deadline':deadline,'episode_budget':episode_budget,
@@ -82,7 +82,7 @@ def add_channel(authority,*,arm,episode,max_output,deadline,episode_budget=None,
     until=time.time()+20
     while time.time()<until:
         ready=channel/'ready.json'
-        if ready.exists()and json.loads(ready.read_text())=={'service_id':authority['service_id'],'channel_id':identity}:
+        if ready.exists()and json.loads(ready.read_text())=={'service_id':authority['service_id'],'channel_id':identity,'protocol':2}:
             return {'host_path':str(channel),'container_path':'/opt/memweave-eval-control',
                 'service_id':authority['service_id'],'channel_id':identity}
         time.sleep(.05)

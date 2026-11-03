@@ -12,6 +12,7 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Literal
+from uuid import uuid4
 
 from harbor.agents.installed.pi import Pi, PiOptions
 from harbor.agents.options import Cli
@@ -303,7 +304,7 @@ class ExperimentPi(Pi):
         if self.options.evaluation_deadline:
             evaluator = self._asset_root + '/evaluation'
             await self.exec_as_agent(environment, f'mkdir -p {shlex.quote(evaluator)}')
-            for filename in ('fetch_guard.mjs', 'content_evidence.mjs', 'guard_bootstrap.mjs', 'preload.mjs', 'budget_guard.py', 'quota_ipc.mjs', 'container_deadline.py', 'budget_guard.mjs', 'container_deadline.mjs', 'sealed_runtime.mjs', 'sealed_bash_env.sh', 'request_boundary.ts', 'reference_source.ts', 'task_registry.mjs', 'checkpoint_observer.ts'):
+            for filename in ('fetch_guard.mjs', 'workspace_git.mjs', 'content_evidence.mjs', 'guard_bootstrap.mjs', 'preload.mjs', 'budget_guard.py', 'quota_ipc.mjs', 'container_deadline.py', 'budget_guard.mjs', 'container_deadline.mjs', 'sealed_runtime.mjs', 'sealed_bash_env.sh', 'request_boundary.ts', 'reference_source.ts', 'task_registry.mjs', 'checkpoint_observer.ts'):
                 await environment.upload_file(Path(__file__).with_name(filename), evaluator+'/'+filename)
             if self.options.prepare_only:
                 await environment.upload_file(Path(__file__).with_name('probe_request.mjs'),evaluator+'/probe_request.mjs')
@@ -469,6 +470,7 @@ positive:true,lost_guard_upstream_requests:0,actual_cli_pid_deadline:true}));
 
     async def exec_as_agent(self, environment, command: str, **kwargs):
         is_pi = "pi --print --mode json" in command
+        invocation=None
         if hasattr(self, "_asset_root"):
             if command.startswith(". ~/.nvm/nvm.sh; "):
                 command = command.removeprefix(". ~/.nvm/nvm.sh; ")
@@ -522,7 +524,37 @@ positive:true,lost_guard_upstream_requests:0,actual_cli_pid_deadline:true}));
                     kwargs['env']['MEMWEAVE_EVAL_DOMAIN_DESCRIPTOR']=self._evaluation_domain_descriptor
                 if self.options.prepare_only and kwargs['env'].get('MEMWEAVE_EVAL_LOCAL_STOP_AFTER'):
                     kwargs['env']['MEMWEAVE_EVAL_DEADLINE']=str(time.time()+float(kwargs['env']['MEMWEAVE_EVAL_LOCAL_STOP_AFTER']))
-        result = await super().exec_as_agent(environment, command, **kwargs)
+                if self.options.evaluation_content_evidence:
+                    from .storage import atomic_json
+                    identity=uuid4().hex
+                    directory=self.logs_dir/'execution-invocations';directory.mkdir(parents=True,exist_ok=True)
+                    invocation={'schema_version':1,'invocation_id':identity,
+                        'stage_id':str(getattr(self,'_evaluation_stage',0)),
+                        'run_id':self.options.evaluation_run_id,'case_id':self.options.evaluation_case_id,
+                        'status':'STARTED','started_at':time.time()}
+                    kwargs['env']['MEMWEAVE_EVAL_INVOCATION_ID']=identity
+                    atomic_json(directory/(identity+'.json'),invocation)
+        try:
+            result = await super().exec_as_agent(environment, command, **kwargs)
+        except BaseException as error:
+            if invocation is not None:invocation.update(status='EXECUTION_RAISED',error_class=type(error).__name__)
+            raise
+        finally:
+            if invocation is not None:
+                # Upstream tee replaces pi.txt for each CLI invocation. Capture it
+                # immediately, before Harbor starts another stage or copies logs.
+                from .storage import atomic_json
+                target=directory/(identity+'.stdout.jsonl')
+                try:
+                    await environment.download_file(str(self.environment_logs_dir/'pi.txt'),target)
+                    invocation.update(stdout_file=target.name,stdout_sha256=file_digest(target),
+                        stdout_bytes=target.stat().st_size,capture_status='CAPTURED')
+                except Exception as error:  # noqa: BLE001 -- capture errors are explicit evidence, never actor success.
+                    invocation.update(capture_status='MISSING',capture_error_class=type(error).__name__)
+                invocation.update(finished_at=time.time())
+                if invocation['status']=='STARTED':
+                    invocation.update(status='RETURNED',return_code=getattr(result,'return_code',None))
+                atomic_json(directory/(identity+'.json'),invocation)
         if not is_pi:
             setup_log = self.logs_dir / "setup/experiment-install.log"
             setup_log.parent.mkdir(parents=True, exist_ok=True)

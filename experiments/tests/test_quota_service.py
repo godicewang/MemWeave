@@ -12,7 +12,7 @@ from memweave_eval.quota_service import apply_scoped
 
 
 def config():
-    return {'token':'secret-fixture-only','arm':'a','episode':'e','id_prefix':'e:a:',
+    return {'protocol':2,'token':'secret-fixture-only','arm':'a','episode':'e','id_prefix':'e:a:',
         'deadline':2000,'max_output':128,'episode_budget':.9,'max_requests':2}
 
 
@@ -43,7 +43,7 @@ def test_node_ipc_uses_single_writer_and_absent_service_dispatches_zero(tmp_path
     for d in ('requests','responses'):(channel/d).mkdir()
     c=dict(config(),deadline=time.time()+60,service_id='fixture-service',channel_id=identity)
     atomic_json(tmp_path/'configs'/(identity+'.json'),c)
-    atomic_json(channel/'client.json',{k:c[k]for k in ('token','service_id','channel_id')})
+    atomic_json(channel/'client.json',{k:c[k]for k in ('token','service_id','channel_id','protocol')})
     script="""import {installGuard} from GUARD;
 let dispatches=0;const f=installGuard({ledger:CHANNEL,trace:TRACE,deadline:DEADLINE,variant:'a',quotaScript:IPC,
 fetchImpl:async()=>{dispatches++;return new Response('data: {"usage":{"prompt_tokens":100,"completion_tokens":1}}\\n\\ndata: [DONE]\\n\\n');}});
@@ -60,6 +60,11 @@ console.log(dispatches);
     try:
         until=time.time()+3
         while not (channel/'ready.json').exists()and time.time()<until:time.sleep(.01)
+        # A completely written but unpublished payload must not be admitted.
+        orphan=channel/'requests'/(str(uuid4())+'.payload')
+        orphan.write_text(json.dumps({'operation':{'action':'reserve','id':'e:a:orphan'}}))
+        time.sleep(.05)
+        assert not json.loads(ledger.read_text())['requests']
         positive=subprocess.run(['node','--input-type=module','-e',script],env=env,capture_output=True,text=True,timeout=5,check=False)
         assert positive.returncode==0,positive.stderr
         assert positive.stdout.strip()=='1'
@@ -80,3 +85,32 @@ def test_formal_judge_pool_is_reserved_independently_of_work(tmp_path):
     judge=dict(work,episode='fixed35-formal:e:judge',id_prefix='fixed35-formal:e:judge:pi-native:')
     request['operation'].update(id=judge['id_prefix']+'r',episode=judge['episode'])
     assert apply_scoped(ledger,judge,request,now=1000)['status']=='reserved'
+
+
+@pytest.mark.parametrize('method,phase',[('fsyncSync','sync_request'),('marker','publish_request')])
+def test_ipc_filesystem_failure_identifies_phase_and_never_publishes(tmp_path,method,phase):
+    code=Path(__file__).parents[1]/'src/memweave_eval/quota_ipc.mjs'
+    for folder in ('requests','responses'):(tmp_path/folder).mkdir()
+    for name in ('client','ready'):
+        (tmp_path/(name+'.json')).write_text(json.dumps({'protocol':2,'service_id':'s','channel_id':'c','token':'fixture'}))
+    hook=tmp_path/'fault.mjs'
+    patch=("const open=fs.openSync;fs.openSync=(p,...a)=>{if(String(p).endsWith('.json'))throw Object.assign(Error('fixture failure'),{code:'EPERM'});return open(p,...a)};"
+        if method=='marker'else"fs.fsyncSync=()=>{throw Object.assign(Error('fixture failure'),{code:'EPERM'});};")
+    hook.write_text("import fs from 'node:fs';"+patch)
+    result=subprocess.run(['node','--import',str(hook),str(code),str(tmp_path)],
+        input=json.dumps({'action':'settle','id':'fixture'}),capture_output=True,text=True,check=False,timeout=5)
+    assert result.returncode==2 and not result.stdout
+    assert json.loads(result.stderr)=={'error_class':'EPERM','reason':'quota_IPC_unavailable_or_invalid','phase':phase}
+    assert not list((tmp_path/'requests').glob('*.json'))
+    assert len(list((tmp_path/'requests').glob('*.payload')))==1
+    assert 'fixture failure'not in result.stderr and 'token'not in result.stderr
+
+
+def test_client_rejects_old_handshake_without_publishing_or_dispatch(tmp_path):
+    code=Path(__file__).parents[1]/'src/memweave_eval/quota_ipc.mjs'
+    for folder in ('requests','responses'):(tmp_path/folder).mkdir()
+    (tmp_path/'client.json').write_text(json.dumps({'service_id':'s','channel_id':'c','protocol':2}))
+    (tmp_path/'ready.json').write_text(json.dumps({'service_id':'s','channel_id':'c'}))
+    result=subprocess.run(['node',str(code),str(tmp_path)],input='{}',text=True,capture_output=True,check=False,timeout=5)
+    assert result.returncode==2 and json.loads(result.stderr)['phase']=='read_handshake'
+    assert not list((tmp_path/'requests').iterdir())

@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261103-v6'
+VERSION='fixed35-score-20261103-v7'
 
 
 def mark_checkpoint_collection(metrics,points):
@@ -83,6 +83,11 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             behavior=grade_conflict_trial(trial,private,contract['state_business'],arm=arm)
             if behavior.get('fixture_only')and not fixture_control:
                 raise ValueError('fake-provider overlay evidence requires explicit fixture-control report; never an actual score')
+        if contract.get('adapter_kind')=='switch-remembered-contract-v2':
+            from .fixed35_switch_replay import grade_switch_probe_trial
+            behavior=grade_switch_probe_trial(trial,contract,arm=arm)
+            if behavior['fixture_only']and not fixture_control:
+                raise ValueError('fake-provider Switch probes require explicit fixture-control report; never an actual score')
         reward=behavior['native']['native_outcome']/100 if admission['family']=='mab'else (outcome.get('verifier')or{}).get('rewards',{}).get('reward')
         if admission['family']=='slop':
             behavior=official['arms'][arm];reward=behavior['score']/100 if behavior['score']is not None else None
@@ -101,6 +106,10 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             'finance':{'cache_metrics':collection['cache']},'normalization_evidence':{},
             'collection':collection,'original_exception':outcome['exception'],'case_behavior':behavior}
         if admission['family']=='state':row['official_llm_judged_result']=row_official
+        if contract.get('adapter_kind')=='switch-remembered-contract-v2'and arm=='pi-memweave':
+            row['behavior_metrics']=row['task_behavior']=behavior['task_behavior']
+        if contract.get('adapter_kind')=='switch-remembered-contract-v2':
+            row.setdefault('behavior_metrics',{})['native_metrics']=behavior['source_final']['native_metrics']
         if contract.get('adapter_kind')=='state-equal-authority-v1':
             from .state_conflict import common_checkpoint_rows
             row['derived_behavior_checkpoints']=common_checkpoint_rows(behavior,arm=arm)
@@ -169,6 +178,8 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
         elif contract.get('adapter_kind')=='state-equal-authority-v1':
             explicit('S.common.protected_constraints',behavior['followthrough']['score'],
                 'Source required cancellation fields AND original lookup ordering AND all other fields at every observed domain boundary')
+        elif contract.get('adapter_kind')=='switch-remembered-contract-v2':
+            row['normalization_evidence']['S.common.protected_constraints']=behavior['common_checkpoint_metric']
         normalized=normalize_trial_scores(row)
         metrics=[]
         assigned={m['metric_id']:m for m in contract['metric_matrix']}
@@ -207,6 +218,10 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                 'S.common.protected_constraints':behavior['derived_action'],
                 'F35.C5-correct-before-action':memory.get('correction'),
                 'F35.C4-three-window-checkpoints':memory.get('three_evictions')})
+        if contract.get('adapter_kind')=='switch-remembered-contract-v2'and not behavior['collection_complete']:
+            for metric in metrics:
+                if (metric['id']=='S.common.protected_constraints'or metric['id'].startswith('S4.'))and metric['status']!='DESIGN_NA':
+                    metric.update(collection_status='REPAIR_REQUIRED',collection_reason='Selected Switch action/Task checkpoint proof incomplete')
         row['normalized_metrics']=metrics
         row['profiles']={name:weighted_profile(metrics,name)for name in ('common_product','plugin_memory')}
         if arm=='pi-native':

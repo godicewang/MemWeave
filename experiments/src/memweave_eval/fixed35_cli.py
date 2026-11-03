@@ -30,6 +30,16 @@ def register(sub):
     switch.add_argument('case_id',choices=['INT-06','INT-07'])
     switch.add_argument('--source',type=Path,required=True)
     switch.add_argument('--output',type=Path,required=True)
+    probes=commands.add_parser('switch-probe-tasks',help='Derive source-bound closed-set Task/remembered-contract checkpoints; no model calls or formal admission')
+    probes.add_argument('case_id',choices=['INT-06','INT-07'])
+    probes.add_argument('--source',type=Path,required=True)
+    probes.add_argument('--runtime-task',type=Path,required=True)
+    probes.add_argument('--output',type=Path,required=True)
+    probe_replay=commands.add_parser('switch-probes',help='Replay selected Switch contract/Task actions from actual CLI evidence; no model calls')
+    probe_replay.add_argument('trial',type=Path)
+    probe_replay.add_argument('--contract',type=Path,required=True)
+    probe_replay.add_argument('--arm',choices=['pi-native','pi-memweave'],required=True)
+    probe_replay.add_argument('--output',type=Path,required=True)
     final=commands.add_parser('switch-final',help='Evaluate source-bound final-delivery and original-test checkpoints offline; no memory inference')
     final.add_argument('--contract',type=Path,required=True)
     final.add_argument('--answer',type=Path)
@@ -76,6 +86,17 @@ def register(sub):
 
 
 def execute(args):
+    if args.fixed35_command=='switch-probes':
+        from .fixed35_switch_replay import grade_switch_probe_trial
+        result=grade_switch_probe_trial(args.trial,json.loads(args.contract.read_text()),arm=args.arm)
+        atomic_json(args.output,result,immutable=True)
+        return {'case_id':result['case_id'],'output':str(args.output),'paid_requests':0,
+            'collection_complete':result['collection_complete'],'fixture_only':result['fixture_only']}
+    if args.fixed35_command=='switch-probe-tasks':
+        from .fixed35_switch_probes import derive_switch_probes
+        record=derive_switch_probes(args.source,args.runtime_task,args.case_id,args.output)
+        return {'case_id':args.case_id,'task_path':record['task_path'],'task_sha256':record['task_sha256'],
+            'probes':len(record['probes']),'paid_requests':0,'not_formal_admission':True}
     if args.fixed35_command=='mab-pressure-tasks':
         from .fixed35_adapters import mab_chunks
         from .fixed35_mab_cards import BOOKS, book_contract

@@ -43,6 +43,14 @@ def test_known_wrong_restore_is_failure_even_if_followup_action_evidence_missing
     assert result['metrics']['restore_after_binding']['not_applicable']==1
 
 
+@pytest.mark.parametrize('passed,evidence,value',[(True,['registry'],1),(False,['registry'],0),(None,['registry'],None),(True,[],None)])
+def test_registered_route_requires_actual_binding_program_check(passed,evidence,value):
+    result=run({'id':'route','kind':'route','allowed':['continue'],'required_route_checks':['source']},
+        {'complete':True,'route':'continue','created_ids':[],'program_route_checks':{
+            'source':{'passed':passed,'evidence_ids':evidence}}})
+    assert result['metrics']['route_correct']['value']==value
+
+
 @pytest.mark.parametrize('returned,expected',[(True,1),(False,0),(None,None)])
 def test_simple_interruption_can_require_a_separate_real_return_action(returned,expected):
     result=run({'id':'s','kind':'route','allowed':['continue'],'simple':True,'return_opportunity_id':'return'},
