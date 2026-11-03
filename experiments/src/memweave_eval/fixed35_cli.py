@@ -15,6 +15,16 @@ def register(sub):
     sources.add_argument('design',type=Path)
     sources.add_argument('--sources',type=Path,required=True)
     sources.add_argument('--output',type=Path,required=True)
+    selected=commands.add_parser('selected-source-contract',help='Freeze TB-01 parity or TB-03 archive parameterized source gold; no models or admission')
+    selected.add_argument('case_id',choices=['TB-01','TB-03'])
+    selected.add_argument('--design',type=Path,required=True)
+    selected.add_argument('--source',type=Path,required=True)
+    selected.add_argument('--output',type=Path,required=True)
+    selected_replay=commands.add_parser('selected-source',help='Replay exact parity/archive source cases with console and CTRF identity cross-checks')
+    selected_replay.add_argument('trial',type=Path)
+    selected_replay.add_argument('--contract',type=Path,required=True)
+    selected_replay.add_argument('--fixture-control',action='store_true')
+    selected_replay.add_argument('--output',type=Path,required=True)
     wal=commands.add_parser('wal-contract',help='Freeze TB-05 exact original test identities and gate checkpoints; no model calls or admission')
     wal.add_argument('--design',type=Path,required=True)
     wal.add_argument('--source',type=Path,required=True)
@@ -143,6 +153,24 @@ def register(sub):
 
 
 def execute(args):
+    if args.fixed35_command=='selected-source-contract':
+        from .pytest_source_gold import freeze_contract
+        design=read_design(args.design);case=next(c for c in design['selection']['cases']if c['pack_case_id']==args.case_id)
+        matrix=[r for r in applicability_matrix(design)if r['case_id']==args.case_id]
+        for row in matrix:
+            if row['metric_id']in {'S.common.protected_constraints','S.common.process_validation'}or(
+                    args.case_id=='TB-03'and row['metric_id']=='S.common.dependency_constraints'):
+                row.update(design_status='PLANNED',opportunity_ids=['selected-exact-source-tests'],
+                    reason='Pinned original parity/archive business cases, complete source validation and TB-03 finite readable/non-wrapper checks; no general memory or provenance inference')
+        value=freeze_contract(case,args.source,args.output,metric_matrix=matrix)
+        return {'case_id':args.case_id,'output':str(args.output),'source_test_ids':len(value['test_ids']),
+            'not_formal_admission':True,'paid_requests':0}
+    if args.fixed35_command=='selected-source':
+        from .pytest_source_gold import grade_trial
+        value=grade_trial(args.trial,json.loads(args.contract.read_text()),fixture_control=args.fixture_control)
+        atomic_json(args.output,value,immutable=True)
+        return {'case_id':value['case_id'],'output':str(args.output),'collection_complete':value['collection_complete'],
+            'fixture_only':value['fixture_only'],'paid_requests':0}
     if args.fixed35_command=='wal-contract':
         from .wal_gold import freeze_contract
         design=read_design(args.design);case=next(c for c in design['selection']['cases']if c['pack_case_id']=='TB-05')

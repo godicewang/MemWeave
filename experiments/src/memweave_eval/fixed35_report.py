@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261103-v24'
+VERSION='fixed35-score-20261103-v25'
 
 
 def raw_display(metric):
@@ -127,6 +127,9 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
         if contract.get('adapter_kind')=='wal-source-v1':
             from .wal_gold import grade_trial
             behavior=grade_trial(trial,contract,fixture_control=fixture_control)
+        if contract.get('adapter_kind')=='pytest-selected-source-v1':
+            from .pytest_source_gold import grade_trial
+            behavior=grade_trial(trial,contract,fixture_control=fixture_control)
         if contract.get('adapter_kind')=='interrupt-final-source-v1':
             from .interrupt_source_gold import grade_capture
             capture_path=Path(admission['browser_evaluator_output'])/trial.name/'final.json'
@@ -172,6 +175,11 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             row['wal_component']=behavior;row['derived_behavior_checkpoints']=checkpoint_rows(behavior)
             row['native_reward']=behavior['original_reward']
             row['behavior_metrics']={'native_metrics':behavior['first_run_native_metrics']or{}}
+        if contract.get('adapter_kind')=='pytest-selected-source-v1':
+            from .pytest_source_gold import checkpoint_rows
+            row['selected_source_component']=behavior;row['derived_behavior_checkpoints']=checkpoint_rows(behavior)
+            row['native_reward']=behavior['original_reward']
+            row['behavior_metrics']={'native_metrics':behavior['native_metrics']or{}}
         if admission['family']=='state':row['official_llm_judged_result']=row_official
         if admission['family']=='slop':row['slop_score_channels']=slop_channels
         if contract.get('adapter_kind')=='warranty-source-v1':
@@ -275,6 +283,12 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                 ('S.common.dependency_constraints',behavior['checkpoints']['structural'])]:
                 explicit(identity,point['score'],
                     'Selected original WAL source assertions; first-run behavior, whole ten-run validation and structural restrictions are separate; no State/adoption inference')
+        elif contract.get('adapter_kind')=='pytest-selected-source-v1':
+            for identity,point in [('S.common.protected_constraints',behavior['common_checkpoint']),
+                ('S.common.process_validation',behavior['whole_protocol']),
+                ('S.common.dependency_constraints',behavior['dependency_checkpoint'])]:
+                if point is not None:explicit(identity,point['score'],
+                    'Exact selected parity/archive source test cases and matched console/CTRF evidence; no memory-adoption or general cleanroom-origin inference')
         elif contract.get('adapter_kind')=='interrupt-final-source-v1':
             explicit('S.common.protected_constraints',behavior['goal_checkpoint']['score'],
                 'Pinned final source DOM constraints only; not temporal State correction or transient-action safety. INT-10 requires active-filter evidence beyond native URL matching.')
@@ -360,6 +374,16 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                     if metric['id']in {'S3.original_reward','S3.partial_pass_rate','S.common.protected_constraints',
                             'S.common.process_validation','S.common.dependency_constraints'}and metric['status']!='DESIGN_NA':
                         metric.update(collection_status='REPAIR_REQUIRED',collection_reason='WAL source verifier artifacts contradict the frozen execution order or reward')
+        if contract.get('adapter_kind')=='pytest-selected-source-v1':
+            mark_checkpoint_collection(metrics,{identity:point for identity,point in [
+                ('S.common.protected_constraints',behavior['common_checkpoint']),
+                ('S.common.process_validation',behavior['whole_protocol']),
+                ('S.common.dependency_constraints',behavior['dependency_checkpoint'])]if point is not None})
+            if behavior['contradictory_reward']or behavior['evidence_issues']:
+                for metric in metrics:
+                    if metric['id']in {'S3.original_reward','S3.partial_pass_rate','S.common.protected_constraints',
+                            'S.common.process_validation','S.common.dependency_constraints'}and metric['status']!='DESIGN_NA':
+                        metric.update(collection_status='REPAIR_REQUIRED',collection_reason='Selected source test identity/reward evidence requires repair')
         if contract.get('adapter_kind')=='interrupt-final-source-v1':
             mark_checkpoint_collection(metrics,{'S.common.protected_constraints':behavior['goal_checkpoint']})
         if contract.get('adapter_kind')=='slop-fk-source-v1':
@@ -384,6 +408,7 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             and all(r.get('slop_fk_component',{}).get('collection_complete',True)for r in rows)
             and all(r.get('warranty_component',{}).get('collection_complete',True)for r in rows)
             and all(r.get('wal_component',{}).get('collection_complete',True)for r in rows)
+            and all(r.get('selected_source_component',{}).get('collection_complete',True)for r in rows)
             and not any(m.get('collection_status')=='REPAIR_REQUIRED'for r in rows for m in r['normalized_metrics']),
         'fixture_scores_included':fixture_control,'official_outcomes_sha256':file_digest(official_outcomes)if official_outcomes else None,
         'contract_sha256':admission['contract_sha256'],'contract_version':contract['version']}
