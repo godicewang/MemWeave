@@ -15,6 +15,18 @@ def register(sub):
     sources.add_argument('design',type=Path)
     sources.add_argument('--sources',type=Path,required=True)
     sources.add_argument('--output',type=Path,required=True)
+    fk=commands.add_parser('slop-fk-tasks',help='Derive SCB-02 source FK correction checkpoints; no model calls or admission')
+    fk.add_argument('--design',type=Path,required=True)
+    fk.add_argument('--source',type=Path,required=True)
+    fk.add_argument('--runtime-task',type=Path,required=True)
+    fk.add_argument('--output',type=Path,required=True)
+    fk_replay=commands.add_parser('slop-fk',help='Replay SCB-02 rule timing, semantic invalidation, business tests and Task continuity')
+    fk_replay.add_argument('trial',type=Path)
+    fk_replay.add_argument('--contract',type=Path,required=True)
+    fk_replay.add_argument('--official-outcome',type=Path)
+    fk_replay.add_argument('--arm',choices=['pi-native','pi-memweave'],required=True)
+    fk_replay.add_argument('--fixture-control',action='store_true')
+    fk_replay.add_argument('--output',type=Path,required=True)
     interrupt=commands.add_parser('interrupt-contract',help='Freeze selected Interrupt final-value source gold; browser environment and temporal behavior are not admitted')
     interrupt.add_argument('--design',type=Path,required=True)
     interrupt.add_argument('--source',type=Path,required=True)
@@ -111,6 +123,25 @@ def register(sub):
 
 
 def execute(args):
+    if args.fixed35_command=='slop-fk-tasks':
+        from .slop_fk_gold import freeze_contract
+        design=read_design(args.design);case=next(c for c in design['selection']['cases']if c['pack_case_id']=='SCB-02')
+        matrix=[r for r in applicability_matrix(design)if r['case_id']=='SCB-02']
+        for row in matrix:
+            if row['metric_id']=='S.common.protected_constraints':
+                row.update(design_status='PLANNED',opportunity_ids=['checkpoint-3-five-fk-source-tests'],
+                    reason='Five independent original FK/rollback test assertions AND; not general constraints or entire source outcome')
+        result=freeze_contract(case,args.source,args.runtime_task,args.output,metric_matrix=matrix)
+        return {'case_id':result['case_id'],'task_path':result['task_path'],'paid_requests':0,'not_formal_admission':True}
+    if args.fixed35_command=='slop-fk':
+        from .slop_fk_gold import grade_trial
+        contract=json.loads(args.contract.read_text())
+        outcome=json.loads(args.official_outcome.read_text())if args.official_outcome else None
+        result=grade_trial(args.trial,contract,arm=args.arm,official_outcome=outcome)
+        if result['fixture_only']and not args.fixture_control:raise ValueError('Slop FK fixtures require explicit fixture-control')
+        atomic_json(args.output,result,immutable=True)
+        return {'case_id':result['case_id'],'output':str(args.output),'paid_requests':0,
+            'fixture_only':result['fixture_only'],'collection_complete':result['collection_complete']}
     if args.fixed35_command=='interrupt-contract':
         from .interrupt_source_gold import freeze_contract
         design=read_design(args.design);case=next(c for c in design['selection']['cases']if c['pack_case_id']==args.case_id)

@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261103-v19'
+VERSION='fixed35-score-20261103-v20'
 
 
 def mark_checkpoint_collection(metrics,points):
@@ -70,7 +70,8 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
         raise ValueError('frozen scoring contract changed')
     pair=json.loads((root/'pair-result.json').read_text());rows=[]
     official=json.loads(official_outcomes.read_text())if official_outcomes else None
-    if admission['family']=='slop'and (not official or official.get('case_id')!=admission['case_id']or official.get('fixture_scores_included')is not False):
+    if admission['family']=='slop'and (not official or official.get('case_id')!=admission['case_id']or
+            official.get('fixture_scores_included')is not False and not(fixture_control and official.get('fixture_scores_included')is True)):
         raise ValueError('matching actual Slop verifier outcomes required; fixture scores rejected')
     for outcome in pair['arms']:
         arm=outcome['arm'];collection=outcome['collection'];trial=Path(outcome['result_path']).parent
@@ -143,6 +144,11 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             'collection':collection,'original_exception':outcome['exception'],'case_behavior':behavior}
         if admission['family']=='state':row['official_llm_judged_result']=row_official
         if admission['family']=='slop':row['slop_score_channels']=slop_channels
+        if contract.get('adapter_kind')=='slop-fk-source-v1':
+            from .slop_fk_gold import checkpoint_rows, grade_trial
+            component=grade_trial(trial,contract,arm=arm,official_outcome=official['arms'][arm])
+            if component['fixture_only']and not fixture_control:raise ValueError('Slop FK fixture cannot enter an actual report')
+            row['slop_fk_component']=component;row['derived_behavior_checkpoints']=checkpoint_rows(component)
         if contract.get('adapter_kind')=='interrupt-final-source-v1':
             from .interrupt_source_gold import checkpoint_rows
             row['interrupt_component']=behavior;row['derived_behavior_checkpoints']=checkpoint_rows(behavior)
@@ -237,6 +243,11 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
         elif contract.get('adapter_kind')=='switch-remembered-contract-v2':
             row['normalization_evidence']['S.common.protected_constraints']=behavior['common_checkpoint_metric']
             if arm=='pi-memweave':row['normalization_evidence'].update(behavior['task_checkpoint_metrics'])
+        elif contract.get('adapter_kind')=='slop-fk-source-v1':
+            # Source components supplement, rather than impersonate, the broad
+            # legacy C5/Task families. Their explicit rows have zero extra weight.
+            explicit('S.common.protected_constraints',row['slop_fk_component']['checkpoints']['source-business-3']['score'],
+                'AND of five pinned independent FK/rollback source tests at checkpoint 3; original strict source outcome remains separate')
         normalized=normalize_trial_scores(row)
         metrics=[]
         assigned={m['metric_id']:m for m in contract['metric_matrix']}
@@ -280,6 +291,8 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             mark_checkpoint_collection(metrics,{'S.common.protected_constraints':behavior['checkpoint']})
         if contract.get('adapter_kind')=='interrupt-final-source-v1':
             mark_checkpoint_collection(metrics,{'S.common.protected_constraints':behavior['goal_checkpoint']})
+        if contract.get('adapter_kind')=='slop-fk-source-v1':
+            mark_checkpoint_collection(metrics,{'S.common.protected_constraints':row['slop_fk_component']['checkpoints']['source-business-3']})
         if contract.get('adapter_kind')=='switch-remembered-contract-v2'and not behavior['collection_complete']:
             for metric in metrics:
                 if (metric['id']=='S.common.protected_constraints'or metric['id'].startswith(('S4.','F35.T')) )and metric['status']!='DESIGN_NA':
@@ -297,6 +310,7 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
     result={'schema_version':3,'evaluator_version':VERSION,'case_id':admission['case_id'],
         'rows':rows,'collection_accepted':all(r['collection']['collection_complete'] for r in rows)
             and (official is None or all(p['collection_complete']for p in official['arms'].values()))
+            and all(r.get('slop_fk_component',{}).get('collection_complete',True)for r in rows)
             and not any(m.get('collection_status')=='REPAIR_REQUIRED'for r in rows for m in r['normalized_metrics']),
         'fixture_scores_included':fixture_control,'official_outcomes_sha256':file_digest(official_outcomes)if official_outcomes else None,
         'contract_sha256':admission['contract_sha256'],'contract_version':contract['version']}
