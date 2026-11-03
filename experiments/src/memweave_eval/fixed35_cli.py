@@ -15,6 +15,15 @@ def register(sub):
     sources.add_argument('design',type=Path)
     sources.add_argument('--sources',type=Path,required=True)
     sources.add_argument('--output',type=Path,required=True)
+    wal=commands.add_parser('wal-contract',help='Freeze TB-05 exact original test identities and gate checkpoints; no model calls or admission')
+    wal.add_argument('--design',type=Path,required=True)
+    wal.add_argument('--source',type=Path,required=True)
+    wal.add_argument('--output',type=Path,required=True)
+    wal_replay=commands.add_parser('wal',help='Replay TB-05 original verifier gates, 97-case source outcomes and ten-run determinism')
+    wal_replay.add_argument('trial',type=Path)
+    wal_replay.add_argument('--contract',type=Path,required=True)
+    wal_replay.add_argument('--fixture-control',action='store_true')
+    wal_replay.add_argument('--output',type=Path,required=True)
     warranty=commands.add_parser('warranty-tasks',help='Bind TB-02 portal source gold and a shared claim-recording schema; no models or admission')
     warranty.add_argument('--design',type=Path,required=True)
     warranty.add_argument('--source',type=Path,required=True)
@@ -134,6 +143,23 @@ def register(sub):
 
 
 def execute(args):
+    if args.fixed35_command=='wal-contract':
+        from .wal_gold import freeze_contract
+        design=read_design(args.design);case=next(c for c in design['selection']['cases']if c['pack_case_id']=='TB-05')
+        matrix=[r for r in applicability_matrix(design)if r['case_id']=='TB-05']
+        for metric in matrix:
+            if metric['metric_id']in {'S.common.protected_constraints','S.common.process_validation','S.common.dependency_constraints'}:
+                metric.update(design_status='PLANNED',opportunity_ids=['selected-wal-source-verifier'],
+                    reason='Frozen exact source behavior, ten-run validation and structural gates respectively; no general memory inference')
+        value=freeze_contract(case,args.source,args.output,metric_matrix=matrix)
+        return {'case_id':'TB-05','output':str(args.output),'source_test_ids':len(value['test_ids']),
+            'not_formal_admission':True,'paid_requests':0}
+    if args.fixed35_command=='wal':
+        from .wal_gold import grade_trial
+        value=grade_trial(args.trial,json.loads(args.contract.read_text()),fixture_control=args.fixture_control)
+        atomic_json(args.output,value,immutable=True)
+        return {'case_id':'TB-05','output':str(args.output),'collection_complete':value['collection_complete'],
+            'fixture_only':value['fixture_only'],'paid_requests':0}
     if args.fixed35_command=='warranty-tasks':
         from .warranty_gold import freeze_contract
         design=read_design(args.design);case=next(c for c in design['selection']['cases']if c['pack_case_id']=='TB-02')
