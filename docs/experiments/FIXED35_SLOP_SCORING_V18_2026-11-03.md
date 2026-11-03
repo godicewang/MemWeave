@@ -20,3 +20,5 @@
 |trajectory_api|nop|5|0|0|
 
 每点沿用固定的原测试组AND，表中控制不是原生／插件模型臂，不能拿reference当插件结果。未运行容器或付费模型；真实账本仍保持`fabfce853c8b8beb43fb840f6eba8992b1fc4c48dd2a550ac4183d7f8b20c029`，正式0/35。旧清单有缓存评分时比对JSON规范化结果；没有缓存评分的条目只读其实际原报告重算，不默认旧分为0或100。
+
+后续预检还复现正式`score_pair`错误使用上一轮固定截止`1793661132`的问题。修复只读取当前admission已哈希冻结的campaign `container_cutoff`，供纯程序verifier使用；缺失／变化的campaign证明在创建评分目录或启动verifier前拒绝。两臂同一截止，并在输出中记录campaign hash及截止来源。不修改现有campaign时钟、API额度或源测试；程序verifier仍预留既有15秒边界及每点900秒上限。

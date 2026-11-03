@@ -190,7 +190,9 @@ def score_pair(root:Path,output:Path,*,fixture_only=False):
     from concurrent.futures import ThreadPoolExecutor
 
     from .fixed35_campaign import trusted_environment
+    from .fixed35_campaign_config import campaign_config
     admission=json.loads((root/'admission.json').read_text());pair=json.loads((root/'pair-result.json').read_text())
+    campaign=campaign_config(admission);deadline=campaign['container_cutoff']
     config=admission['slop_verifier']
     if file_digest(Path(config['environment']))!=config['environment_sha256']:raise ValueError('frozen Slop verifier config changed')
     for path,sha in [(config['sources'],config['problem_revision']),(config['runner_source'],config['runner_revision'])]:
@@ -203,9 +205,11 @@ def score_pair(root:Path,output:Path,*,fixture_only=False):
         outcome=next(x for x in pair['arms']if x['arm']==arm)
         return arm,evaluate_trial(Path(outcome['result_path']).parent,problem=config['problem'],stages=config['stages'],
             runner=config['runner'],environment=config['environment'],sources=config['sources'],output=output/arm,
-            deadline=1793661132.,env=env,expected_image=config['image_id'],fixture_only=fixture_only)
+            deadline=deadline,env=env,expected_image=config['image_id'],fixture_only=fixture_only)
     with ThreadPoolExecutor(max_workers=2)as pool:arms=dict(pool.map(score,['pi-native','pi-memweave']))
     record={'case_id':admission['case_id'],'arms':arms,'fixture_scores_included':fixture_only,
-        'version':'fixed35-slop-applicable-20261102-v2','admission_sha256':file_digest(root/'admission.json')}
+        'version':'fixed35-slop-applicable-20261102-v2','admission_sha256':file_digest(root/'admission.json'),
+        'campaign_sha256':admission['campaign']['sha256'],'verifier_deadline_unix':deadline,
+        'deadline_source':'hash_bound_campaign.container_cutoff'}
     atomic_json(output/'pair-official-outcomes.json',record,immutable=True)
     return output/'pair-official-outcomes.json'

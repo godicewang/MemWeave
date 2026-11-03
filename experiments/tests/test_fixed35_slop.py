@@ -80,6 +80,43 @@ def test_known_missing_required_submission_is_original_failure_without_fabricate
     assert result['checkpoints']['a']['passed']is None and result['checkpoints']['a']['total']is None
 
 
+def test_score_pair_binds_current_campaign_container_clock_and_rejects_missing_or_changed_proof(tmp_path,monkeypatch):
+    import json
+
+    from memweave_eval import fixed35_slop
+    from memweave_eval.storage import file_digest
+    root=tmp_path/'case';root.mkdir();environment=tmp_path/'environment.yaml';environment.write_text('fixture')
+    config={'schema_version':1,'budget_id':'new-independent','ledger':str(tmp_path/'new-independent/quota.json'),
+        'started_at':1000,'model_cutoff':2000,'judge_cutoff':3000,'container_cutoff':4000,'hard_deadline':5000,
+        'maximum_usd':19.,'authorized_usd':20.,'arm_limits':{'pi-native':9.,'pi-memweave':9.,'preflight':1.}}
+    campaign=tmp_path/'campaign.json';campaign.write_text(json.dumps(config))
+    admission={'case_id':'SCB-02','code_path':str(tmp_path),
+        'campaign':{'path':str(campaign),'sha256':file_digest(campaign)},'slop_verifier':{
+            'environment':str(environment),'environment_sha256':file_digest(environment),'sources':str(tmp_path/'source'),
+            'problem_revision':'f'*40,'runner_source':str(tmp_path/'runner'),'runner_revision':'f'*40,
+            'runner':str(tmp_path/'runner/bin/slop'),'problem':'database_migration',
+            'stages':[f'checkpoint_{i}'for i in range(1,6)],'image_id':'sha256:fixture'}}
+    path=root/'admission.json';path.write_text(json.dumps(admission))
+    (root/'pair-result.json').write_text(json.dumps({'arms':[{'arm':arm,'result_path':str(tmp_path/arm/'result.json')}
+        for arm in ['pi-native','pi-memweave']]}))
+    monkeypatch.setattr('memweave_eval.fixed35_campaign.trusted_environment',lambda _:{})
+    monkeypatch.setattr(fixed35_slop.subprocess,'check_output',lambda command,**kw:'f'*40 if command[-1]=='HEAD'else'')
+    calls=[]
+    def evaluate(trial,**kwargs):
+        calls.append(kwargs['deadline']);return {'collection_complete':True,'score':100,'fixture_scores_included':True}
+    monkeypatch.setattr(fixed35_slop,'evaluate_trial',evaluate)
+    scored=fixed35_slop.score_pair(root,tmp_path/'scored',fixture_only=True)
+    assert calls==[4000,4000]
+    metadata=json.loads(scored.read_text())
+    assert metadata['verifier_deadline_unix']==4000 and metadata['campaign_sha256']==admission['campaign']['sha256']
+    changed=json.dumps({});campaign.write_text(changed)
+    with pytest.raises(ValueError,match='changed'):fixed35_slop.score_pair(root,tmp_path/'changed',fixture_only=True)
+    assert not(tmp_path/'changed').exists()and len(calls)==2
+    admission.pop('campaign');path.write_text(json.dumps(admission))
+    with pytest.raises(ValueError,match='campaign'):fixed35_slop.score_pair(root,tmp_path/'missing',fixture_only=True)
+    assert not(tmp_path/'missing').exists()and len(calls)==2
+
+
 def test_sdk_resource_adapter_labels_and_caps_only_the_owned_create(tmp_path):
     from types import SimpleNamespace
 
