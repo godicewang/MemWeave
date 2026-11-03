@@ -56,7 +56,9 @@ def _answer(records):
             parts=row['_value'].get('content')
             if isinstance(parts,list):
                 texts=[p['text']for p in parts if p.get('type')=='text'and isinstance(p.get('text'),str)]
-                if texts:last='\n'.join(texts)
+                # An observed assistant message with no text is an empty
+                # answer, distinct from a missing assistant-return record.
+                last='\n'.join(texts)
     return last
 
 
@@ -221,6 +223,22 @@ def load_task_records(trial):
     return events,records
 
 
+def task_observation_complete(spec,observed):
+    """A known failed verdict never waives required observation fields."""
+    if observed.get('complete')is not True:return False
+    if spec['kind']=='retrieval':return type(observed.get('limit'))is int and isinstance(observed.get('candidates'),list)
+    if spec['kind']=='restore':return 'bound'in observed and all(type(observed.get(k))is bool
+        for k in ['request_current','action_passed'])
+    if not isinstance(observed.get('created_ids'),list):return False
+    if spec.get('must_create')and any(type(observed.get(k))is not bool for k in ['goal_scope_correct','before_deadline']):return False
+    if spec.get('simple')and any(type(observed.get(k))is not bool for k in ['answer_passed','protected_unchanged',
+            *(['return_action_passed']if spec.get('return_opportunity_id')else[])]):return False
+    for name in spec.get('required_route_checks',[]):
+        program=observed.get('program_route_checks');check=program.get(name,{})if isinstance(program,dict)else{}
+        if not isinstance(check,dict)or type(check.get('passed'))is not bool or not check.get('evidence_ids'):return False
+    return True
+
+
 def grade_task_trial(trial,contract,*,action_evidence=None):
     events,records=load_task_records(trial)
     observations={g['id']:extract_task_opportunity(g,records,
@@ -245,4 +263,5 @@ def grade_task_trial(trial,contract,*,action_evidence=None):
     result.update(extractor_version=VERSION,observations=observations,boundary_coverage=coverage,
         fixture_only=contract.get('fixture_only')is True,
         interpretation='real Task protocol evidence plus explicit evaluator program actions; fixtures never count as model behavior')
+    result['collection_complete']=coverage['complete']and all(task_observation_complete(s,observations[s['id']])for s in contract['opportunities'])
     return result

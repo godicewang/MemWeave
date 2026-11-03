@@ -76,7 +76,8 @@ def test_task_search_real_arguments_result_ranking_and_limit_missing():
     result,_=score(gold,[before,end]);assert result['metrics']['hit_at_k']['value']==0
     query=tool('task_find',args={'query':'previous task','limit':2})
     result,_=score(gold,protocol([before,query,reply(value=[{'task_id':'task_old'}]),end]))
-    assert result['metrics']['hit_at_k']['unknown']==1
+    assert result['metrics']['hit_at_k']['unknown']==0
+    assert result['metrics']['hit_at_k']['not_applicable']==1
 
 
 def test_blocked_search_with_public_tool_result_is_known_failure_not_missing_receipt():
@@ -131,6 +132,13 @@ def test_source_probe_critical_boundary_uses_observed_file_commit_not_an_earlier
     action['first_action_call_id']='not-observed'
     result,_=score(gold,rows,action)
     assert result['metrics']['restore_end_to_end']['unknown']==1
+
+
+def test_known_wrong_binding_does_not_waive_missing_actual_delivery_or_action_proof():
+    from memweave_eval.fixed35_task_behavior import task_observation_complete
+    spec={'id':'restore','kind':'restore'}
+    assert not task_observation_complete(spec,{'complete':True,'bound':'wrong','request_current':None,'action_passed':False})
+    assert task_observation_complete(spec,{'complete':True,'bound':'wrong','request_current':True,'action_passed':False})
 
 
 def test_independent_goal_create_and_deadline_require_durable_objects():

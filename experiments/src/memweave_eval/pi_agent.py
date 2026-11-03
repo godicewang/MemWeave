@@ -46,6 +46,7 @@ class PiExperimentOptions(PiOptions):
     # PiOptions is a Pydantic model; mutable field defaults are copied per instance.
     evaluation_task_timeouts: dict[str,int] = {}  # noqa: RUF012
     evaluation_stage_timeouts: list[float] = []  # noqa: RUF012 -- Pydantic copies mutable defaults.
+    evaluation_expected_stage_names: list[str] = []  # noqa: RUF012
     evaluation_task_ids: list[str] = []  # noqa: RUF012
     evaluation_task_configs: dict = {}  # noqa: RUF012
     evaluation_sealed_tasks: list[str] = []  # noqa: RUF012
@@ -88,6 +89,18 @@ class ExperimentPi(Pi):
 
     def get_version_command(self) -> str:
         return "pi --version"
+
+    async def _session_positions(self,environment):
+        if not self.options.evaluation_deadline:return await super()._session_positions(environment)
+        if not getattr(self,'_asset_root',None):raise RuntimeError('trusted evaluation Node runtime unavailable')
+        root=self.environment_logs_dir/self._SESSIONS_DIRECTORY
+        result=await self.exec_as_agent(environment,'node '+shlex.quote(self._asset_root+'/evaluation/session_positions.mjs')+
+            ' '+shlex.quote(str(root)))
+        values=json.loads(result.stdout)
+        if not isinstance(values,dict)or any(not isinstance(name,str)or not name.endswith('.jsonl')
+                or type(count)is not int or count<0 for name,count in values.items()):
+            raise ValueError('invalid native Session line-count result')
+        return values
 
     async def pack_asset(self, environment, directory: str, top: str, target: Path):
         remote = self._experiment_home + "/.memweave-export.tar"
@@ -304,7 +317,7 @@ class ExperimentPi(Pi):
         if self.options.evaluation_deadline:
             evaluator = self._asset_root + '/evaluation'
             await self.exec_as_agent(environment, f'mkdir -p {shlex.quote(evaluator)}')
-            for filename in ('fetch_guard.mjs', 'workspace_git.mjs', 'content_evidence.mjs', 'guard_bootstrap.mjs', 'preload.mjs', 'budget_guard.py', 'quota_ipc.mjs', 'container_deadline.py', 'budget_guard.mjs', 'container_deadline.mjs', 'sealed_runtime.mjs', 'sealed_bash_env.sh', 'request_boundary.ts', 'reference_source.ts', 'task_registry.mjs', 'checkpoint_observer.ts'):
+            for filename in ('fetch_guard.mjs', 'workspace_git.mjs', 'session_positions.mjs', 'content_evidence.mjs', 'guard_bootstrap.mjs', 'preload.mjs', 'budget_guard.py', 'quota_ipc.mjs', 'container_deadline.py', 'budget_guard.mjs', 'container_deadline.mjs', 'sealed_runtime.mjs', 'sealed_bash_env.sh', 'request_boundary.ts', 'reference_source.ts', 'task_registry.mjs', 'checkpoint_observer.ts'):
                 await environment.upload_file(Path(__file__).with_name(filename), evaluator+'/'+filename)
             if self.options.prepare_only:
                 await environment.upload_file(Path(__file__).with_name('probe_request.mjs'),evaluator+'/probe_request.mjs')
@@ -342,6 +355,7 @@ class ExperimentPi(Pi):
             "canary": self.options.evaluation_canary,
             "fresh_profile_and_memory": True,
             "evaluation_window_pressure":pressure if self.options.variant=='pi-memweave'else None,
+            "expected_actor_stage_names":self.options.evaluation_expected_stage_names,
             "resources": resources,
             "deployment_seconds": time.monotonic() - started,
             "package_sha256": self.options.package_sha256 if self.options.extension else None,

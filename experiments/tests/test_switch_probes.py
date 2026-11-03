@@ -55,6 +55,17 @@ def test_source_binding_must_be_observed_at_the_actual_mutation_call_not_only_at
     assert binding_at_deadline([end],'2',9,['target'])['passed']is True
 
 
+def test_probe_cannot_repair_an_earlier_wrong_code_action_and_then_claim_successful_restore():
+    from memweave_eval.fixed35_switch_replay import unchanged_until_probe
+    def frame(phase,digest):return {'phase':phase,'workspace':{'git_worktrees':{
+        'w00':{'status':'complete','projection_sha256':digest}}}}
+    start=frame('agent_start','a');commit=frame('tool_end','a')
+    assert unchanged_until_probe([start,commit],commit,['w00'])is True
+    assert unchanged_until_probe([start,frame('tool_end','b'),commit],commit,['w00'])is False
+    assert unchanged_until_probe([start,commit,frame('tool_end','b')],commit,['w00'])is True
+    assert unchanged_until_probe([start,{'workspace':{}},commit],commit,['w00'])is None
+
+
 def test_forbidden_persistent_creation_is_known_wrong_without_a_goal_semantics_judge():
     from memweave_eval.behavior_metrics import evaluate_behavior
     gold={'version':'source-case','cases':[{'id':'simple','kind':'route','allowed':['continue'],
@@ -73,6 +84,16 @@ def test_probe_assertions_and_opportunities_are_distinct_denominators():
     missing=checkpoint_metric([p(100),p(None)])
     assert missing['value']is None and missing['numerator']==1 and missing['unknown']==1
     assert checkpoint_metric([])['status']=='not_applicable'
+
+
+def test_task_aggregate_rows_average_opportunities_after_each_internal_and_not_all_cases_together():
+    from memweave_eval.fixed35_switch_replay import task_checkpoint_metrics
+    value=task_checkpoint_metrics({'cases':[{'case_id':'T2:a','kind':'restore','value':1,'status':'scored'},
+        {'case_id':'T2:b','kind':'restore','value':0,'status':'scored'},{'case_id':'T3:independent','kind':'route','value':1,'status':'scored'},
+        {'case_id':'T3-followup:later','kind':'route','value':0,'status':'scored'}]})
+    assert value['S.case_v2.T2-current-task-restore']['value']==.5
+    assert value['S.case_v2.T3-independent-goal-create']['value']==1
+    assert value['S.case_v2.T4-ephemeral-interruption']['status']=='not_applicable'
 
 
 def test_original_tests_remain_separate_from_remembered_contract_probe(tmp_path):

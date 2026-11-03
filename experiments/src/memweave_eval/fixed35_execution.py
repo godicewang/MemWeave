@@ -40,6 +40,12 @@ def job_config(*,root:Path,task:Path,case_id,arm,run_id,plan:Path,deadline,
     if not all(type(v)is int and v>0 for v in resources.values())or not {'cpus','memory_mb'}<=set(resources):
         raise ValueError('positive integer CPU/memory resource limits required')
     name=case_id.lower()+'-'+arm+('-software' if prepare_only else '-canary' if canary else '')
+    declaration=tomllib.loads((task/'task.toml').read_text())if(task/'task.toml').exists()else{}
+    # STATE can have a dynamic simulated dialogue inside one Harbor task.
+    # Only an actual source `steps` sequence defines this diagnostic denominator.
+    stages=[s.get('name')for s in declaration.get('steps')or[]]
+    if any(not isinstance(s,str)or not s for s in stages)or len(set(stages))!=len(stages):
+        raise ValueError('expected source actor stages must be uniquely named')
     options={'version':'1.4.0','node_version':'24.22.0','variant':arm,
              'package_path':str(PACKAGE),'package_sha256':PACKAGE_SHA256,
              'auth_path':'' if prepare_only else str(Path.home()/'.local/share/memweave-dev/pi-agent/auth.json'),
@@ -49,6 +55,7 @@ def job_config(*,root:Path,task:Path,case_id,arm,run_id,plan:Path,deadline,
              'evaluation_quota_backend':'python','evaluation_content_evidence':True,
              'evaluation_case_id':case_id,'evaluation_task_ids':[task.name],
              'evaluation_task_configs':{task.name:task_config or {}},
+             'evaluation_expected_stage_names':stages,
              'evaluation_run_id':run_id+':'+case_id+(':canary' if canary else ''),
              'evaluation_progress_after_returns':0,'evaluation_canary':canary,
              'evaluation_request_limit':1 if canary else None,

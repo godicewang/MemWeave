@@ -17,10 +17,14 @@ def test_retrieval_limits_best_subset_and_deduplication():
     assert result["metrics"]["top1_given_best_hit"]["value"] == 0
     short = run(case, {"limit": 2, "candidates": ["a"], "complete": True})
     assert short["metrics"]["hit_at_k"]["value"] is None
-    assert short["metrics"]["hit_at_k"]["unknown"] == 1
+    assert short["metrics"]["hit_at_k"]["unknown"] == 0
+    assert short["metrics"]["hit_at_k"]["not_applicable"] == 1
+    assert short['cases'][0]['status']=='not_applicable'
     empty = run(case, {"limit": 3, "candidates": [], "complete": True, "error": True})
     assert empty["metrics"]["hit_at_k"]["value"] == 0
     assert empty["metrics"]["top1_given_best_hit"]["value"] is None
+    rejected=run(case,{'limit':0,'candidates':[],'complete':True,'query_failed':True})
+    assert rejected['metrics']['hit_at_k']['value']==0
 
 
 def test_restore_keeps_missed_intents_and_does_not_require_search():

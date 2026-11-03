@@ -149,7 +149,10 @@ def collect_episode(trial: Path, *, arm, ledger: Path,auxiliary_roots=(),expecte
     tools=known_zero_tools(tools,complete=boundary['complete'])
     from .fixed35_references import grade_known_references
     references=grade_known_references(trial,events=events,locations=locations)
-    return {'collection_complete':not unresolved and boundary['complete']and delivery['complete'],
+    from .stage_execution import stage_execution
+    stages=stage_execution(trial,events)
+    return {'collection_complete':not unresolved and boundary['complete']and delivery['complete']and stages['evidence_complete']is True,
+        'stage_execution':stages,'protocol_execution_complete':stages['protocol_execution_complete'],
         'fixture_control':fixture_control,
         'transport_collection_complete':not unresolved,'execution_boundary_collection':boundary,'requests':len(requests),
         'delivery_metrics':delivery,

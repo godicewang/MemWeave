@@ -10,10 +10,14 @@ from .fixed35 import checkpoint_verdict
 from .fixed35_business import case_events, execution_boundaries
 from .fixed35_switch import grade_switch_final
 from .fixed35_switch_probes import VERSION, grade_probe, route_marker
-from .fixed35_task_behavior import extract_task_opportunity, load_task_records
+from .fixed35_task_behavior import (
+    extract_task_opportunity,
+    load_task_records,
+    task_observation_complete,
+)
 from .storage import file_digest
 
-REPLAY_VERSION='fixed35-switch-replay-20261103-v3'
+REPLAY_VERSION='fixed35-switch-replay-20261103-v4'
 
 
 def source_targets(registry,route_id):
@@ -61,7 +65,25 @@ def binding_at_deadline(records,stage,deadline,targets):
         'evidence_ids':[record['event_sha256']]if record and record.get('event_sha256')else[]}
 
 
-def probe_action(trial,probe,events,locations,records):
+def unchanged_until_probe(rows,first,slots):
+    frames=[e for e in rows if isinstance(e.get('workspace'),dict)]
+    start=next((e for e in frames if e.get('phase')=='agent_start'),None)
+    if not start or not slots:return None
+    initial=start['workspace'].get('git_worktrees',{})
+    if any(initial.get(slot,{}).get('status')!='complete'or not isinstance(
+        initial.get(slot,{}).get('projection_sha256'),str)for slot in slots):return None
+    changed=False;missing=False
+    for e in frames:
+        current=e['workspace'].get('git_worktrees',{})
+        for slot in slots:
+            item=current.get(slot,{})
+            if item.get('status')!='complete':missing=True
+            elif item.get('projection_sha256')!=initial[slot]['projection_sha256']:changed=True
+        if e is first:break
+    return False if changed else None if missing else True
+
+
+def probe_action(trial,probe,events,locations,records,*,worktrees):
     rows=[e for e in events if e.get('stage_id')==probe['stage_id']]
     frames=[e for e in rows if e['event']=='workspace_checkpoint']
     starts=[e for e in frames if e.get('phase')=='agent_start'];ends=[e for e in frames if e.get('phase')=='agent_end']
@@ -89,6 +111,9 @@ def probe_action(trial,probe,events,locations,records):
     point=grade_probe(text,probe)
     point['assertions']['file_absent_at_checkpoint_start']={'value':initial_absent,
         'status':'missing'if initial_absent is None else'pass'if initial_absent else'fail'}
+    clean=unchanged_until_probe(rows,first,worktrees)
+    point['assertions']['no_observed_code_change_before_probe']={'value':clean,
+        'status':'missing'if clean is None else'pass'if clean else'fail'}
     checks={k:v['value']for k,v in point['assertions'].items()}
     point=checkpoint_verdict({'id':point['checkpoint_id'],'required_assertions':list(checks)},checks)
     if not coverage['complete']:point['collection_complete']=False
@@ -107,6 +132,7 @@ def probe_action(trial,probe,events,locations,records):
     values={'schema':assertion_values.get('exact_probe_schema'),
         'source_scope':assertion_values.get('source_constraint:checkout'),
         'source_contract':conjunction(semantic),'audit_tag':assertion_values.get('source_constraint:audit_tag'),
+        'before_code_change':clean,
         'current_goal_identity':marker==probe['route_id']if before and binding.get('status')in {'CAPTURED','NO_BOUND_TASK'}else None}
     action={'first_action_call_id':first.get('call_id')if first else None,'program_checks':[
         {'checker_id':name,'passed':value,'call_id':first.get('call_id')if first else None,
@@ -124,7 +150,8 @@ def grade_switch_probe_trial(trial:Path,contract,*,arm):
             if file_digest(Path(extra['source_path']))!=extra['source_sha256']:
                 raise ValueError('selected latest Switch source update changed')
     events,locations=case_events(trial);_,records=load_task_records(trial)
-    points=[probe_action(trial,p,events,locations,records)for p in contract['probes']]
+    points=[probe_action(trial,p,events,locations,records,
+        worktrees=contract['task_config']['workspace']['worktrees'])for p in contract['probes']]
     fixture=contract.get('fixture_only')is True or any(trial.rglob('cli-fake-upstream.jsonl'))
     result={'version':REPLAY_VERSION,'source_protocol_version':VERSION,'case_id':contract['case_id'],'common_probes':points,
         'scope':contract['scope'],'fixture_only':fixture,
@@ -145,16 +172,20 @@ def grade_switch_probe_trial(trial:Path,contract,*,arm):
         if not targets:
             unavailable.append({'probe':probe['id'],'status':'MISSING_EVIDENCE'if targets is None else'UPSTREAM_RECORD_NOT_CREATED',
                 'reason':'query-time target corpus unknown'if targets is None else'complete corpus has no saved record bearing the original source identity',
-                'retrieval_rates':None,'not_design_na':True})
-        if targets and probe.get('search_requested',True):
+                'retrieval_rates':None,'not_design_na':True,'retrieval_applicable':probe.get('search_requested',True)})
+        if targets and probe.get('search_requested',True)and query:
             retrieve={'id':'T1:'+probe['id'],'kind':'retrieval','stage_id':stage,'k':3,
                 'relevant':targets,'best':targets,'frozen_default_limit':5,'requires_query':True}
             obs=extract_task_opportunity(retrieve,records)
             obs['complete'] &= point['boundary_coverage']['complete']
             specs.append(retrieve);observations[retrieve['id']]=obs
+        elif targets and probe.get('search_requested',True):
+            unavailable.append({'probe':probe['id'],'status':'CONDITIONAL_NO_QUERY',
+                'reason':'no search result was requested; legal known-ID restore is evaluated by end-to-end T2, not forced search',
+                'retrieval_rates':None,'not_design_na':True,'retrieval_applicable':True})
         restore={'id':'T2:'+probe['id'],'kind':'restore','stage_id':stage,'targets':targets or[],
             'critical_tools':['write','edit','bash'],'critical_boundary':'program_action_call_id',
-            'required_checkers':['schema','source_scope','source_contract','audit_tag','current_goal_identity']}
+            'required_checkers':['schema','source_scope','source_contract','audit_tag','current_goal_identity','before_code_change']}
         obs=extract_task_opportunity(restore,records,action_evidence=point['action_evidence'])
         if targets is None:obs.update(complete=False,reason='source target corpus evidence missing')
         obs['complete'] &= point['boundary_coverage']['complete']
@@ -221,10 +252,22 @@ def grade_switch_probe_trial(trial:Path,contract,*,arm):
     obs['complete'] &= coverage['complete']and protected is not None
     specs.append(simple);observations[simple['id']]=obs
     result['task_behavior']=evaluate_behavior({'version':REPLAY_VERSION,'cases':specs},observations)
+    for name in ['hit_at_k','recall_at_k','best_top1','top1_given_best_hit']:
+        metric=result['task_behavior']['metrics'].setdefault(name,{'value':None,'numerator':0,'denominator':0,'unknown':0,'not_applicable':0})
+        for item in unavailable:
+            if item.get('retrieval_applicable'):
+                metric['unknown'if item['status']=='MISSING_EVIDENCE'else'not_applicable']+=1
+        metric.update(value=metric['numerator']/metric['denominator']if metric['denominator']and not metric['unknown']else None,
+            status='unknown'if metric['unknown']else'scored'if metric['denominator']else'not_applicable',
+            reason='query corpus evidence missing'if metric['unknown']else
+                'actual queries only; legal known-ID recovery is kept in the complete T2 intent denominator')
     result['task_behavior'].update(observations=observations,unavailable_target_opportunities=unavailable,
         interpretation='Closed-set source Goal IDs and first synchronous recalled-contract artifact; not arbitrary source-edit correctness.')
+    result['task_checkpoint_metrics']=task_checkpoint_metrics(result['task_behavior'])
     result['collection_complete'] &= not any(u['status']=='MISSING_EVIDENCE'for u in unavailable)
-    result['collection_complete'] &= all(p['status']!='unknown'for p in result['task_behavior']['cases'])
+    missing=[s['id']for s in specs if not task_observation_complete(s,observations[s['id']])]
+    result['missing_task_observation_ids']=missing
+    result['collection_complete'] &= not missing
     return result
 
 
@@ -265,3 +308,22 @@ def checkpoint_metric(points):
         'status':'unknown'if unknown else'scored'if known else'not_applicable',
         'reason':'AND of schema, every source constraint, source scope and early audit tag, '
             'then equal mean across preregistered distinct probe checkpoints; not an original code-test outcome'}
+
+
+def task_checkpoint_metrics(behavior):
+    groups={'T1-retrieval-ranking':lambda c:c['kind']=='retrieval',
+        'T2-current-task-restore':lambda c:c['kind']=='restore',
+        'T3-independent-goal-create':lambda c:c['case_id'].startswith('T3:'),
+        'T4-ephemeral-interruption':lambda c:c['case_id']=='T4:temporary-conversion'}
+    result={}
+    for name,predicate in groups.items():
+        cases=[c for c in behavior['cases']if predicate(c)]
+        eligible=[c for c in cases if c.get('status')!='not_applicable']
+        known=[c for c in eligible if c.get('status')=='scored'and c['value']in (0,1)]
+        success=sum(c['value']==1 for c in known);unknown=len(eligible)-len(known)
+        result['S.case_v2.'+name]={'value':success/len(known)if known and not unknown else None,
+            'numerator':success,'denominator':len(known),'unknown':unknown,
+            'status':'unknown'if unknown else'scored'if known else'not_applicable',
+            'reason':'AND within each source-bound opportunity, equal mean across opportunities; '
+                'legal direct-ID restore is not a retrieval opportunity; no duplicate child-assertion weighting'}
+    return result

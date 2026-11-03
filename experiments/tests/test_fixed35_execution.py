@@ -70,4 +70,5 @@ def test_source_stage_policy_preserves_each_stage_and_sum(tmp_path):
         plan=plan,deadline=3000,seconds=1200,resources={'cpus':2,'memory_mb':4096},time_policy='source-per-stage')
     assert 'override_timeout_sec'not in cfg['agents'][0]
     assert cfg['agents'][0]['kwargs']['evaluation_stage_timeouts']==[900,300]
+    assert cfg['agents'][0]['kwargs']['evaluation_expected_stage_names']==['first','second']
     assert cfg['agents'][0]['kwargs']['evaluation_task_timeouts']=={tmp_path.name:1200}

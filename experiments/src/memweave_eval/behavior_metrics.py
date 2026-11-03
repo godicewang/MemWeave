@@ -56,13 +56,19 @@ def evaluate_behavior(gold: dict, evidence: dict) -> dict:
             relevant, best = set(case["relevant"]), set(case["best"])
             if not relevant or not best or not best <= relevant or type(k) is not int or k < 1:
                 raise ValueError("invalid retrieval gold")
+            failed=obs.get('query_failed')is True
+            if obs.get('complete')is True and not failed and type(obs.get('limit'))is int and 0<obs['limit']<k:
+                for name in ['hit_at_k','recall_at_k','best_top1','top1_given_best_hit']:
+                    totals[name]['not_applicable']+=1
+                results.append({'case_id':identity,'kind':kind,'value':None,'status':'not_applicable','checks':{},
+                    'reason':'effective search limit below frozen K; ranking is unobserved, not a collection loss'})
+                continue
             known = (
                 obs.get("complete") is True
-                and type(obs.get("limit")) is int
-                and obs["limit"] >= k
+                and (failed or type(obs.get("limit")) is int and obs["limit"] >= k)
                 and isinstance(obs.get("candidates"), list)
             )
-            candidates = list(dict.fromkeys(obs.get("candidates", [])))[:k] if known else []
+            candidates = list(dict.fromkeys(obs.get("candidates", [])))[:k] if known and not failed else []
             hit = bool(relevant.intersection(candidates))
             best_hit = bool(best.intersection(candidates))
             checks = {

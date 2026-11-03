@@ -49,6 +49,9 @@ def scoped_execution_boundaries(trial:Path,events,*,stage_id=None):
             if row.get('type')=='message_end'and message.get('role')=='toolResult':
                 completed.add((identity,message.get('toolCallId')))
         related=[e for e in events if e.get('execution_invocation_id')==identity]
+        expected_returns=sum(r.get('type')=='message_end'and(r.get('message')or{}).get('role')=='assistant'for r in native)
+        if expected_returns!=sum(e['event']=='assistant_return'for e in related):
+            errors.append('assistant_return_callbacks_differ_from_native_stdout')
         if any(str(e.get('stage_id'))!=manifest['stage_id']for e in related):
             errors.append('invocation_stage_differs_from_observer')
         starts=[e for e in related if e['event']=='workspace_checkpoint'and e.get('phase')=='agent_start']

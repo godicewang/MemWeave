@@ -2,8 +2,8 @@
 
 No production reducer is imported. Native IDs/links and earlier committed
 metadata establish the expected range; actual HTTP bodies establish delivery.
-Resumed/restarted, compacted, multimedia or token-truncated projections are
-explicitly outside this version and remain missing, never design NA.
+Same-Session resume is checked from raw branch metadata. Foreign resume,
+restart, compaction, multimedia and token truncation remain explicit unknowns.
 """
 from __future__ import annotations
 
@@ -20,16 +20,7 @@ class MissingWindowEvidence(ValueError):
     pass
 
 
-def identity_selection(shape,*,recent_turns,evict_turns):
-    if not isinstance(shape,dict)or shape.get('version')!='native-window-shape-v1' or 'previous_window'not in shape:
-        raise MissingWindowEvidence('native identity ledger missing')
-    if shape.get('unsupported_lifecycle')is not False:
-        raise MissingWindowEvidence('resume/restart requires a separately frozen seed projection oracle')
-    n,b=recent_turns,evict_turns
-    if any(type(v)is not int or v<=0 for v in (n,b))or b>n:raise ValueError('invalid frozen N/B')
-    messages=shape.get('messages');session=shape.get('session_id')
-    if not isinstance(messages,list)or not isinstance(session,str)or not session:
-        raise MissingWindowEvidence('native branch identity list missing')
+def native_events(messages):
     events=[];pending=set();seen=set();anchor=None
     for m in messages:
         if not isinstance(m,dict)or not isinstance(m.get('id'),str)or not m['id']:
@@ -55,6 +46,24 @@ def identity_selection(shape,*,recent_turns,evict_turns):
             if role=='user'and calls:raise ValueError('user event cannot own tool calls')
             events.append({'id':identity,'messages':[identity]});pending=set(calls)
     if pending:raise MissingWindowEvidence('pending native result at request boundary')
+    return events,anchor
+
+
+def identity_selection(shape,*,recent_turns,evict_turns):
+    if not isinstance(shape,dict)or shape.get('version')not in {'native-window-shape-v1','native-window-shape-v2'}or 'previous_window'not in shape:
+        raise MissingWindowEvidence('native identity ledger missing')
+    n,b=recent_turns,evict_turns
+    if any(type(v)is not int or v<=0 for v in (n,b))or b>n:raise ValueError('invalid frozen N/B')
+    messages=shape.get('messages');session=shape.get('session_id')
+    if not isinstance(messages,list)or not isinstance(session,str)or not session:
+        raise MissingWindowEvidence('native branch identity list missing')
+    events,anchor=native_events(messages)
+    if shape.get('unsupported_lifecycle')is not False:
+        if shape['version']!='native-window-shape-v2':
+            raise MissingWindowEvidence('resume/restart requires a separately frozen seed projection oracle')
+        from .resume_window_evidence import MissingResumeEvidence, same_session_resume
+        try:events,_=same_session_resume(shape,native_events,n)
+        except MissingResumeEvidence as error:raise MissingWindowEvidence(str(error))from error
     ids=[e['id']for e in events];prior=shape['previous_window']
     boundary=None;old_batches=[];reset=False
     if prior is not None:
@@ -133,6 +142,7 @@ def grade_identity_windows(trial,request_ids,*,recent_turns,evict_turns,enabled,
             json.loads(read_object(store,event['payload_ref'])),projection,
             recent_turns=recent_turns,evict_turns=evict_turns,max_source_bytes=max_source_bytes)
         items.append(dict(_item(identity,value,reason),assertions=checks))
-    return dict(summarize(items),version='native-identity-plain-text-v1',
+    return dict(summarize(items),version='native-identity-plain-text-v2',
         scope='Independent native-entry range, complete tool events, exact plain-text HTTP projection and durable candidate metadata. '
-            'Not a token-allocation, compaction, resume/restart or multimodal oracle; unsupported evidence is unknown.')
+            'Same-Session declared resume seed fidelity is supported; source-choice optimality, foreign resume, restart, '
+            'token-allocation, compaction or multimodal projections remain outside this oracle; unsupported evidence is unknown.')

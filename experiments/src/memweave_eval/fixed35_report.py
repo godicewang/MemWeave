@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261103-v7'
+VERSION='fixed35-score-20261103-v8'
 
 
 def mark_checkpoint_collection(metrics,points):
@@ -130,7 +130,7 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             row['contract_metrics']['window_integrity']=grade_small_windows(trial,
                 collection['delivery_metrics']['request_ids'],recent_turns=window['recent_turns'],
                 enabled=arm=='pi-memweave',max_source_bytes=window.get('max_source_bytes',100000))
-        if contract.get('window_contract',{}).get('kind')=='native-identity-plain-text-v1':
+        if contract.get('window_contract',{}).get('kind')in {'native-identity-plain-text-v1','native-identity-plain-text-v2'}:
             from .fixed35_identity_window import grade_identity_windows
             window=contract['window_contract']
             row['contract_metrics']['window_integrity']=grade_identity_windows(trial,
@@ -180,6 +180,7 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                 'Source required cancellation fields AND original lookup ordering AND all other fields at every observed domain boundary')
         elif contract.get('adapter_kind')=='switch-remembered-contract-v2':
             row['normalization_evidence']['S.common.protected_constraints']=behavior['common_checkpoint_metric']
+            if arm=='pi-memweave':row['normalization_evidence'].update(behavior['task_checkpoint_metrics'])
         normalized=normalize_trial_scores(row)
         metrics=[]
         assigned={m['metric_id']:m for m in contract['metric_matrix']}
@@ -220,7 +221,7 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                 'F35.C4-three-window-checkpoints':memory.get('three_evictions')})
         if contract.get('adapter_kind')=='switch-remembered-contract-v2'and not behavior['collection_complete']:
             for metric in metrics:
-                if (metric['id']=='S.common.protected_constraints'or metric['id'].startswith('S4.'))and metric['status']!='DESIGN_NA':
+                if (metric['id']=='S.common.protected_constraints'or metric['id'].startswith(('S4.','F35.T')) )and metric['status']!='DESIGN_NA':
                     metric.update(collection_status='REPAIR_REQUIRED',collection_reason='Selected Switch action/Task checkpoint proof incomplete')
         row['normalized_metrics']=metrics
         row['profiles']={name:weighted_profile(metrics,name)for name in ('common_product','plugin_memory')}

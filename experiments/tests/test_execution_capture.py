@@ -53,6 +53,17 @@ def test_cumulative_stage_copies_require_explicit_scope_not_inferred_from_remain
     assert not scoped_execution_boundaries(tmp_path,first,stage_id='nonexistent')['complete']
 
 
+def test_missing_assistant_callback_is_not_mistaken_for_an_observed_empty_answer(tmp_path):
+    events=capture(tmp_path,'one','1');folder=tmp_path/'execution-invocations'
+    output=folder/'one.stdout.jsonl';rows=output.read_text().splitlines()
+    rows.insert(-1,json.dumps({'type':'message_end','message':{'role':'assistant'}}));output.write_text('\n'.join(rows)+'\n')
+    path=folder/'one.json';manifest=json.loads(path.read_text());manifest.update(stdout_sha256=file_digest(output),stdout_bytes=output.stat().st_size)
+    path.write_text(json.dumps(manifest))
+    assert not scoped_execution_boundaries(tmp_path,events)['complete']
+    events.append(dict(events[0],event='assistant_return'))
+    assert scoped_execution_boundaries(tmp_path,events)['complete']
+
+
 @pytest.mark.parametrize('raise_execution',[False,True])
 def test_public_pi_exec_capture_also_runs_after_execution_exception(tmp_path,raise_execution):
     agent=ExperimentPi(logs_dir=tmp_path,model_name='deepseek/deepseek-flash',version='1.4.0',

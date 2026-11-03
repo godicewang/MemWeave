@@ -155,6 +155,8 @@ def derive_switch_probes(source:Path,runtime_task:Path,case_id,output:Path):
         'task_path':str(target),'task_sha256':task_digest(target),'source_task_sha256':task_digest(runtime_task),
         'task_config':{'workspace':{'root':'/work','files':[p['filename']for p in probes],
             'content_files':[p['filename']for p in probes],'worktrees':sorted(first_by_slot)}},
+        'window_contract':{'kind':'native-identity-plain-text-v2','recent_turns':200,'evict_turns':40,
+            'max_source_bytes':4000000,'scope':'Frozen Flash 1M/default 200/40; same-Session declared resume seed fidelity only'},
         'scope':'Explicit closed-set source identities and remembered-contract JSON actions, not a general natural-language Goal oracle. '
             'Original final business tests remain unchanged and separate; no ranking success is inferred without query-time corpus evidence.',
         'status':'SOURCE_BOUND_DERIVED_COMPONENT_NOT_FORMAL_ADMISSION',
