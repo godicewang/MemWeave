@@ -15,6 +15,21 @@ def register(sub):
     sources.add_argument('design',type=Path)
     sources.add_argument('--sources',type=Path,required=True)
     sources.add_argument('--output',type=Path,required=True)
+    interrupt=commands.add_parser('interrupt-contract',help='Freeze selected Interrupt final-value source gold; browser environment and temporal behavior are not admitted')
+    interrupt.add_argument('--design',type=Path,required=True)
+    interrupt.add_argument('--source',type=Path,required=True)
+    interrupt.add_argument('--case-id',choices=['INT-08','INT-09','INT-10'],required=True)
+    interrupt.add_argument('--output',type=Path,required=True)
+    baseline=commands.add_parser('interrupt-baseline',help='Freeze one shared source replay prefix; no model calls, browser replay, or opportunity claim')
+    baseline.add_argument('--contract',type=Path,required=True)
+    baseline.add_argument('--replay',type=Path,required=True)
+    baseline.add_argument('--output',type=Path,required=True)
+    baseline.add_argument('--fixture-control',action='store_true')
+    final_interrupt=commands.add_parser('interrupt-final',help='Grade final selected browser-query evidence; does not infer temporal correction or rating removal from URL alone')
+    final_interrupt.add_argument('--contract',type=Path,required=True)
+    final_interrupt.add_argument('--capture',type=Path,required=True)
+    final_interrupt.add_argument('--output',type=Path,required=True)
+    final_interrupt.add_argument('--fixture-control',action='store_true')
     wdm=commands.add_parser('wdm-contract',help='Freeze source-bound LONG-02 output artifact predicates; no model calls or admission')
     wdm.add_argument('--design',type=Path,required=True)
     wdm.add_argument('--source',type=Path,required=True)
@@ -96,6 +111,35 @@ def register(sub):
 
 
 def execute(args):
+    if args.fixed35_command=='interrupt-contract':
+        from .interrupt_source_gold import freeze_contract
+        design=read_design(args.design);case=next(c for c in design['selection']['cases']if c['pack_case_id']==args.case_id)
+        matrix=[r for r in applicability_matrix(design)if r['case_id']==args.case_id]
+        for row in matrix:
+            if row['metric_id']=='S.common.protected_constraints':
+                row.update(design_status='DESIGN_UNRESOLVED'if args.case_id=='INT-10'else'PLANNED',
+                    opportunity_ids=['selected-final-source-values'],reason='Final source DOM constraints only; not timely memory correction'
+                        if args.case_id!='INT-10'else'Source URL cannot prove rating retraction; calibrated active-filter observation is not implemented')
+        result=freeze_contract(case,args.source,args.output,metric_matrix=matrix)
+        return {'case_id':args.case_id,'output':str(args.output),'paid_requests':0,
+            'not_formal_admission':True,'pending':result['pending']}
+    if args.fixed35_command=='interrupt-baseline':
+        from .interrupt_source_gold import freeze_baseline
+        result=freeze_baseline(json.loads(args.contract.read_text()),args.replay,args.output,
+            fixture_control=getattr(args,'fixture_control',False))
+        return {'case_id':result['case_id'],'output':str(args.output),'paid_requests':0,
+            'total_actions':result['total_actions'],'interrupt_at_action':result['interrupt_at_action'],
+            'baseline_sha256':result['baseline_sha256'],'behavior_opportunity_verified':False,
+            'fixture_only':result['fixture_only']}
+    if args.fixed35_command=='interrupt-final':
+        from .interrupt_source_gold import grade_capture
+        contract=json.loads(args.contract.read_text());capture=json.loads(args.capture.read_text())if args.capture.is_file()else None
+        result=grade_capture(contract,capture)
+        if (result['fixture_only']is True or contract.get('fixture_only')is True)and not args.fixture_control:
+            raise ValueError('Interrupt fixtures require explicit fixture-control; never model performance')
+        atomic_json(args.output,result,immutable=True)
+        return {'case_id':result['case_id'],'output':str(args.output),'paid_requests':0,
+            'collection_complete':result['collection_complete'],'fixture_only':result['fixture_only']}
     if args.fixed35_command=='wdm-contract':
         from .wdm_artifact import wdm_contract
         case=next(c for c in read_design(args.design)['selection']['cases']if c['pack_case_id']=='LONG-02')

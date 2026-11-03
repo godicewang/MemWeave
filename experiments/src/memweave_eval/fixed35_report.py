@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261103-v18'
+VERSION='fixed35-score-20261103-v19'
 
 
 def mark_checkpoint_collection(metrics,points):
@@ -101,6 +101,12 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             behavior=grade_wdm_trial(trial,contract)
             if behavior['fixture_only']and not fixture_control:
                 raise ValueError('fake-provider WDM artifacts require explicit fixture-control reporting')
+        if contract.get('adapter_kind')=='interrupt-final-source-v1':
+            from .interrupt_source_gold import grade_capture
+            capture_path=Path(admission['browser_evaluator_output'])/trial.name/'final.json'
+            behavior=grade_capture(contract,json.loads(capture_path.read_text())if capture_path.is_file()else None)
+            if behavior['fixture_only']is True and not fixture_control:
+                raise ValueError('Interrupt fixture capture requires explicit fixture-control reporting')
         if contract.get('adapter_kind')=='state-business-v1':
             from .fixed35_state_behavior import grade_state_trial
             private=Path(admission['agent_options']['state_evaluator_output'])/trial.name
@@ -137,6 +143,9 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             'collection':collection,'original_exception':outcome['exception'],'case_behavior':behavior}
         if admission['family']=='state':row['official_llm_judged_result']=row_official
         if admission['family']=='slop':row['slop_score_channels']=slop_channels
+        if contract.get('adapter_kind')=='interrupt-final-source-v1':
+            from .interrupt_source_gold import checkpoint_rows
+            row['interrupt_component']=behavior;row['derived_behavior_checkpoints']=checkpoint_rows(behavior)
         if contract.get('adapter_kind')=='switch-remembered-contract-v2'and arm=='pi-memweave':
             row['behavior_metrics']=row['task_behavior']=behavior['task_behavior']
         if contract.get('adapter_kind')=='switch-remembered-contract-v2':
@@ -206,6 +215,9 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             row['derived_behavior_checkpoints']=checkpoint_rows(behavior)
             explicit('S.common.protected_constraints',behavior['checkpoint']['score'],
                 'LONG-02 source geometry/NPY/binary output assertions AND; excludes optical quality and minimum-feature DRC')
+        elif contract.get('adapter_kind')=='interrupt-final-source-v1':
+            explicit('S.common.protected_constraints',behavior['goal_checkpoint']['score'],
+                'Pinned final source DOM constraints only; not temporal State correction or transient-action safety. INT-10 requires active-filter evidence beyond native URL matching.')
         elif contract.get('adapter_kind')=='source-protection-v2':
             explicit('S.common.protected_constraints',behavior['common']['score'],
                 'AND of source-gold initial hashes and every complete observed protected-tree boundary; not original task success')
@@ -266,6 +278,8 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                 'F35.C3-before-dependent-edit':behavior['plugin']})
         if contract.get('adapter_kind')=='wdm-artifact-v1':
             mark_checkpoint_collection(metrics,{'S.common.protected_constraints':behavior['checkpoint']})
+        if contract.get('adapter_kind')=='interrupt-final-source-v1':
+            mark_checkpoint_collection(metrics,{'S.common.protected_constraints':behavior['goal_checkpoint']})
         if contract.get('adapter_kind')=='switch-remembered-contract-v2'and not behavior['collection_complete']:
             for metric in metrics:
                 if (metric['id']=='S.common.protected_constraints'or metric['id'].startswith(('S4.','F35.T')) )and metric['status']!='DESIGN_NA':
