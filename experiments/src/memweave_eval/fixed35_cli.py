@@ -141,6 +141,9 @@ def execute(args):
         for row in matrix:
             if row['metric_id']=='S.common.protected_constraints':
                 row.update(design_status='PLANNED',opportunity_ids=['20-source-claim-decisions'],reason='Mean of 20 signed claim-specific multi-assertion checkpoints; original all-or-nothing reward remains separate')
+            if row['metric_id']in {'S1.timely_write','S1.retention','S1.write_precision','S1.pollution'}:
+                row.update(design_status='PLANNED',opportunity_ids=['finite-warranty-claim-cards-v1'],
+                    reason='Restricted source claim c/b/q grammar; four required late-material slots and reported judgeable creation coverage, not all free-text memory')
         result=freeze_contract(case,args.source,args.runtime_task,args.output,metric_matrix=matrix)
         return {'case_id':result['case_id'],'task_path':result['task_path'],'paid_requests':0,'not_formal_admission':True}
     if args.fixed35_command=='warranty':

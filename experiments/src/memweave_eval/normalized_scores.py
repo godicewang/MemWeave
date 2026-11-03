@@ -38,6 +38,14 @@ def _empty(status='unknown', reason='required_evidence_missing'):
 
 
 def score_value(value, mapping, *, support=None, status=None, reason=None):
+    if support is not None and status!='invalid':
+        counts=tuple(support.get(k)for k in ('numerator','denominator','unknown'))
+        if any(v is None for v in counts):return _empty('unknown','rate_count_evidence_missing')
+        num,den,unknown=counts
+        if not all(_number(v)and v>=0 for v in counts)or num>den:
+            return _empty('invalid','invalid_rate_counts')
+        if status=='not_applicable'and den+unknown>0:
+            return _empty('invalid','nonzero_opportunities_conflict_with_na_flag')
     if status in ('invalid', 'unknown', 'insufficient_sample', 'not_applicable'):
         return _empty(status, reason or status)
     if mapping == 'diagnostic':
@@ -150,6 +158,9 @@ def _view(row):
 
 def _support(row, spec):
     identity, path = spec['id'], spec['raw_source']
+    explicit=(row.get('normalization_evidence')or{}).get(identity)
+    if isinstance(explicit,dict)and all(k in explicit for k in ('numerator','denominator','unknown')):
+        return {k:explicit[k]for k in ('numerator','denominator','unknown')}
     if identity == 'S3.partial_pass_rate':
         return _get(row, 'quality.partial_support')
     if identity.startswith('Q1.tool.') and identity.endswith('.error_rate'):

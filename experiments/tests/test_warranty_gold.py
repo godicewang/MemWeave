@@ -179,6 +179,12 @@ def test_existing_report_keeps_original_outcome_and_explicit_missing_warranty_co
     rows=list(csv.DictReader((tmp_path/'report/derived-behavior.csv').open()))
     assert len(rows)==6 and all(json.loads(r['weights'])=={'common_product':0,'plugin_memory':0}for r in rows)
     assert sum(r['status']=='MISSING_EVIDENCE'for r in rows)==2
+    component.update(common_metric=dict(complete,s=21),memory_metric=complete,collection_complete=True)
+    single_report(tmp_path,tmp_path/'invalid-report',fixture_control=True)
+    invalid=json.loads((tmp_path/'invalid-report/results.json').read_text())
+    assert invalid['collection_accepted']is False
+    metric=next(m for m in invalid['rows'][0]['normalized_metrics']if m['id']=='S.common.protected_constraints')
+    assert metric['status']=='invalid'and metric['score']is None and metric['collection_status']=='REPAIR_REQUIRED'
 
 
 def test_original_claim_partial_counts_zero_missing_and_inconsistency(tmp_path):
@@ -192,3 +198,78 @@ def test_original_claim_partial_counts_zero_missing_and_inconsistency(tmp_path):
     for trace in [{'passed_cases':0,'total_cases':20}, {'passed_cases':21,'total_cases':20,'partial_score':1},
         {'passed_cases':0,'total_cases':0,'partial_score':0},{'passed_cases':20,'total_cases':20,'partial_score':.95}]:
         p.write_text(json.dumps(trace));assert source_native_trace(tmp_path,20)['status']=='INVALID'
+
+
+def test_finite_semantic_card_rates_keep_timeliness_retention_precision_pollution_separate():
+    from memweave_eval.warranty_gold import card_semantics
+    target={'CLM-2601':gold()}
+    text=json.dumps({'c':'CLM-2601','b':gold()['basis_code'],'q':'claim-only'})
+    entries=[{'text':text,'visible':True,'archived':False}]
+    journals={'task':[{'op':'append_fact','fact':text},{'op':'append_fact','fact':'unjudged free text'}]}
+    late={'CLM-2601':{'score':0,'collection_complete':True}}
+    result=card_semantics(target,['CLM-2601'],late,entries,journals,[(1,entries),(2,entries)],complete=True)
+    assert result['timely_write']['value']==0 and result['retention']['value']==1
+    assert result['write_precision']['value']==1 and result['pollution']['value']==0
+    assert result['controlled_coverage']=={'judged_fd_creations':1,'fd_creations':2,'fraction':.5}
+    wrong=json.dumps({'c':'CLM-2601','b':'OLD','q':'all-claims'})
+    bad=entries+[{'text':wrong,'visible':True,'archived':False}]
+    journals['task'].append({'op':'append_decision','decision':wrong})
+    result=card_semantics(target,['CLM-2601'],late,bad,journals,[(1,bad),(1,bad),(2,entries)],complete=True)
+    assert result['write_precision']['value']==.5 and result['pollution']['value']==.5
+    assert result['pollution']['denominator']==2,'same physical boundary is not counted twice'
+    assert result['retention']['value']==0
+    bad[-1]['archived']=True;bad[-1]['visible']=False
+    result=card_semantics(target,['CLM-2601'],late,bad,journals,[(1,bad)],complete=True)
+    assert result['retention']['value']==1 and result['write_precision']['value']==.5,'archival cannot erase a bad earlier creation'
+
+
+def test_semantic_card_zero_and_missing_are_never_confused():
+    from memweave_eval.warranty_gold import card_semantics
+    targets={'CLM-2601':gold()};point={'CLM-2601':{'score':0,'collection_complete':True}}
+    empty=card_semantics(targets,['CLM-2601'],point,[],{},[(1,[])],complete=True)
+    assert empty['timely_write']['value']==empty['retention']['value']==0
+    assert empty['write_precision']['status']=='not_applicable'and empty['write_precision']['value']is None
+    assert empty['pollution']['value']==0
+    missing=card_semantics(targets,['CLM-2601'],point,None,None,[(1,None)],complete=False)
+    assert all(missing[k]['value']is None for k in ['timely_write','retention','write_precision','pollution'])
+    assert missing['controlled_coverage']['fraction']is None
+
+
+def test_explicit_finite_card_counts_reach_normalized_raw_score_support_and_bounds():
+    from memweave_eval.normalized_scores import normalize_trial_scores
+    row={'variant_id':'pi-memweave','normalization_evidence':{'S1.timely_write':{
+        'value':None,'numerator':1,'denominator':2,'unknown':1,'status':'unknown'}}}
+    metric=next(m for m in normalize_trial_scores(row)['metrics']if m['id']=='S1.timely_write')
+    assert metric['raw']is None and metric['observed_raw']==.5 and metric['score']==50
+    assert metric['status']=='partial'and metric['coverage']==2/3
+    assert [metric['support_'+key]for key in ['s','f','u','n']]==[1,1,1,3]
+    from memweave_eval.fixed35_report import raw_display
+    shown=json.loads(raw_display(metric))
+    assert shown=={'raw':None,'observed_raw':.5,'s':1,'f':1,'u':1,'n':3}
+    row['normalization_evidence']['S1.timely_write'].update(value=1,numerator=3,denominator=2,unknown=0,status='scored')
+    metric=next(m for m in normalize_trial_scores(row)['metrics']if m['id']=='S1.timely_write')
+    assert metric['score']is None and metric['status']=='invalid'
+
+
+def test_component_not_admitted_marker_cannot_be_bypassed_with_planned_rows():
+    from memweave_eval.fixed35_campaign import validate_case_design
+    contract={'metric_matrix':[{'metric_id':'unit','design_status':'PLANNED',
+        'applicability_version':'fixed35-research-assignments-20261102-v2'}]}
+    validate_case_design(contract)
+    for marker in [True,'true',1]:
+        with pytest.raises(ValueError):validate_case_design(dict(contract,not_formal_admission=marker))
+    validate_case_design(dict(contract,not_formal_admission=False))
+    with pytest.raises(ValueError):validate_case_design(dict(contract,contract_status='SOURCE_COMPONENT_NOT_ADMITTED'))
+
+
+def test_raw_count_missing_invalid_and_false_na_flags_cannot_hide_opportunities():
+    from memweave_eval.normalized_scores import score_value
+    for counts,status in [({'numerator':0,'denominator':4,'unknown':0},'not_applicable'),
+        ({'numerator':-1,'denominator':0,'unknown':0},'not_applicable'),
+        ({'numerator':0,'denominator':float('nan'),'unknown':0},'unknown')]:
+        result=score_value(None,'rate',support=counts,status=status)
+        assert result['score']is None and result['status']=='invalid'
+    missing=score_value(None,'rate',support={'numerator':None,'denominator':0,'unknown':0},status='not_applicable')
+    assert missing['status']=='unknown'and missing['score']is None
+    empty=score_value(None,'rate',support={'numerator':0,'denominator':0,'unknown':0},status='not_applicable')
+    assert empty['status']=='not_applicable'and empty['score']is None

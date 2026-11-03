@@ -59,7 +59,9 @@ def validate_paid_canary(record,ledger=None):
 
 def validate_case_design(contract):
     matrix=contract.get('metric_matrix')
-    if contract.get('contract_status')=='DRAFT_NOT_ADMITTED'or not isinstance(matrix,list)or not matrix:
+    if 'not_formal_admission'in contract and type(contract['not_formal_admission'])is not bool:
+        raise ValueError('component admission marker must be boolean')
+    if contract.get('not_formal_admission')is True or contract.get('contract_status')in {'DRAFT_NOT_ADMITTED','SOURCE_COMPONENT_NOT_ADMITTED'}or not isinstance(matrix,list)or not matrix:
         raise ValueError('source draft or empty case opportunities cannot be admitted')
     if len({m.get('metric_id')for m in matrix})!=len(matrix):
         raise ValueError('case design repeats a metric')

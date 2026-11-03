@@ -12,7 +12,7 @@ from .warranty_pi import WarrantyEvidenceMixin
 
 class WarrantyOptions(PiExperimentOptions):
     warranty_gold_path:str
-    warranty_fixture_mode:Literal['positive','late-card','wrong-then-repair','no-submit']='positive'
+    warranty_fixture_mode:Literal['positive','late-card','wrong-then-repair','no-submit','wrong-card']='positive'
 
 
 class WarrantyFreePi(WarrantyEvidenceMixin,FreeEpisodePi):
@@ -44,7 +44,8 @@ with urllib.request.urlopen(request,timeout=20) as response:print(response.read(
         for identity in sorted(payloads):
             record=None
             if self.options.variant=='pi-memweave'and identity in gold['memory_claims']:
-                card=json.dumps({'c':identity,'b':payloads[identity]['basis_code'],'q':'claim-only'},separators=(',',':'))
+                basis='WRONG_BASIS'if self.options.warranty_fixture_mode=='wrong-card'else payloads[identity]['basis_code']
+                card=json.dumps({'c':identity,'b':basis,'q':'claim-only'},separators=(',',':'))
                 if len(card)>100:raise ValueError('fixture record exceeds unchanged public 100-character policy')
                 record={'tool':'state_append','arguments':{'items':[{'type':'fact','content':card,'evidence':{'U1':'Claim-specific decision from the supplied business task; software control only'}}]}}
             if record and self.options.warranty_fixture_mode!='late-card':actions.append(record)

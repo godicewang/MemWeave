@@ -11,7 +11,15 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261103-v21'
+VERSION='fixed35-score-20261103-v22'
+
+
+def raw_display(metric):
+    data={'raw':metric.get('raw')}
+    if metric.get('observed_raw')is not None:data['observed_raw']=metric['observed_raw']
+    if any(metric.get('support_'+k)is not None for k in ('s','f','u','n')):
+        data.update({k:metric.get('support_'+k)for k in ('s','f','u','n')})
+    return json.dumps(data,ensure_ascii=False)
 
 
 def mark_checkpoint_collection(metrics,points):
@@ -232,8 +240,17 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             explicit('S.common.protected_constraints',behavior['checkpoint']['score'],
                 'LONG-02 source geometry/NPY/binary output assertions AND; excludes optical quality and minimum-feature DRC')
         elif contract.get('adapter_kind')=='warranty-source-v1':
-            explicit('S.common.protected_constraints',behavior['common_metric']['score'],
-                'Fixed mean over 20 independently ANDed source claim decisions; first submissions and State are separate supplement rows')
+            common=behavior['common_metric']
+            row['normalization_evidence']['S.common.protected_constraints']={
+                'value':common['score']/100 if common['score']is not None else None,
+                'numerator':common['s'],'denominator':common['n']-common['u'],'unknown':common['u'],
+                'status':'scored'if common['score']is not None else'unknown',
+                'reason':'Fixed mean over 20 independently ANDed source claim decisions; first submissions and State are separate supplement rows'}
+            if behavior.get('semantic_rates')and arm=='pi-memweave':
+                for name in ['timely_write','retention','write_precision','pollution']:
+                    row['normalization_evidence']['S1.'+name]=dict(behavior['semantic_rates'][name],
+                        reason='Restricted source c/b/q claim cards only; no free-text/adoption claim; creation coverage='+
+                            json.dumps(behavior['semantic_rates']['controlled_coverage'],ensure_ascii=False))
         elif contract.get('adapter_kind')=='interrupt-final-source-v1':
             explicit('S.common.protected_constraints',behavior['goal_checkpoint']['score'],
                 'Pinned final source DOM constraints only; not temporal State correction or transient-action safety. INT-10 requires active-filter evidence beyond native URL matching.')
@@ -280,7 +297,7 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                     reason='complete independent execution log proves this tool execute() never started; no execution latency denominator')
             elif item['status']=='not_applicable':
                 item.update(status='CONDITIONAL_NO_OPPORTUNITY',design_reason=spec.get('conditional_na'))
-            elif item['status'] in {'unknown','partial'}:
+            elif item['status'] in {'unknown','partial','invalid'}:
                 item['collection_status']='REPAIR_REQUIRED'
             qualify_state_statistics(item,original_id,row['state_metrics'])
             if contract.get('adapter_kind')in {'readonly-before-first-change-v1','readonly-before-first-change-v2'}and not behavior['boundary_coverage']['complete']and original_id in {
@@ -304,6 +321,12 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             mark_checkpoint_collection(metrics,{'S.common.protected_constraints':behavior['checkpoint']})
         if contract.get('adapter_kind')=='warranty-source-v1':
             mark_checkpoint_collection(metrics,{'S.common.protected_constraints':behavior['common_metric']})
+            if behavior.get('semantic_rates')and arm=='pi-memweave':
+                for m in metrics:
+                    if m['id'].startswith('S1.'):
+                        rate=behavior['semantic_rates'][m['id'].removeprefix('S1.')]
+                        m['controlled_coverage']=behavior['semantic_rates']['controlled_coverage']
+                        if not rate['collection_complete']and m['status']!='DESIGN_NA':m['collection_status']='REPAIR_REQUIRED'
         if contract.get('adapter_kind')=='interrupt-final-source-v1':
             mark_checkpoint_collection(metrics,{'S.common.protected_constraints':behavior['goal_checkpoint']})
         if contract.get('adapter_kind')=='slop-fk-source-v1':
@@ -331,16 +354,20 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
         'fixture_scores_included':fixture_control,'official_outcomes_sha256':file_digest(official_outcomes)if official_outcomes else None,
         'contract_sha256':admission['contract_sha256'],'contract_version':contract['version']}
     atomic_json(output/'results.json',result,immutable=True)
-    columns=['case_id','arm','metric_id','meaning','raw','raw_formula','score','status','score_formula',
-        'weight','reason','support_s','support_f','support_u','support_n','mapping_version']
+    columns=['case_id','arm','metric_id','meaning','raw','observed_raw','raw_formula','score','status','score_formula',
+        'weight','reason','support_s','support_f','support_u','support_n','score_coverage','lower','upper',
+        'collection_status','controlled_coverage','mapping_version']
     with (output/'metrics.csv').open('w',newline='')as stream:
         writer=csv.DictWriter(stream,fieldnames=columns);writer.writeheader()
         for row in rows:
             for m in row['normalized_metrics']:
                 writer.writerow({'case_id':row['case_id'],'arm':row['variant_id'],'metric_id':m['id'],
-                    'meaning':m.get('meaning'), 'raw':json.dumps(m['raw'],ensure_ascii=False),
+                    'meaning':m.get('meaning'), 'raw':json.dumps(m['raw'],ensure_ascii=False),'observed_raw':m.get('observed_raw'),
                     'raw_formula':m.get('raw_formula'),'score':m['score'],'status':m['status'],
                     'score_formula':m.get('score_formula'),'weight':json.dumps(m['weights']), 'reason':m.get('reason'),
+                    'score_coverage':m.get('coverage'),'lower':m.get('lower'),'upper':m.get('upper'),
+                    'collection_status':m.get('collection_status'),
+                    'controlled_coverage':json.dumps(m.get('controlled_coverage'),ensure_ascii=False),
                     **{k:m.get(k)for k in ('support_s','support_f','support_u','support_n','mapping_version')}})
     derived=[dict(m,case_id=row['case_id'],arm=row['variant_id'])for row in rows for m in row.get('derived_behavior_checkpoints',[])]
     if derived:
@@ -356,12 +383,12 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             columns=['case_id','arm','channel','score','status','source_field','raw_formula','score_formula','reason']
             writer=csv.DictWriter(stream,fieldnames=columns);writer.writeheader();writer.writerows(slop_rows)
     text=['# 固定案例配对报告',f"\n案例：{admission['case_id']}；评分版本：{VERSION}。原始结果、派生行为与采集验收分别保留。\n",
-          '|变体|指标|含义与原公式|原始值|百分制|状态/原因|','|---|---|---|---|---|---|']
+          '|变体|指标|含义／原公式／百分制公式|原始值|百分制|状态/原因|','|---|---|---|---|---|---|']
     for row in rows:
         for m in row['normalized_metrics']:
             if m['status']=='diagnostic' or m['status']=='DESIGN_NA':continue
-            values=[row['variant_id'],m['id'],str(m.get('meaning',''))+' / '+str(m.get('raw_formula','')),
-                json.dumps(m['raw'],ensure_ascii=False),str(m['score']),m['status']+': '+str(m.get('reason'))]
+            values=[row['variant_id'],m['id'],str(m.get('meaning',''))+' / '+str(m.get('raw_formula',''))+' / '+str(m.get('score_formula','')),
+                raw_display(m),str(m['score']),m['status']+': '+str(m.get('reason'))]
             text.append('| '+' | '.join(v.replace('|','\\|').replace('\n',' ')for v in values)+' |')
     if slop_rows:
         text.extend(['','## Slop原始严格与派生适用测试口径','',
@@ -375,7 +402,7 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             '共同检查点在两臂按同一程序判定；State条目仅插件适用，原生为设计NA。权重0，不替代原170行的State/记忆指标，不并入既有加权总分。fixture控制不作为模型成绩。','',
             '|变体|指标|含义与原公式|原始值|百分制|状态|','|---|---|---|---|---|---|'])
         for item in derived:
-            values=[item['arm'],item['id'],item['meaning']+' / '+item['raw_formula'],str(item['raw']),
+            values=[item['arm'],item['id'],item['meaning']+' / '+item['raw_formula']+' / '+item['score_formula'],str(item['raw']),
                 '-'if item['status']=='DESIGN_NA'else str(item['score']),item['status']]
             text.append('| '+' | '.join(v.replace('|','\\|').replace('\n',' ')for v in values)+' |')
     (output/'report.md').write_text('\n'.join(text)+'\n')
