@@ -51,6 +51,7 @@ def checkpoint_outcome(report):
     submission=report.get('submission_contract')
     if isinstance(submission,dict)and submission.get('handoff_complete')is True and isinstance(submission.get('missing_required_files'),list)and submission['missing_required_files']and all(isinstance(p,str)and p for p in submission['missing_required_files']):
         return {'score':0,'partial_score':None,'status':'SCORED','reason':'required submitted file absent',
+            'original_all_reported_tests_score':0,
             'missing_required_files':submission['missing_required_files'],'passed':None,'total':None,
             'official_test_execution':'not started because the source submission violates the native required-file contract'}
     required=('infrastructure_failure','pytest_exit_code','pytest_collected','pass_counts','total_counts')
@@ -100,6 +101,24 @@ def sequential_outcome(reports,expected_stages):
         'status':'SCORED'if complete else'REPAIR_REQUIRED','collection_complete':complete,
         'checkpoints':points,'original_all_reported_tests_AND':0 if 0 in original else 100 if all(v==100 for v in original)else None,
         'aggregation':'derived strict AND over every fixed applicable checkpoint; partial is equal-checkpoint mean; original counts separate'}
+
+
+def score_channels(outcome):
+    """Never relabel the derived applicable-test success as the source result."""
+    if not isinstance(outcome,dict):raise TypeError('Slop score channels require an outcome object')
+    result={}
+    for channel,field,formula in [
+        ('original_strict','original_all_reported_tests_AND','AND of strict all-reported-test verdicts at every source checkpoint'),
+        ('derived_applicable','score','AND of all applicable-test verdicts at every source checkpoint; fixed conditional skip is separate')]:
+        value=outcome.get(field)
+        if value is not None and(type(value)not in (int,float)or value not in (0,100)):
+            raise ValueError('invalid Slop binary score in '+field)
+        result[channel]={'score':value,'status':'SCORED'if value is not None else'MISSING_EVIDENCE',
+            'source_field':field,'raw_formula':formula,'score_formula':'identity on the 0–100 binary scale',
+            'reason':None if value is not None else'Explicit source score absent; no fallback to the other channel'}
+    complete=outcome.get('collection_complete')
+    result['collection_complete']=complete if type(complete)is bool else None
+    return result
 
 
 def evaluate_trial(trial:Path,*,problem,stages,runner,environment,sources,output:Path,deadline,env,expected_image,cpus=2,memory_mb=8192,fixture_only=False):

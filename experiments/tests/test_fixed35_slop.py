@@ -56,6 +56,30 @@ def test_only_fixed_source_checkpoint_conditional_skip_excluded_original_counts_
     assert checkpoint_outcome(dict(value,checkpoint_name='checkpoint_2'))['score']==0
 
 
+def test_original_reward_never_falls_back_to_derived_applicable_score():
+    from memweave_eval.fixed35_slop import score_channels
+    with pytest.raises(TypeError):score_channels(None)
+    value=score_channels({'score':100,'original_all_reported_tests_AND':0,'collection_complete':True})
+    assert value['original_strict']['score']==0 and value['derived_applicable']['score']==100
+    value=score_channels({'score':100,'collection_complete':True})
+    assert value['original_strict']['score']is None and value['original_strict']['status']=='MISSING_EVIDENCE'
+    assert value['derived_applicable']['score']==100
+
+
+@pytest.mark.parametrize('bad',[True,-1,101,50,float('nan'),float('inf'),'100'])
+def test_slop_binary_score_channels_reject_invalid_values(bad):
+    from memweave_eval.fixed35_slop import score_channels
+    with pytest.raises(ValueError):score_channels({'score':bad,'original_all_reported_tests_AND':0})
+    with pytest.raises(ValueError):score_channels({'score':100,'original_all_reported_tests_AND':bad})
+
+
+def test_known_missing_required_submission_is_original_failure_without_fabricated_test_counts():
+    result=sequential_outcome({'a':{'submission_contract':{'handoff_complete':True,
+        'missing_required_files':['requirements.txt']}},'b':report()},['a','b'])
+    assert result['score']==result['original_all_reported_tests_AND']==0
+    assert result['checkpoints']['a']['passed']is None and result['checkpoints']['a']['total']is None
+
+
 def test_sdk_resource_adapter_labels_and_caps_only_the_owned_create(tmp_path):
     from types import SimpleNamespace
 

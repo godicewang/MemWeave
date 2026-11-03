@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261103-v17'
+VERSION='fixed35-score-20261103-v18'
 
 
 def mark_checkpoint_collection(metrics,points):
@@ -118,7 +118,9 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                 raise ValueError('fake-provider Switch probes require explicit fixture-control report; never an actual score')
         reward=behavior['native']['native_outcome']/100 if admission['family']=='mab'else (outcome.get('verifier')or{}).get('rewards',{}).get('reward')
         if admission['family']=='slop':
-            behavior=official['arms'][arm];reward=behavior['score']/100 if behavior['score']is not None else None
+            from .fixed35_slop import score_channels
+            behavior=official['arms'][arm];slop_channels=score_channels(behavior)
+            original=slop_channels['original_strict']['score'];reward=original/100 if original is not None else None
         row_official=None
         if admission['family']=='state'and outcome.get('host_official_score')and 'official_status'in outcome['host_official_score']:
             status=outcome['host_official_score'];score_path=Path(status['scored_file'])
@@ -134,6 +136,7 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             'finance':{'cache_metrics':collection['cache']},'normalization_evidence':{},
             'collection':collection,'original_exception':outcome['exception'],'case_behavior':behavior}
         if admission['family']=='state':row['official_llm_judged_result']=row_official
+        if admission['family']=='slop':row['slop_score_channels']=slop_channels
         if contract.get('adapter_kind')=='switch-remembered-contract-v2'and arm=='pi-memweave':
             row['behavior_metrics']=row['task_behavior']=behavior['task_behavior']
         if contract.get('adapter_kind')=='switch-remembered-contract-v2':
@@ -302,6 +305,12 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                 'weights','weight_reason','support_s','support_f','support_u','support_n','evidence_coverage','collection_complete']
             writer=csv.DictWriter(stream,fieldnames=fields,extrasaction='ignore');writer.writeheader()
             writer.writerows(dict(m,score='-'if m['status']=='DESIGN_NA'else m['score'],weights=json.dumps(m['weights']))for m in derived)
+    slop_rows=[dict(case_id=row['case_id'],arm=row['variant_id'],channel=name,**value)
+        for row in rows for name,value in row.get('slop_score_channels',{}).items()if isinstance(value,dict)]
+    if slop_rows:
+        with(output/'slop-score-channels.csv').open('w',newline='')as stream:
+            columns=['case_id','arm','channel','score','status','source_field','raw_formula','score_formula','reason']
+            writer=csv.DictWriter(stream,fieldnames=columns);writer.writeheader();writer.writerows(slop_rows)
     text=['# 固定案例配对报告',f"\n案例：{admission['case_id']}；评分版本：{VERSION}。原始结果、派生行为与采集验收分别保留。\n",
           '|变体|指标|含义与原公式|原始值|百分制|状态/原因|','|---|---|---|---|---|---|']
     for row in rows:
@@ -309,6 +318,13 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             if m['status']=='diagnostic' or m['status']=='DESIGN_NA':continue
             values=[row['variant_id'],m['id'],str(m.get('meaning',''))+' / '+str(m.get('raw_formula','')),
                 json.dumps(m['raw'],ensure_ascii=False),str(m['score']),m['status']+': '+str(m.get('reason'))]
+            text.append('| '+' | '.join(v.replace('|','\\|').replace('\n',' ')for v in values)+' |')
+    if slop_rows:
+        text.extend(['','## Slop原始严格与派生适用测试口径','',
+            'S3.original_reward只使用原始严格口径；派生适用测试单列，不能称原题全过。两列都是本系统固定的程序AND，不冒称Slop官方榜单唯一分数。','',
+            '|变体|口径|百分制|状态|来源字段／计算方式|','|---|---|---:|---|---|'])
+        for item in slop_rows:
+            values=[item['arm'],item['channel'],str(item['score']),item['status'],item['source_field']+' / '+item['raw_formula']]
             text.append('| '+' | '.join(v.replace('|','\\|').replace('\n',' ')for v in values)+' |')
     if derived:
         text.extend(['','## 派生案例的共同程序检查点','',
