@@ -1,6 +1,7 @@
 // Transport guard with summaries and opt-in evaluator-only content evidence.
 import fs from 'node:fs';
 import {gitWorktrees} from './workspace_git.mjs';
+import {treeProjection}from'./tree_projection.mjs';
 import path from 'node:path';
 import {createHash, randomUUID} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
@@ -79,7 +80,11 @@ export function workspaceSummary(root='/app/interpreter') {
   }
   let cargo=null;
   try { cargo=fs.readFileSync(path.join(root,'Cargo.toml'),'utf8'); } catch {}
+  const trees={};
+  for(const [name,definition]of Object.entries(config.projection_trees??{}))
+    trees[name]=treeProjection(path.resolve(root,definition.path),definition);
   return {files,file_status,cargo,file_refs,
+    ...(config.projection_trees?{tree_projections:trees}:{}),
     ...(config.worktrees?{git_worktrees:gitWorktrees(root,config.worktrees)}:{})}; // No evaluator metadata enters a model.
 }
 

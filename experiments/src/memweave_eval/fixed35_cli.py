@@ -30,6 +30,12 @@ def register(sub):
     switch.add_argument('case_id',choices=['INT-06','INT-07'])
     switch.add_argument('--source',type=Path,required=True)
     switch.add_argument('--output',type=Path,required=True)
+    protection=commands.add_parser('source-protection-tasks',help='Freeze selected source-protection gold and a shared recording overlay; no model calls or admission')
+    protection.add_argument('case_id',choices=['LONG-03','LONG-04','TB-08'])
+    protection.add_argument('--design',type=Path,required=True)
+    protection.add_argument('--source',type=Path,required=True)
+    protection.add_argument('--runtime-task',type=Path,required=True)
+    protection.add_argument('--output',type=Path,required=True)
     probes=commands.add_parser('switch-probe-tasks',help='Derive source-bound closed-set Task/remembered-contract checkpoints; no model calls or formal admission')
     probes.add_argument('case_id',choices=['INT-06','INT-07'])
     probes.add_argument('--source',type=Path,required=True)
@@ -86,6 +92,12 @@ def register(sub):
 
 
 def execute(args):
+    if args.fixed35_command=='source-protection-tasks':
+        from .source_protection import derive_protection
+        case=next(c for c in read_design(args.design)['selection']['cases']if c['pack_case_id']==args.case_id)
+        record=derive_protection(case,args.source,args.runtime_task,args.output)
+        return {'case_id':args.case_id,'task_path':record['task_path'],'task_sha256':record['task_sha256'],
+            'protected_source_files':len(record['expected_initial_files']),'paid_requests':0,'not_formal_admission':True}
     if args.fixed35_command=='switch-probes':
         from .fixed35_switch_replay import grade_switch_probe_trial
         result=grade_switch_probe_trial(args.trial,json.loads(args.contract.read_text()),arm=args.arm)

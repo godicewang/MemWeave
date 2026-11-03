@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261103-v9'
+VERSION='fixed35-score-20261103-v10'
 
 
 def mark_checkpoint_collection(metrics,points):
@@ -73,6 +73,11 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
         if contract.get('adapter_kind')in {'readonly-before-first-change-v1','readonly-before-first-change-v2'}:
             from .fixed35_business import grade_readonly
             behavior=grade_readonly(trial,contract,arm=arm)
+        if contract.get('adapter_kind')=='source-protection-v2':
+            from .source_protection import grade_protection_trial
+            behavior=grade_protection_trial(trial,contract,arm=arm)
+            if behavior['fixture_only']and not fixture_control:
+                raise ValueError('fake-provider source-protection traces require explicit fixture-control reporting')
         if contract.get('adapter_kind')=='state-business-v1':
             from .fixed35_state_behavior import grade_state_trial
             private=Path(admission['agent_options']['state_evaluator_output'])/trial.name
@@ -169,6 +174,13 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                                  ('S1.write_precision','write_precision'),('S1.pollution','pollution')]:
                 row['normalization_evidence'][metric]=dict(behavior[field],
                     reason='Controlled READ_ONLY path records only; see parser coverage and exact case contract')
+        elif contract.get('adapter_kind')=='source-protection-v2':
+            explicit('S.common.protected_constraints',behavior['common']['score'],
+                'AND of source-gold initial hashes and every complete observed protected-tree boundary; not original task success')
+            explicit('S.case_v2.C3-before-dependent-edit',behavior['plugin']['score'],
+                'Exact typed active constraint before first persistent change in the frozen selected source projection AND protected invariants; '
+                    'other actions are outside this component deadline scope',
+                status='not_applicable'if behavior['plugin']['status']=='CONDITIONAL_NO_OPPORTUNITY'else None)
         elif contract.get('adapter_kind')=='state-business-v1':
             explicit('S.common.protected_constraints',behavior['score'],
                 behavior.get('reason')or'AND of pinned state fields, protected domain records and case-specific behavior assertions; official LLM judge is separate')
@@ -219,6 +231,9 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                 'S.common.protected_constraints':behavior['derived_action'],
                 'F35.C5-correct-before-action':memory.get('correction'),
                 'F35.C4-three-window-checkpoints':memory.get('three_evictions')})
+        if contract.get('adapter_kind')=='source-protection-v2':
+            mark_checkpoint_collection(metrics,{'S.common.protected_constraints':behavior['common'],
+                'F35.C3-before-dependent-edit':behavior['plugin']})
         if contract.get('adapter_kind')=='switch-remembered-contract-v2'and not behavior['collection_complete']:
             for metric in metrics:
                 if (metric['id']=='S.common.protected_constraints'or metric['id'].startswith(('S4.','F35.T')) )and metric['status']!='DESIGN_NA':
