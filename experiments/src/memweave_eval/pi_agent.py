@@ -545,7 +545,7 @@ positive:true,lost_guard_upstream_requests:0,actual_cli_pid_deadline:true}));
                     invocation={'schema_version':1,'invocation_id':identity,
                         'stage_id':str(getattr(self,'_evaluation_stage',0)),
                         'run_id':self.options.evaluation_run_id,'case_id':self.options.evaluation_case_id,
-                        'status':'STARTED','started_at':time.time()}
+                        'status':'STARTED','started_at':time.time(),'started_monotonic_ns':str(time.monotonic_ns())}
                     kwargs['env']['MEMWEAVE_EVAL_INVOCATION_ID']=identity
                     atomic_json(directory/(identity+'.json'),invocation)
         try:

@@ -101,9 +101,12 @@ def literal_snapshot(texts, contract):
 
 def grade_action(prediction, answers, action, *, action_observation_complete):
     score=score_mab(prediction,answers,action if action is not None else {} if action_observation_complete else None)
+    # File-value evidence is independent of whether the final text was captured.
+    file_score=score_mab('',answers,action if action is not None else {} if action_observation_complete else None)
+    score['typed_action']=file_score['typed_action']
     checks={'answer_correct':None if prediction is None else bool(score['strict_answer']),
             'file_schema':None if not action_observation_complete else isinstance(action,dict)and set(action)=={'value'}and isinstance(action['value'],str),
-            'file_value':None if not action_observation_complete else bool(score['typed_action'])}
+            'file_value':None if not action_observation_complete else bool(file_score['typed_action'])}
     point=checkpoint_verdict({'id':'F35.MAB.typed-action-v1','required_assertions':list(checks)},checks)
     return {'native':score,'derived_action':point}
 
@@ -154,10 +157,10 @@ def delivered_memory(messages,boundary):
 
 
 def grade_mab_trial(trial:Path,contract,*,arm):
-    from .state_pi import final_pi_text
+    from .mab_answer_evidence import query_answer
     # Only final query artifacts count; an ingestion acknowledgement is not an answer.
     agent=trial/'steps/query/agent'
-    prediction=final_pi_text(agent/'pi.txt')if (agent/'pi.txt').exists()else ''
+    prediction,answer_proof=query_answer(trial,agent,contract)
     artifacts=agent/'fixed35-artifacts'
     presence=artifacts/'answer-presence.json'
     exists=json.loads(presence.read_text())['exists']if presence.exists()else None
@@ -166,9 +169,10 @@ def grade_mab_trial(trial:Path,contract,*,arm):
         try:action=json.loads((artifacts/'answer.json').read_text())
         except (ValueError,FileNotFoundError):action={}
     result=grade_action(prediction,contract['answers'],action,action_observation_complete=type(exists)is bool)
-    # Complete observed episode never reached its query => a real business failure.
-    if not agent.exists():
+    # A source-stage terminal proof, not a missing directory, establishes failure.
+    if answer_proof['source']=='known_source_stage_abort':
         result=grade_action('',contract['answers'],None,action_observation_complete=True)
+    result['answer_evidence']=answer_proof
     if arm=='pi-native':
         result['memory']={'status':'DESIGN_NA','reason':'native Pi has no State'}
         return result
