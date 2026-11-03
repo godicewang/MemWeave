@@ -80,6 +80,9 @@ def package_metrics(rows,expected,registry):
         if e['design_status']=='DESIGN_UNRESOLVED':
             row=dict(row,observed_unaccepted_score=row.get('score'),score=None,
                 status='DESIGN_UNRESOLVED',reason=e['reason'],collection_complete=False)
+        if row['status']=='CONDITIONAL_NO_OPPORTUNITY'and row.get('collection_complete')is not True:
+            row=dict(row,status='MISSING_EVIDENCE',score=None,collection_complete=False,
+                reason='A conditional denominator exemption requires explicit complete collection evidence')
         complete.append(dict(metadata[e['metric_id']],**{k:v for k,v in row.items()if k!='id'}))
     aggregates=[]
     for arm in ('pi-native','pi-memweave'):
@@ -94,8 +97,11 @@ def package_metrics(rows,expected,registry):
             effective=[r for r in selected if r not in mathematical]
             result=aggregate_metric(effective,expected_cases=[r for r in expected if r['arm']==arm and
                 r['metric_id']==metric['id']and r['case_id']not in {x['case_id']for x in mathematical}])
+            if not effective and mathematical:
+                result.update(collection_accepted=all(r.get('collection_complete')is True for r in mathematical))
             aggregates.append(dict(result,arm=arm,metric_id=metric['id'],
                 status='SCORED'if result['valid_cases']and not(result['missing']or result['not_run'])else
+                    'CONDITIONAL_NO_OPPORTUNITY'if result['eligible_cases']==0 and mathematical else
                     'DESIGN_NA'if result['eligible_cases']==0 else'MISSING_EVIDENCE',
                 mathematical_na=len(mathematical),meaning=metric['meaning'],
                 raw_formula=metric['raw_formula'],score_formula=metric['score_formula'],weights=metric['weights']))

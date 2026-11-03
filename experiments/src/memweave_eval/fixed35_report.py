@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261103-v16'
+VERSION='fixed35-score-20261103-v17'
 
 
 def mark_checkpoint_collection(metrics,points):
@@ -43,6 +43,24 @@ def metric_alias(identity):
     if identity.startswith('S.case_v2.'):
         return 'F35.'+identity.removeprefix('S.case_v2.')
     return identity
+
+
+def qualify_state_statistics(item,identity,state):
+    """A proved zero statistical denominator is not a lost observation."""
+    positions=state.get('write_model_positions');uniform=state.get('uniformity')or{}
+    if identity=='Q7.fd_density'and item.get('status')=='unknown'and item.get('raw')is None \
+            and state.get('source_status')=='ok'and state.get('ratio_status')=='zero_model_responses' \
+            and type(state.get('model_responses_with_usage'))is int and state['model_responses_with_usage']==0 \
+            and type(state.get('fd_events_added'))is int:
+        item.update(score=None,status='CONDITIONAL_NO_OPPORTUNITY',reason='Complete episode evidence proves zero usage-bearing assistant returns; F/D density has a zero denominator',
+            statistical_denominator={'model_responses_with_usage':0,'fd_events_added':state['fd_events_added']})
+        item.pop('collection_status',None)
+    if identity=='Q7.uniformity_cv'and item.get('status')=='insufficient_sample'and state.get('source_status')=='ok' \
+            and isinstance(positions,list)and uniform.get('status')=='insufficient_sample':
+        item.update(score=None,status='CONDITIONAL_NO_OPPORTUNITY',
+            reason='Complete committed journal and model positions prove fewer than two internal gaps, or a zero mean gap; CV is mathematically undefined, not missing collection',
+            statistical_denominator={'committed_batches':len(positions),'internal_intervals':len(uniform.get('intervals')or[]),
+                'mean_interval':uniform.get('mean_interval')})
 
 
 def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=None,*,fixture_control=False):
@@ -225,6 +243,7 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                 item.update(status='CONDITIONAL_NO_OPPORTUNITY',design_reason=spec.get('conditional_na'))
             elif item['status'] in {'unknown','partial'}:
                 item['collection_status']='REPAIR_REQUIRED'
+            qualify_state_statistics(item,original_id,row['state_metrics'])
             if contract.get('adapter_kind')in {'readonly-before-first-change-v1','readonly-before-first-change-v2'}and not behavior['boundary_coverage']['complete']and original_id in {
                     'S.common.protected_constraints','S.case_v2.C3-before-dependent-edit'}and item['status']!='DESIGN_NA':
                 item['collection_status']='REPAIR_REQUIRED'

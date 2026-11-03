@@ -23,6 +23,28 @@ def test_full_matrix_macro_and_missing_entire_case_cannot_pass():
     assert not package_metrics([],expected,registry)['collection_accepted']
 
 
+def test_complete_mathematical_zero_opportunities_never_turn_into_structural_design_na():
+    registry,expected,rows=setup_rows()
+    rows=[dict(r,status='CONDITIONAL_NO_OPPORTUNITY',score=None,collection_complete=True,
+        reason='complete positions prove only one committed batch')for r in rows]
+    result=package_metrics(rows,expected,registry)
+    assert result['collection_accepted']
+    assert all(r['status']=='CONDITIONAL_NO_OPPORTUNITY'and r['score']is None and r['collection_accepted']for r in result['aggregates'])
+    assert all(r['mathematical_na']==3 for r in result['aggregates'])
+
+
+@pytest.mark.parametrize('complete',[None,False])
+def test_conditional_denominator_needs_explicit_complete_evidence(complete):
+    registry,expected,rows=setup_rows()
+    rows=[dict(r,status='CONDITIONAL_NO_OPPORTUNITY',score=None,collection_complete=True)for r in rows]
+    if complete is None:rows[0].pop('collection_complete')
+    else:rows[0]['collection_complete']=complete
+    result=package_metrics(rows,expected,registry)
+    assert not result['collection_accepted']
+    assert result['rows'][0]['status']=='MISSING_EVIDENCE'
+    assert result['aggregates'][0]['missing']==1 and result['aggregates'][0]['mathematical_na']==2
+
+
 def test_na_requires_design_and_duplicate_or_unexpected_cells_rejected():
     registry,expected,rows=setup_rows()
     with pytest.raises(ValueError):package_metrics(rows+rows[:1],expected,registry)
