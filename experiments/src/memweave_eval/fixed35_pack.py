@@ -5,7 +5,7 @@ import csv
 import json
 from pathlib import Path
 
-from .fixed35 import aggregate_metric
+from .fixed35 import aggregate_metric, collection_exception
 from .fixed35_report import metric_alias
 from .normalized_scores import catalogue
 from .storage import atomic_json, file_digest
@@ -40,6 +40,26 @@ def profile_score(rows,registry,profile):
     weights={m['id']:m['weights'].get(profile,0)for m in registry}
     eligible=[r for r in rows if weights[r['metric_id']]>0 and r['status']not in
         {'DESIGN_NA','CONDITIONAL_NO_OPPORTUNITY','DIAGNOSTIC'}]
+    design=sum(weights[r['metric_id']]for r in eligible)
+    excluded=[]
+    for row in eligible:
+        if row['status']=='EXCLUDED_UNCOLLECTABLE':
+            proofs=row.get('exclusions')or row.get('excluded_cases')
+            if proofs:
+                values=proofs.values()if isinstance(proofs,dict)else proofs
+                for proof in values:
+                    # Common-pair exceptions carry the already audited per-arm
+                    # reasons, including a scored peer removed for fairness.
+                    if 'reasons'in proof:
+                        for reason,repairs in zip(proof['reasons'],proof['repair_attempts'],strict=True):
+                            collection_exception({'reason':reason,'repair_attempts':repairs})
+                    else:collection_exception(proof)
+            else:collection_exception(row)
+            excluded.append({'metric_id':row['metric_id'],'weight':weights[row['metric_id']],
+                'reason':row.get('reason'),'repair_attempts':row.get('repair_attempts'),
+                'case_exceptions':proofs})
+    excluded_weight=sum(r['weight']for r in excluded)
+    eligible=[r for r in eligible if r['status']!='EXCLUDED_UNCOLLECTABLE']
     planned=sum(weights[r['metric_id']]for r in eligible)
     known=[r for r in eligible if r['status']=='SCORED'and r['score']is not None]
     observed=sum(weights[r['metric_id']]for r in known)
@@ -47,9 +67,11 @@ def profile_score(rows,registry,profile):
     return {'score':contribution/planned if planned and observed==planned else None,
         'conditional_score':contribution/observed if observed else None,
         'coverage':observed/planned if planned else None,'planned_weight':planned,'observed_weight':observed,
+        'design_weight':design,'excluded_weight':excluded_weight,'excluded_metrics':excluded,
+        'pre_exclusion_coverage':observed/design if design else None,
         'lower':contribution/planned if planned else None,
         'upper':(contribution+100*(planned-observed))/planned if planned else None,
-        'interpretation':'Missing evidence blocks point total; bounds show unsupported contribution, not a zero verdict'}
+        'interpretation':'Audited irreparable exceptions leave the effective denominator and remain explicit; ordinary missing evidence blocks point total. Effective-subset coverage does not prove full-design coverage.'}
 
 
 def profile_with_classes(rows,registry,profile):
@@ -83,6 +105,7 @@ def package_metrics(rows,expected,registry):
         if row['status']=='CONDITIONAL_NO_OPPORTUNITY'and row.get('collection_complete')is not True:
             row=dict(row,status='MISSING_EVIDENCE',score=None,collection_complete=False,
                 reason='A conditional denominator exemption requires explicit complete collection evidence')
+        if row['status']=='EXCLUDED_UNCOLLECTABLE':collection_exception(row)
         complete.append(dict(metadata[e['metric_id']],**{k:v for k,v in row.items()if k!='id'}))
     aggregates=[]
     for arm in ('pi-native','pi-memweave'):
@@ -101,6 +124,7 @@ def package_metrics(rows,expected,registry):
                 result.update(collection_accepted=all(r.get('collection_complete')is True for r in mathematical))
             aggregates.append(dict(result,arm=arm,metric_id=metric['id'],
                 status='SCORED'if result['valid_cases']and not(result['missing']or result['not_run'])else
+                    'EXCLUDED_UNCOLLECTABLE'if result['eligible_cases']and result['excluded']==result['eligible_cases']else
                     'CONDITIONAL_NO_OPPORTUNITY'if result['eligible_cases']==0 and mathematical else
                     'DESIGN_NA'if result['eligible_cases']==0 else'MISSING_EVIDENCE',
                 mathematical_na=len(mathematical),meaning=metric['meaning'],
@@ -188,17 +212,19 @@ def pack_report(manifest:Path,output:Path):
                         status='SCORED'if metric['status']=='scored'else'DIAGNOSTIC'if metric['status']=='diagnostic'else metric['status'],
                         collection_complete=metric.get('collection_status')!='REPAIR_REQUIRED'))
     result=package_metrics(rows,expected,registry)
-    result.update(version='fixed35-pack-20261103-v3',manifest_sha256=file_digest(manifest),source_sha256=source_hashes,
+    result.update(version='fixed35-pack-20261103-v4',manifest_sha256=file_digest(manifest),source_sha256=source_hashes,
         aggregation='valid cases equally within benchmark, then valid benchmark means equally; no test-count weighting')
     output.mkdir(parents=True,exist_ok=False);atomic_json(output/'results.json',result,immutable=True)
     with (output/'metrics.csv').open('w',newline='')as stream:
         columns=['case_id','benchmark','arm','metric_id','meaning','raw','raw_formula','score','score_formula',
-            'mapping_version','weights','status','reason','support_s','support_f','support_u','support_n']
+            'mapping_version','weights','status','reason','repair_attempts','support_s','support_f','support_u','support_n']
         writer=csv.DictWriter(stream,fieldnames=columns,extrasaction='ignore');writer.writeheader()
-        writer.writerows(dict(r,raw=json.dumps(r.get('raw'),ensure_ascii=False),weights=json.dumps(r['weights']))for r in result['rows'])
+        writer.writerows(dict(r,raw=json.dumps(r.get('raw'),ensure_ascii=False),weights=json.dumps(r['weights']),
+            repair_attempts=json.dumps(r.get('repair_attempts'),ensure_ascii=False))for r in result['rows'])
     for arm in ('pi-native','pi-memweave'):
         with (output/(arm+'-wide.csv')).open('w',newline='')as stream:
-            columns=['case_id',*[m['id']for m in registry if m['mapping']!='diagnostic'],'weighted_total','weighted_coverage']
+            columns=['case_id',*[m['id']for m in registry if m['mapping']!='diagnostic'],'weighted_total','weighted_coverage',
+                'pre_exclusion_coverage','excluded_weight','excluded_metrics']
             writer=csv.DictWriter(stream,fieldnames=columns);writer.writeheader()
             for case in cases:
                 row={'case_id':case['case_id']}
@@ -207,7 +233,9 @@ def pack_report(manifest:Path,output:Path):
                         row[item['metric_id']]='-'if item['status']=='DESIGN_NA'else item['score']if item['score']is not None else item['status']
                 total=next(x for x in result['case_totals']if x['case_id']==case['case_id']and x['arm']==arm)
                 score=total['profiles']['plugin_memory'if arm=='pi-memweave'else'common_product']
-                row.update(weighted_total=score['score'],weighted_coverage=score['coverage'])
+                row.update(weighted_total=score['score'],weighted_coverage=score['coverage'],
+                    pre_exclusion_coverage=score['pre_exclusion_coverage'],excluded_weight=score['excluded_weight'],
+                    excluded_metrics=json.dumps(score['excluded_metrics'],ensure_ascii=False))
                 writer.writerow(row)
     with (output/'comparison.csv').open('w',newline='')as stream:
         columns=['case_id','native_score','plugin_score','native_conditional_score','plugin_conditional_score','coverage','matched_metrics','eligible_metrics']
@@ -235,6 +263,6 @@ def pack_report(manifest:Path,output:Path):
             writer.writerow(row)
     (output/'report.md').write_text('# 固定35案例整包报告\n\n完整冻结单元格：'+str(result['expected_cells'])+
         '；实际结果单元格：'+str(result['observed_cells'])+'；采集验收：'+str(result['collection_accepted'])+
-        '。\n\n`-`仅表示预注册设计不适用；NOT_RUN/缺证据不伪装成0或不适用。公式和原始分母见JSON/metrics.csv。\n')
+        '。\n\n`-`仅表示预注册设计不适用；NOT_RUN/缺证据不伪装成0或不适用。明确记录修复失败的采集例外从有效评分分母剔除，仍阻止采集验收；排除前覆盖率、排除权重及原因独立展示。有效子集分数不代表完整设计覆盖。公式和原始分母见JSON/metrics.csv。\n')
     return {'output':str(output),'collection_accepted':result['collection_accepted'],
         'expected_cells':result['expected_cells'],'observed_cells':result['observed_cells']}

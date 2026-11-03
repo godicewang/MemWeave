@@ -6,6 +6,7 @@ import re
 from collections import defaultdict
 
 VERSION = 'fixed35-20261102-v1'
+AGGREGATION_VERSION = 'fixed35-aggregate-20261103-v2'
 
 
 def validate_selection(selection, *, expected_count=35):
@@ -44,6 +45,18 @@ def checkpoint_verdict(contract, evidence):
                            for i in required}}
 
 
+def collection_exception(row):
+    """Only an audited, scoreless collection failure may leave a denominator."""
+    reason=row.get('reason');repairs=row.get('repair_attempts')
+    def documented(item):
+        return bool(item.strip())if isinstance(item,str)else isinstance(item,dict)and all(
+            isinstance(item.get(k),str)and item[k].strip()for k in ('action','result'))
+    if not isinstance(reason,str)or not reason.strip()or not isinstance(repairs,list)or not repairs or any(
+            not documented(item)for item in repairs)or row.get('score')is not None:
+        raise ValueError('uncollectable exception requires reason and attempted repairs as documented list, and no score')
+    return {k:row[k]for k in ('reason','repair_attempts')}
+
+
 def aggregate_metric(rows, *, expected_cases=None):
     rows=list(rows)
     observed={(row['benchmark'],row['case_id'])for row in rows}
@@ -62,7 +75,7 @@ def aggregate_metric(rows, *, expected_cases=None):
                          'reason':row.get('reason') or 'Expected metric row absent'})
     groups = defaultdict(list)
     counts = {'valid_cases': 0, 'eligible_cases': 0, 'design_na': 0, 'missing': 0, 'excluded': 0, 'not_run': 0}
-    identities = set()
+    identities = set();exclusions=[]
     for row in rows:
         identity = (row['benchmark'], row['case_id'])
         if identity in identities:
@@ -76,8 +89,8 @@ def aggregate_metric(rows, *, expected_cases=None):
             continue
         counts['eligible_cases'] += 1
         if status == 'EXCLUDED_UNCOLLECTABLE':
-            if not row.get('reason') or not row.get('repair_attempts'):
-                raise ValueError('uncollectable exception requires reason and attempted repairs')
+            proof=collection_exception(row)
+            exclusions.append(dict(benchmark=row['benchmark'],case_id=row['case_id'],**proof))
             counts['excluded'] += 1
         elif status == 'NOT_RUN':
             counts['not_run'] += 1
@@ -93,12 +106,14 @@ def aggregate_metric(rows, *, expected_cases=None):
     benchmarks = {name: {'score': sum(values)/len(values), 'valid_cases': len(values)}
                   for name, values in sorted(groups.items())}
     return {'score': sum(b['score'] for b in benchmarks.values())/len(benchmarks) if benchmarks else None,
-            'benchmarks': benchmarks, **counts,
+            'benchmarks': benchmarks, **counts,'exclusions':exclusions,
+            'scoring_cases':counts['eligible_cases']-counts['excluded'],
+            'pre_exclusion_case_coverage':counts['valid_cases']/counts['eligible_cases']if counts['eligible_cases']else None,
             'collection_accepted': bool(rows) and expected_cases is not None
                 and counts['missing'] == counts['excluded'] == counts['not_run'] == 0,
             'expected_set_verified':expected_cases is not None,'omitted_rows':sorted(omitted),
             'aggregation': 'equal_cases_within_benchmark_then_equal_available_benchmarks',
-            'version': VERSION}
+            'version': AGGREGATION_VERSION}
 
 
 def paired_effective_rows(rows):

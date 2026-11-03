@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261103-v22'
+VERSION='fixed35-score-20261103-v23'
 
 
 def raw_display(metric):
@@ -32,9 +32,17 @@ def mark_checkpoint_collection(metrics,points):
 
 
 def weighted_profile(metrics,profile,*,allowed_ids=None):
+    from .fixed35 import collection_exception
     eligible=[m for m in metrics if m['weights'].get(profile,0)>0 and
         m['status']not in {'DESIGN_NA','not_applicable','CONDITIONAL_NO_OPPORTUNITY'} and
         (allowed_ids is None or m['id']in allowed_ids)]
+    design=sum(m['weights'][profile]for m in eligible)
+    excluded=[]
+    for metric in eligible:
+        if metric['status']=='EXCLUDED_UNCOLLECTABLE':
+            excluded.append(dict(metric_id=metric['id'],weight=metric['weights'][profile],
+                **collection_exception(metric)))
+    eligible=[m for m in eligible if m['status']!='EXCLUDED_UNCOLLECTABLE']
     planned=sum(m['weights'][profile]for m in eligible)
     known=[m for m in eligible if m['status']in {'scored','SCORED'}and m['score']is not None]
     weight=sum(m['weights'][profile]for m in known)
@@ -42,9 +50,11 @@ def weighted_profile(metrics,profile,*,allowed_ids=None):
     return {'score':contribution/planned if planned and weight==planned else None,
         'conditional_score':contribution/weight if weight else None,'coverage':weight/planned if planned else None,
         'eligible_weight':planned,'observed_weight':weight,'lower':contribution/planned if planned else None,
+        'design_weight':design,'excluded_weight':sum(m['weight']for m in excluded),'excluded_metrics':excluded,
+        'pre_exclusion_coverage':weight/design if design else None,
         'upper':(contribution+100*(planned-weight))/planned if planned else None,
         'missing_metric_ids':[m['id']for m in eligible if m not in known],
-        'interpretation':'fixed leaf weights; design NA removed; incomplete evidence is not a zero or a full score'}
+        'interpretation':'fixed leaf weights; design NA and audited collection exceptions leave the effective denominator; ordinary missing evidence still blocks a full score; pre-exclusion coverage remains explicit'}
 
 
 def metric_alias(identity):

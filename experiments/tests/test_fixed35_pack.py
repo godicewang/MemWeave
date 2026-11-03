@@ -143,6 +143,42 @@ def test_all_common_collection_exceptions_remain_exceptions_with_case_reasons():
     assert all(t['score']is None for t in result['matched_common_totals'].values())
 
 
+def test_case_total_excludes_only_audited_exception_and_discloses_original_weight():
+    from memweave_eval.fixed35_pack import profile_score
+    registry=[{'id':i,'weights':{'p':.5}}for i in ('a','b')]
+    rows=[{'metric_id':'a','status':'SCORED','score':60},
+        {'metric_id':'b','status':'EXCLUDED_UNCOLLECTABLE','score':None,
+         'reason':'Both original and backup truncated','repair_attempts':['Replayed original','Validated backup']}]
+    value=profile_score(rows,registry,'p')
+    assert value['score']==60 and value['coverage']==1
+    assert value['design_weight']==1 and value['planned_weight']==.5 and value['excluded_weight']==.5
+    assert value['pre_exclusion_coverage']==.5
+    assert value['excluded_metrics'][0]['metric_id']=='b'
+    rows[0].update(status='NOT_RUN',score=None)
+    value=profile_score(rows,registry,'p')
+    assert value['score']is None and value['coverage']==0 and value['pre_exclusion_coverage']==0
+
+
+@pytest.mark.parametrize('change',[{'reason':''},{'repair_attempts':[]},{'repair_attempts':'retried'},
+    {'repair_attempts':['']},{'score':0}])
+def test_exception_must_not_hide_missing_repairs_or_a_known_failure(change):
+    registry,expected,rows=setup_rows()
+    rows[0]=dict(rows[0],status='EXCLUDED_UNCOLLECTABLE',score=None,reason='raw evidence unrecoverable',
+        repair_attempts=['original parse','backup checksum'])
+    rows[0].update(change)
+    with pytest.raises(ValueError,match='exception'):
+        package_metrics(rows,expected,registry)
+
+
+def test_all_exceptions_remove_denominator_without_awarding_a_full_score():
+    from memweave_eval.fixed35_pack import profile_score
+    registry=[{'id':'m','weights':{'p':1}}]
+    value=profile_score([{'metric_id':'m','status':'EXCLUDED_UNCOLLECTABLE','score':None,
+        'reason':'Both evidence copies lost','repair_attempts':['Checked original and backup']}],registry,'p')
+    assert value['score']is None and value['conditional_score']is None and value['coverage']is None
+    assert value['planned_weight']==0 and value['excluded_weight']==1 and value['pre_exclusion_coverage']==0
+
+
 def test_unresolved_design_blocks_acceptance_even_if_a_numeric_result_exists():
     registry,expected,rows=setup_rows()
     expected[0]=dict(expected[0],design_status='DESIGN_UNRESOLVED',reason='opportunity not frozen')

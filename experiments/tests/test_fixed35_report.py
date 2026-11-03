@@ -18,6 +18,20 @@ def test_common_comparison_selects_the_same_frozen_metric_ids():
     assert weighted_profile(rows,'p',allowed_ids={'b'})['score']==0
 
 
+def test_single_report_profile_keeps_audited_exception_separate_from_missing():
+    import pytest
+    rows=[{'id':'a','weights':{'p':.5},'score':60,'status':'scored'},
+        {'id':'b','weights':{'p':.5},'score':None,'status':'EXCLUDED_UNCOLLECTABLE',
+         'reason':'Primary and mirror response lost','repair_attempts':[{'action':'recover mirrors','result':'both truncated'}]}]
+    profile=weighted_profile(rows,'p')
+    assert profile['score']==60 and profile['coverage']==1 and profile['pre_exclusion_coverage']==.5
+    assert profile['excluded_weight']==.5 and profile['design_weight']==1
+    rows[1]['repair_attempts']=[]
+    with pytest.raises(ValueError,match='exception'):weighted_profile(rows,'p')
+    rows[1].update(status='unknown')
+    assert weighted_profile(rows,'p')['score']is None
+
+
 def test_known_checkpoint_failure_with_missing_evidence_still_blocks_collection():
     from memweave_eval.fixed35_report import mark_checkpoint_collection
     rows=[{'id':'F35.C4-three-window-checkpoints','status':'scored','score':0},
