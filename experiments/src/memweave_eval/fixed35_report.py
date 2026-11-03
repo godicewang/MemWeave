@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261103-v13'
+VERSION='fixed35-score-20261103-v14'
 
 
 def mark_checkpoint_collection(metrics,points):
@@ -163,13 +163,14 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             row['contract_metrics']['rule_integrity']=proof
             row['normalization_evidence']['Q3.rule_integrity']=proof
         if admission['family']=='mab':
+            from .fixed35_mab import normalization_points
             explicit('S.common.protected_constraints',behavior['derived_action']['score'],
                 'MAB typed-action overlay: correct final answer AND exact one-value JSON schema AND correct file value')
-            memory=behavior.get('memory',{})
-            for old,field in [('S.case_v2.C5-correct-before-action','correction'),
-                              ('S.case_v2.C4-three-window-checkpoints','three_evictions')]:
-                point=memory.get(field)or{}
-                explicit(old,point.get('score'),point.get('reason')or'controlled checkpoint evidence unavailable')
+            for identity,point in normalization_points(behavior,admission['case_id']).items():
+                point=point or{}
+                explicit(identity,point.get('score'),point.get('reason')or(
+                    'Selected finite typed source relation AND no known incompatible active card AND pre-action timing AND actual first answer-file value; not general free-text memory semantics'
+                    if 'C1-'in identity else'controlled checkpoint evidence unavailable'))
         elif contract.get('adapter_kind')in {'readonly-before-first-change-v1','readonly-before-first-change-v2'}:
             explicit('S.common.protected_constraints',behavior['common_constraint']['score'])
             point=behavior['plugin_memory']
@@ -236,11 +237,8 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             item['opportunity_ids']=spec['opportunity_ids'];item['mapping_version']=VERSION
             metrics.append(item)
         if admission['family']=='mab':
-            memory=behavior.get('memory')or{}
-            mark_checkpoint_collection(metrics,{
-                'S.common.protected_constraints':behavior['derived_action'],
-                'F35.C5-correct-before-action':memory.get('correction'),
-                'F35.C4-three-window-checkpoints':memory.get('three_evictions')})
+            mark_checkpoint_collection(metrics,{'S.common.protected_constraints':behavior['derived_action'],
+                **{metric_alias(identity):point for identity,point in normalization_points(behavior,admission['case_id']).items()}})
         if contract.get('adapter_kind')=='source-protection-v2':
             mark_checkpoint_collection(metrics,{'S.common.protected_constraints':behavior['common'],
                 'F35.C3-before-dependent-edit':behavior['plugin']})

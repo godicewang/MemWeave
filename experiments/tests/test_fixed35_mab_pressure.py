@@ -32,6 +32,39 @@ def test_eligible_evictions_start_after_current_source_not_first_unrelated_cut()
     assert eviction_eligible(protocol=None,stage=1,valid_after=40,source_seen=False,source_visible=True)
 
 
+def test_remaining_original_excerpt_cannot_be_hidden_by_loss_of_the_whole_chunk():
+    from memweave_eval.fixed35_mab import source_visible
+    whole='Long natural context.\n188. The chief executive officer of Microsoft is Steve Jobs.\nMore supplied context.'
+    support='188. The chief executive officer of Microsoft is Steve Jobs.'
+    assert source_visible(['Tool returned: '+support],[whole],[support])
+    assert not source_visible(['# Symbolic State\nF1 '+support],[whole],[support])
+    assert not source_visible(['Other natural context.'],[whole],[support])
+
+
+def test_each_of_three_boundaries_requires_independent_window_evidence_and_all_assertions():
+    points=[{'boundary_id':str(i),'original_source_absent':True,'current_facts_retained':True,
+        'delivered_version_correct':True,'window_projection_correct':True}for i in range(3)]
+    grade=grade_three_evictions(points,observation_complete=True,require_identity=True)
+    assert grade['score']==100 and all(p['score']==100 for p in grade['checkpoints'])
+    assert len(grade['assertions'])==16
+    incomplete=grade_three_evictions(points,observation_complete=False,require_identity=True)
+    assert incomplete['score']is None and not incomplete['collection_complete']
+    points[1]['window_projection_correct']=False
+    assert grade_three_evictions(points,observation_complete=True,require_identity=True)['score']==0
+    points[1]['window_projection_correct']=None
+    assert grade_three_evictions(points,observation_complete=True,require_identity=True)['score']is None
+
+
+def test_selected_c1_mapping_uses_distinct_source_gold_points_without_filling_other_cases():
+    from memweave_eval.fixed35_mab import normalization_points
+    book={'score':100,'collection_complete':True};fact={'score':0,'collection_complete':True}
+    behavior={'typed_book_memory':book,'memory':{'correction':fact}}
+    assert normalization_points(behavior,'MAB-06')['S.case_v2.C1-transient-baseline']is book
+    assert normalization_points(behavior,'MAB-05')['S.case_v2.C1-transient-baseline']is fact
+    assert 'S.case_v2.C1-transient-baseline'not in normalization_points(behavior,'MAB-04')
+    assert normalization_points({},'MAB-06')['S.case_v2.C1-transient-baseline']is None
+
+
 def test_pressure_copy_keeps_original_query_and_environment_gold_stays_outside_actor(tmp_path):
     source=tmp_path/'original';(source/'steps/query').mkdir(parents=True)
     (source/'steps/query/instruction.md').write_text('Original question, no gold.')

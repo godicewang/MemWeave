@@ -117,25 +117,49 @@ def grade_correction(texts, contract, *, correct_action, snapshot_before_action)
     return checkpoint_verdict({'id':'F35.C5.current-memory-before-action-v1','required_assertions':list(checks)},checks)
 
 
-def grade_three_evictions(snapshots, *, observation_complete):
+def grade_three_evictions(snapshots, *, observation_complete, require_identity=False):
     required=['eviction_1','eviction_2','eviction_3']
-    checks={}
+    checks={};points=[]
     boundaries=set()
     for index,name in enumerate(required):
-        if snapshots is None or index>=len(snapshots):
-            checks[name]=None
-            continue
-        item=snapshots[index]
+        item=snapshots[index]if snapshots is not None and index<len(snapshots)else{}
         boundary=item.get('boundary_id')
-        independent=isinstance(boundary,str)and boundary not in boundaries
-        boundaries.add(boundary)
-        values=[item.get('original_source_absent'),item.get('current_facts_retained'),item.get('delivered_version_correct')]
-        checks[name]=independent and all(values)if all(type(v)is bool for v in values)else None
-    point=checkpoint_verdict({'id':'F35.C4.three-actual-evictions-v1','required_assertions':required},checks)
+        independent=boundary not in boundaries if isinstance(boundary,str)and boundary else None
+        if isinstance(boundary,str)and boundary:boundaries.add(boundary)
+        values={field:item.get(field)for field in ['original_source_absent','current_facts_retained','delivered_version_correct']}
+        values['independent_boundary_id']=independent
+        if require_identity:values['window_projection_correct']=item.get('window_projection_correct')
+        points.append(checkpoint_verdict({'id':name,'required_assertions':list(values)},values))
+        checks.update({name+':'+field:value for field,value in values.items()})
+    if require_identity:checks['whole_boundary_sequence_complete']=True if observation_complete else None
+    point=checkpoint_verdict({'id':'F35.C4.three-actual-evictions-v2','required_assertions':list(checks)},checks)
+    point['checkpoints']=points
+    point['independent_window_required']=require_identity
     if observation_complete and (snapshots is None or len(snapshots)<3):
         point.update(reason='PLANNED_OPPORTUNITY_NOT_TRIGGERED: fewer than three actual evictions',
                      opportunity_status='UNFILLED_PLANNED_SLOT')
+    elif not observation_complete:
+        point.update(reason='Whole episode boundary evidence incomplete; planned-slot fulfillment cannot be inferred',
+            opportunity_status='UNKNOWN_INCOMPLETE_CAPTURE')
     return point
+
+
+def source_visible(messages,originals,supports=()):
+    """A remaining literal source excerpt is still visible even without its whole chunk."""
+    needles=[*originals,*supports]
+    if not needles or any(not isinstance(s,str)or not s for s in needles):raise ValueError('nonempty original source support required')
+    return any(needle in message for message in messages if not message.startswith('# Symbolic State')for needle in needles)
+
+
+def normalization_points(behavior,case_id):
+    """Bind actual source-specific points; no generic fixture label becomes evidence."""
+    memory=behavior.get('memory')or{}
+    points={'S.case_v2.C5-correct-before-action':memory.get('correction'),
+        'S.case_v2.C4-three-window-checkpoints':memory.get('three_evictions')}
+    if case_id=='MAB-05':points['S.case_v2.C1-transient-baseline']=memory.get('correction')
+    if case_id in {'MAB-06','MAB-07','MAB-08'}:
+        points['S.case_v2.C1-transient-baseline']=behavior.get('typed_book_memory')
+    return points
 
 
 def eviction_eligible(*,protocol,stage,valid_after,source_seen,source_visible):
@@ -181,6 +205,8 @@ def grade_mab_trial(trial:Path,contract,*,arm):
         for event in replay_content(store)['events']:
             key=event['producer_id'],event['sequence'];records[key]=event;locations[key]=store
     events=sorted(records.values(),key=lambda e:(e['timestamp'],e['producer_id'],e['sequence']))
+    from .fixed35_business import execution_boundaries
+    complete=execution_boundaries(trial,events)['complete']
     texts=None;before=None;action_seen=False;evictions=[];boundaries=set();first_action_correct=None
     source=Path(contract['source_instruction_path'])
     if contract.get('source_instruction_sha256')and file_digest(source)!=contract['source_instruction_sha256']:
@@ -194,7 +220,10 @@ def grade_mab_trial(trial:Path,contract,*,arm):
             path=Path(support['path'])
             if file_digest(path)!=support['sha256']:raise ValueError('frozen current-source instruction changed')
             originals.append(path.read_text())
-    source_seen=False;seen_sources=set()
+    support_text=[s['support']for s in sources]if sources else[]
+    for support,item in zip(support_text,sources or[],strict=True):
+        if support not in Path(item['path']).read_text():raise ValueError('frozen critical support missing from source instruction')
+    source_seen=False;seen_sources=set();window_proof=None
     projection={};before_calls={};workspace_v2=contract.get('action_observation')=='workspace-content-v2'
     previous_action_hash=None;initial_action_observed=False
     for event in events:
@@ -240,13 +269,13 @@ def grade_mab_trial(trial:Path,contract,*,arm):
                 raw=message.get('content')
                 return raw if isinstance(raw,str)else '\n'.join(p.get('text','')for p in raw or []if isinstance(p,dict))
             messages=[content(m)for m in payload.get('messages',[])]
-            source_visible=any(text in value for text in originals for value in messages)
+            visible=source_visible(messages,originals,support_text)
             for index,text in enumerate(originals):
                 if any(text in value for value in messages):seen_sources.add(index)
             stage=int(event.get('stage_id')or 0)
             eligible=eviction_eligible(protocol=contract.get('eviction_protocol'),stage=stage,
                 valid_after=contract.get('literal_valid_after_stage',1),
-                source_seen=len(seen_sources)==len(originals),source_visible=source_visible)
+                source_seen=len(seen_sources)==len(originals),source_visible=visible)
             if cut and cut not in boundaries and eligible:
                 boundaries.add(cut)
                 literal=contract.get('literal_memory')
@@ -270,12 +299,24 @@ def grade_mab_trial(trial:Path,contract,*,arm):
                 if contract.get('eviction_protocol')=='eligible-after-current-source-v3':
                     _,delivered=delivered_memory(messages,boundary)
                 evictions.append({'boundary_id':cut,'stage_id':stage,
-                    'original_source_absent':(len(seen_sources)==len(originals)if sources else source_seen)and not source_visible,
+                    'original_source_absent':(len(seen_sources)==len(originals)if sources else source_seen)and not visible,
                     'current_facts_retained':keep,'delivered_version_correct':delivered,
                     'request_id':event['request_id'],'expected_state_version':expected,
                     'payload_ref':event.get('payload_ref'),'journal_ref':boundary.get('expected_journal_ref'),
                     'event_identity':[event['producer_id'],event['sequence']]})
-            source_seen|=source_visible
+                config=contract.get('window_contract')or{}
+                if config.get('kind')in {'native-identity-plain-text-v1','native-identity-plain-text-v2'}:
+                    if window_proof is None:
+                        from .fixed35_identity_window import grade_identity_windows
+                        try:
+                            metric=grade_identity_windows(trial,[e['request_id']for e in events if e['event']=='request_ready'],
+                                recent_turns=config['recent_turns'],evict_turns=config['evict_turns'],enabled=True,
+                                max_source_bytes=config.get('max_source_bytes',4000000))
+                            window_proof={i['id']:i for i in metric['items']}
+                        except (ValueError,KeyError,OSError):window_proof={}
+                    proof=window_proof.get(event['request_id'],{})
+                    evictions[-1].update(window_projection_correct=proof.get('value'),independent_window_proof=proof)
+            source_seen|=visible
         elif event['event']=='state_after_tool':
             snapshot=event.get('state',{});texts=None;before=None
             if snapshot.get('journal_ref'):
@@ -295,9 +336,7 @@ def grade_mab_trial(trial:Path,contract,*,arm):
                 break
     literal=contract.get('literal_memory')
     if contract.get('typed_book_memory'):
-        from .fixed35_business import execution_boundaries
         from .fixed35_mab_cards import grade_book_card
-        complete=execution_boundaries(trial,events)['complete']
         result['typed_book_memory']=grade_book_card(texts,contract['typed_book_memory'],
             before_dependency=before if action_seen else False if complete else None,
             business_action_correct=first_action_correct if action_seen else False if complete else None)
@@ -305,14 +344,13 @@ def grade_mab_trial(trial:Path,contract,*,arm):
         correct_action=first_action_correct,
         snapshot_before_action=before if action_seen else None)if literal else None
     if contract.get('typed_fact_memory'):
-        from .fixed35_business import execution_boundaries
         from .fixed35_fact_cards import grade_fact_cards
-        complete=execution_boundaries(trial,events)['complete']
         correction=grade_fact_cards(texts,contract['typed_fact_memory'],
             correct_action=first_action_correct if action_seen else False if complete else None,
             before=before if action_seen else False if complete else None)
     result['memory']={'correction':correction,
-        'three_evictions':grade_three_evictions(evictions,observation_complete=True),
+        'three_evictions':grade_three_evictions(evictions,observation_complete=complete,
+            require_identity=(contract.get('window_contract')or{}).get('kind')in {'native-identity-plain-text-v1','native-identity-plain-text-v2'}),
         'eviction_snapshots':evictions[:3],
         'parser_scope':'finite canonical entity/value literal predicates; not general free-text semantics',
         'literal_contract':literal,'dependent_write_observed':action_seen}
