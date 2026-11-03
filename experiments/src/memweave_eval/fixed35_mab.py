@@ -135,6 +135,24 @@ def grade_three_evictions(snapshots, *, observation_complete):
     return point
 
 
+def eviction_eligible(*,protocol,stage,valid_after,source_seen,source_visible):
+    """Eligibility uses evidence exposure, never the observed memory outcome."""
+    if protocol!='eligible-after-current-source-v3':return True
+    return stage>=valid_after and source_seen and not source_visible
+
+
+def delivered_memory(messages,boundary):
+    blocks=[value for value in messages if value.startswith('# Symbolic State')]
+    if 'expected_task_id'not in boundary:return None,None
+    if boundary['expected_task_id']is None:return ([],not blocks)
+    if len(blocks)!=1:return [],False
+    task=re.search(r'^task_id: (\S+)$',blocks[0],re.MULTILINE)
+    if not task or task[1]!=boundary['expected_task_id']:return [],False
+    entries=re.findall(r'(?ms)^[FD]\d+ (.*?)\ne: \[',blocks[0])
+    expected=boundary.get('expected_version_at_prepare');version=re.search(r'^state_version: (\d+)$',blocks[0],re.MULTILINE)
+    return entries,(bool(version)and int(version[1])==expected)if type(expected)is int else None
+
+
 def grade_mab_trial(trial:Path,contract,*,arm):
     from .state_pi import final_pi_text
     # Only final query artifacts count; an ingestion acknowledgement is not an answer.
@@ -164,7 +182,15 @@ def grade_mab_trial(trial:Path,contract,*,arm):
     if contract.get('source_instruction_sha256')and file_digest(source)!=contract['source_instruction_sha256']:
         raise ValueError('frozen original MAB source instruction changed')
     original=source.read_text()
-    source_seen=False
+    sources=contract.get('source_instruction_paths')
+    originals=[original]
+    if sources:
+        originals=[]
+        for support in sources:
+            path=Path(support['path'])
+            if file_digest(path)!=support['sha256']:raise ValueError('frozen current-source instruction changed')
+            originals.append(path.read_text())
+    source_seen=False;seen_sources=set()
     projection={};before_calls={};workspace_v2=contract.get('action_observation')=='workspace-content-v2'
     previous_action_hash=None;initial_action_observed=False
     for event in events:
@@ -175,9 +201,9 @@ def grade_mab_trial(trial:Path,contract,*,arm):
             state=event.get('binding')or{}
             if state.get('journal_ref'):
                 rows=[json.loads(line)for line in read_object(store,state['journal_ref']).decode().splitlines()]
-                before_calls[event['call_id']]=(active_text(rows),True)
-            elif state.get('status')=='NO_BOUND_TASK':before_calls[event['call_id']]=([],True)
-            else:before_calls[event['call_id']]=(None,None)
+                before_calls[(event['producer_id'],event['call_id'])]=(active_text(rows),True)
+            elif state.get('status')=='NO_BOUND_TASK':before_calls[(event['producer_id'],event['call_id'])]=([],True)
+            else:before_calls[(event['producer_id'],event['call_id'])]=(None,None)
         if workspace_v2 and event['event']=='workspace_checkpoint'and event.get('stage_id')==contract.get('query_stage_id'):
             workspace=event.get('workspace')or{};files=workspace.get('files')or{}
             if 'answer.json'in files:
@@ -186,7 +212,7 @@ def grade_mab_trial(trial:Path,contract,*,arm):
                 if event.get('phase')=='agent_start'and not initial_action_observed:
                     initial_action_observed=status.get('status')=='absent'and current_hash is None
                 if event.get('phase')in {'tool_end','tool_result'}and initial_action_observed and current_hash!=previous_action_hash:
-                    action_seen=True;texts,before=before_calls.get(event.get('call_id'),(None,None))
+                    action_seen=True;texts,before=before_calls.get((event['producer_id'],event.get('call_id')),(None,None))
                     ref=workspace.get('file_refs',{}).get('answer.json')
                     if ref and ref.get('sha256')==current_hash:
                         try:first_action_correct=bool(score_mab('',contract['answers'],json.loads(read_object(store,ref)))['typed_action'])
@@ -210,19 +236,41 @@ def grade_mab_trial(trial:Path,contract,*,arm):
                 raw=message.get('content')
                 return raw if isinstance(raw,str)else '\n'.join(p.get('text','')for p in raw or []if isinstance(p,dict))
             messages=[content(m)for m in payload.get('messages',[])]
-            source_visible=any(original in value for value in messages)
-            if cut and cut not in boundaries:
+            source_visible=any(text in value for text in originals for value in messages)
+            for index,text in enumerate(originals):
+                if any(text in value for value in messages):seen_sources.add(index)
+            stage=int(event.get('stage_id')or 0)
+            eligible=eviction_eligible(protocol=contract.get('eviction_protocol'),stage=stage,
+                valid_after=contract.get('literal_valid_after_stage',1),
+                source_seen=len(seen_sources)==len(originals),source_visible=source_visible)
+            if cut and cut not in boundaries and eligible:
                 boundaries.add(cut)
                 literal=contract.get('literal_memory')
-                valid=int(event.get('stage_id')or 0)>=contract.get('literal_valid_after_stage',1)
+                valid=stage>=contract.get('literal_valid_after_stage',1)
                 blocks=[value for value in messages if value.startswith('# Symbolic State')]
                 delivered_entries=re.findall(r'(?ms)^[FD]\d+ (.*?)\ne: \[',blocks[0])if len(blocks)==1 else None
+                if contract.get('eviction_protocol')=='eligible-after-current-source-v3':
+                    delivered_entries,_=delivered_memory(messages,boundary)
                 keep=literal_snapshot(delivered_entries,literal)['required_relations']if literal and valid else None
+                if contract.get('typed_book_memory')and valid:
+                    from .fixed35_mab_cards import card_snapshot
+                    checks=card_snapshot(delivered_entries,contract['typed_book_memory'])
+                    keep=all(checks.values())if all(type(v)is bool for v in checks.values())else None
+                if contract.get('typed_fact_memory')and valid:
+                    from .fixed35_fact_cards import fact_snapshot
+                    checks=fact_snapshot(delivered_entries,contract['typed_fact_memory'])
+                    keep=all(checks.values())if all(type(v)is bool for v in checks.values())else None
                 expected=boundary.get('expected_version_at_prepare')
                 versions=[int(m.group(1))for value in blocks if (m:=re.search(r'state_version: (\d+)',value))]
                 delivered=(len(versions)==1 and versions[0]==expected)if type(expected)is int else None
-                evictions.append({'boundary_id':cut,'original_source_absent':source_seen and not source_visible,
-                    'current_facts_retained':keep,'delivered_version_correct':delivered})
+                if contract.get('eviction_protocol')=='eligible-after-current-source-v3':
+                    _,delivered=delivered_memory(messages,boundary)
+                evictions.append({'boundary_id':cut,'stage_id':stage,
+                    'original_source_absent':(len(seen_sources)==len(originals)if sources else source_seen)and not source_visible,
+                    'current_facts_retained':keep,'delivered_version_correct':delivered,
+                    'request_id':event['request_id'],'expected_state_version':expected,
+                    'payload_ref':event.get('payload_ref'),'journal_ref':boundary.get('expected_journal_ref'),
+                    'event_identity':[event['producer_id'],event['sequence']]})
             source_seen|=source_visible
         elif event['event']=='state_after_tool':
             snapshot=event.get('state',{});texts=None;before=None
@@ -242,10 +290,26 @@ def grade_mab_trial(trial:Path,contract,*,arm):
                     except (ValueError,KeyError):first_action_correct=False
                 break
     literal=contract.get('literal_memory')
-    result['memory']={'correction':grade_correction(texts,literal,
+    if contract.get('typed_book_memory'):
+        from .fixed35_business import execution_boundaries
+        from .fixed35_mab_cards import grade_book_card
+        complete=execution_boundaries(trial,events)['complete']
+        result['typed_book_memory']=grade_book_card(texts,contract['typed_book_memory'],
+            before_dependency=before if action_seen else False if complete else None,
+            business_action_correct=first_action_correct if action_seen else False if complete else None)
+    correction=grade_correction(texts,literal,
         correct_action=first_action_correct,
-        snapshot_before_action=before if action_seen else None)if literal else None,
+        snapshot_before_action=before if action_seen else None)if literal else None
+    if contract.get('typed_fact_memory'):
+        from .fixed35_business import execution_boundaries
+        from .fixed35_fact_cards import grade_fact_cards
+        complete=execution_boundaries(trial,events)['complete']
+        correction=grade_fact_cards(texts,contract['typed_fact_memory'],
+            correct_action=first_action_correct if action_seen else False if complete else None,
+            before=before if action_seen else False if complete else None)
+    result['memory']={'correction':correction,
         'three_evictions':grade_three_evictions(evictions,observation_complete=True),
+        'eviction_snapshots':evictions[:3],
         'parser_scope':'finite canonical entity/value literal predicates; not general free-text semantics',
         'literal_contract':literal,'dependent_write_observed':action_seen}
     return result

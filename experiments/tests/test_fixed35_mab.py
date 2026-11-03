@@ -45,6 +45,15 @@ def test_archive_or_window_removal_is_not_active_memory():
     assert active_text(rows)==['new']
 
 
+def test_known_unbound_state_is_missing_memory_not_missing_observation():
+    from memweave_eval.fixed35_mab import delivered_memory
+    assert delivered_memory(['当前未绑定 Task。'],{'expected_task_id':None})==([],True)
+    assert delivered_memory([],{})==(None,None)
+    assert delivered_memory([],{'expected_task_id':'task','expected_version_at_prepare':2})==([],False)
+    text='# Symbolic State\ntask_id: other\nstate_version: 2\nF1 wrong\ne: [U1]'
+    assert delivered_memory([text],{'expected_task_id':'task','expected_version_at_prepare':2})==([],False)
+
+
 def test_multihop_current_chain_or_correct_derived_fact_both_accepted():
     from memweave_eval.fixed35_mab import literal_snapshot
     contract={'required_relation_sets':[

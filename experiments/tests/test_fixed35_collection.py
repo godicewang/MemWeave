@@ -52,11 +52,19 @@ def test_real_admission_requires_matching_two_arm_settled_canary(tmp_path):
     ledger=tmp_path/'ledger.json';ledger.write_text(json.dumps({'requests':{
         'native':{'status':'settled','arm':'preflight'},'plugin':{'status':'settled','arm':'preflight'}}}))
     proof=tmp_path/'canary.json';evidence={'passed':True,'evaluator_commit':'a'*40,'runtime_plan_sha256':'b'*64,
-        'per_arm':{a:{'actor_request_ids':[identity],'guard_negative_upstream_requests':0}
+        'per_arm':{a:{'actor_request_ids':[identity],'guard_negative_upstream_requests':0,
+                     'rule_integrity':{'value':1,'coverage':1}}
             for a,identity in [('pi-native','native'),('pi-memweave','plugin')]}}
     proof.write_text(json.dumps(evidence));record={'admission_status':'ADMITTED','family':'tb4','evaluator_commit':'a'*40,
         'runtime_plan_sha256':'b'*64,'paid_canary':{'path':str(proof),'sha256':file_digest(proof)}}
     validate_paid_canary(record,ledger)
+    for value in ({},{'value':0,'coverage':1},{'value':1,'coverage':.5}):
+        original=evidence['per_arm']['pi-memweave']['rule_integrity']
+        evidence['per_arm']['pi-memweave']['rule_integrity']=value
+        proof.write_text(json.dumps(evidence));record['paid_canary']['sha256']=file_digest(proof)
+        with pytest.raises(ValueError,match='Rule'):validate_paid_canary(record,ledger)
+        evidence['per_arm']['pi-memweave']['rule_integrity']=original
+    proof.write_text(json.dumps(evidence));record['paid_canary']['sha256']=file_digest(proof)
     with pytest.raises(ValueError,match='not admitted'):validate_paid_canary(dict(record,admission_status='PENDING'),ledger)
     with pytest.raises(ValueError,match='frozen'):validate_paid_canary(dict(record,evaluator_commit='c'*40),ledger)
     ledger.write_text(json.dumps({'requests':{'native':{'status':'reserved','arm':'preflight'}}}))

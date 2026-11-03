@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import math
+import tomllib
 from pathlib import Path
 
 from .storage import file_digest
@@ -13,6 +15,15 @@ PACKAGE=BASE/'artifacts/marathon-20261101/godice-memweave-0.1.0.tgz'
 MODEL_CUTOFF=1793650812.0  # 2026-11-02T20:20:12Z; validated below by campaign config.
 
 
+def source_stage_budgets(task:Path):
+    config=tomllib.loads((task/'task.toml').read_text())
+    default=config.get('agent',{}).get('timeout_sec')
+    budgets=[s.get('agent',{}).get('timeout_sec',default)for s in config.get('steps')or[{}]]
+    if any(type(v)not in (int,float)or not math.isfinite(v)or v<=0 for v in budgets):
+        raise ValueError('every source stage needs a finite positive actor budget')
+    return budgets
+
+
 def can_pair(resources,available_cpu,available_memory_mb,reserve_memory_mb=2048):
     return (2*resources['cpus']<=available_cpu and
             2*resources['memory_mb']<=available_memory_mb-reserve_memory_mb)
@@ -21,9 +32,10 @@ def can_pair(resources,available_cpu,available_memory_mb,reserve_memory_mb=2048)
 def job_config(*,root:Path,task:Path,case_id,arm,run_id,plan:Path,deadline,
                seconds=1800,resources,prepare_only=False,canary=False,control=None,
                host_scored=False,episode_budget=.6,output_tokens=8192,concurrency=1,
-               task_config=None):
+               task_config=None,time_policy='case-cap'):
     if arm not in {'pi-native','pi-memweave'}:
         raise ValueError('unknown paired arm')
+    if time_policy not in {'case-cap','source-per-stage'}:raise ValueError('unknown actor time policy')
     resources={k:resources[k]for k in ('cpus','memory_mb','storage_mb')if k in resources}
     if not all(type(v)is int and v>0 for v in resources.values())or not {'cpus','memory_mb'}<=set(resources):
         raise ValueError('positive integer CPU/memory resource limits required')
@@ -42,6 +54,10 @@ def job_config(*,root:Path,task:Path,case_id,arm,run_id,plan:Path,deadline,
              'evaluation_request_limit':1 if canary else None,
              'evaluation_episode_budget':episode_budget,'evaluation_resources':resources,
              'evaluation_task_timeouts':{task.name:seconds}}
+    if time_policy=='source-per-stage':
+        stages=source_stage_budgets(task)
+        if sum(stages)!=seconds:raise ValueError('source stage budgets do not equal frozen full episode budget')
+        options['evaluation_stage_timeouts']=stages
     if canary:
         options.update(evaluation_budget_arm='preflight',evaluation_role='preflight',
                        evaluation_run_id=run_id+':'+case_id+':'+arm+':canary')
@@ -50,6 +66,7 @@ def job_config(*,root:Path,task:Path,case_id,arm,run_id,plan:Path,deadline,
     agent={'import_path':'memweave_eval.pi_agent:ExperimentPi','model_name':'deepseek/deepseek-flash',
            'resume_trajectory':True,'extra_allowed_hosts':['api.deepseek.com'],'kwargs':options,
            'override_setup_timeout_sec':1800,'override_timeout_sec':120 if canary else seconds}
+    if time_policy=='source-per-stage'and not canary:agent.pop('override_timeout_sec')
     if control:agent={'name':control,'resume_trajectory':True}
     cfg={'job_name':name,'jobs_dir':str(root/'harbor'),'n_attempts':1,
          'n_concurrent_trials':concurrency,'quiet':True,'retry':{'max_retries':0},

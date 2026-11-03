@@ -39,7 +39,7 @@ class StatePiOptions(PiExperimentOptions):
     state_evaluator_output:str
     evaluation_judge_deadline:float
     evaluation_aux_quota_channels:dict[str,str]=Field(default_factory=dict)
-    evaluation_state_overlay:Literal['equal-authority-conflict-v1','equal-authority-conflict-v2']|None=None
+    evaluation_state_overlay:Literal['equal-authority-conflict-v1','equal-authority-conflict-v2','equal-authority-conflict-v3']|None=None
 
 
 class StatePi(ExperimentPi):
@@ -74,7 +74,8 @@ class StatePi(ExperimentPi):
             if domain_name!='travel'or task_id!='47-adversarial_conflicting_cabin_claim'or self.options.evaluation_case_id!='INT-04':
                 raise ValueError('equal-authority overlay is bound to selected INT-04')
             from .state_conflict import TOOL, ConflictEnvironment, conflict_contract
-            self._overlay_contract=conflict_contract(source,state_records=self.options.evaluation_state_overlay.endswith('v2'))
+            self._overlay_contract=conflict_contract(source,state_records=self.options.evaluation_state_overlay!='equal-authority-conflict-v1',
+                strict_current=self.options.evaluation_state_overlay=='equal-authority-conflict-v3')
             backend_environment=ConflictEnvironment(self._state_environment)
             overlay_tools=[TOOL]
             (self._private_output/'overlay-contract.json').write_text(json.dumps(self._overlay_contract))

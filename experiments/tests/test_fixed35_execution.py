@@ -43,3 +43,20 @@ def test_episode_policy_rejects_invalid_values(tmp_path,field,value):
     (tmp_path/'task.toml').write_text('[agent]\ntimeout_sec=900\n')
     with pytest.raises(ValueError):validate_episode_policy(
         {'task_path':str(tmp_path),'seconds':900,'episode_budget':.5,field:value})
+
+
+def test_source_stage_policy_preserves_each_stage_and_sum(tmp_path):
+    from memweave_eval.fixed35_campaign import validate_episode_policy
+    from memweave_eval.fixed35_execution import source_stage_budgets
+    (tmp_path/'task.toml').write_text('[agent]\ntimeout_sec=900\n[[steps]]\nname="first"\n[[steps]]\nname="second"\n[steps.agent]\ntimeout_sec=300\n')
+    assert source_stage_budgets(tmp_path)==[900,300]
+    record={'task_path':str(tmp_path),'seconds':1200,'episode_budget':.5,'time_policy':'source-per-stage'}
+    validate_episode_policy(record)
+    with pytest.raises(ValueError):validate_episode_policy(dict(record,seconds=900))
+    plan=tmp_path/'plan.json';plan.write_text('{}')
+    plan.with_name('runtime-assets.lock.json').write_text(json.dumps({'objects':{}}))
+    cfg=job_config(root=tmp_path,task=tmp_path,case_id='Switch',arm='pi-native',run_id='r',
+        plan=plan,deadline=3000,seconds=1200,resources={'cpus':2,'memory_mb':4096},time_policy='source-per-stage')
+    assert 'override_timeout_sec'not in cfg['agents'][0]
+    assert cfg['agents'][0]['kwargs']['evaluation_stage_timeouts']==[900,300]
+    assert cfg['agents'][0]['kwargs']['evaluation_task_timeouts']=={tmp_path.name:1200}

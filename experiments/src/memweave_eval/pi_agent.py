@@ -44,6 +44,7 @@ class PiExperimentOptions(PiOptions):
     evaluation_resources: dict[str,int] = {}  # noqa: RUF012
     # PiOptions is a Pydantic model; mutable field defaults are copied per instance.
     evaluation_task_timeouts: dict[str,int] = {}  # noqa: RUF012
+    evaluation_stage_timeouts: list[float] = []  # noqa: RUF012 -- Pydantic copies mutable defaults.
     evaluation_task_ids: list[str] = []  # noqa: RUF012
     evaluation_task_configs: dict = {}  # noqa: RUF012
     evaluation_sealed_tasks: list[str] = []  # noqa: RUF012
@@ -158,9 +159,11 @@ class ExperimentPi(Pi):
             labels=actual.get('Config',{}).get('Labels',{})
             if labels.get('com.docker.compose.project')!=project or labels.get('com.docker.compose.service')!='main':
                 raise ValueError('fixed-case main container labels do not match trusted Harbor session')
+            from .actor_resources import verify_actor_limits
+            limits=verify_actor_limits(actual.get('HostConfig'),self.options.evaluation_resources)
             (self.logs_dir/'container-image-identity.json').write_text(json.dumps({
                 'container_id':actual['Id'],'image_id':actual['Image'],'expected_image_id':entry['image']['id'],
-                'verified_before_credentials':actual.get('Image')==entry['image']['id']}))
+                'verified_before_credentials':actual.get('Image')==entry['image']['id'],'resource_limits':limits}))
             if actual.get('Image')!=entry['image']['id']:
                 raise ValueError('actual container image differs from frozen runtime plan; no credential loaded')
         cache = Path(plan["cache"])
@@ -289,6 +292,13 @@ class ExperimentPi(Pi):
             )
             self.options.extension = self._asset_root + "/package/src/extension/index.ts"
 
+        # Isolated case profile only: keep the package defaults and native Pi
+        # untouched. This is an explicitly frozen pressure adaptation, not State.
+        from .pressure_config import window_settings
+        pressure=window_settings(self._evaluation_task_config)
+        if pressure is not None and self.options.variant=='pi-memweave':
+            await self.upload_private(environment,json.dumps(pressure),home+'/.pi/memory/config.json')
+
         await self.exec_as_agent(environment, f"mkdir -p {shlex.quote(profile)}")
         if self.options.evaluation_deadline:
             evaluator = self._asset_root + '/evaluation'
@@ -330,6 +340,7 @@ class ExperimentPi(Pi):
             "prepare_only": self.options.prepare_only,
             "canary": self.options.evaluation_canary,
             "fresh_profile_and_memory": True,
+            "evaluation_window_pressure":pressure if self.options.variant=='pi-memweave'else None,
             "resources": resources,
             "deployment_seconds": time.monotonic() - started,
             "package_sha256": self.options.package_sha256 if self.options.extension else None,
@@ -540,11 +551,16 @@ positive:true,lost_guard_upstream_requests:0,actual_cli_pid_deadline:true}));
                 instruction='Reply only OK. Do not call any tools. This is a connectivity canary.'
             timeout=self.options.evaluation_task_timeouts.get(self._evaluation_task_id)
             if timeout and not self.options.evaluation_canary and self.options.protocol=='fixed35':
-                self._evaluation_effective_deadline=min(self.options.evaluation_deadline,
-                    self._episode_started_unix+timeout)
+                from .case_timing import actor_deadline
+                stages=self.options.evaluation_stage_timeouts
+                self._evaluation_effective_deadline=actor_deadline(self.options.evaluation_deadline,
+                    self._episode_started_unix,timeout,time.time(),self._evaluation_stage,stages)
                 resource=self.options.evaluation_resources
                 instruction+=('\n\nEvaluation budget notice (same policy for both variants): '
-                    f'the total case budget across all stages is {timeout} seconds; '
+                    +(f'the sum of original actor allowances is {timeout} seconds; '
+                      f'this source stage has its original {stages[self._evaluation_stage-1]:g}-second allowance; '
+                      'intermediate verifier/setup time is not deducted from the next stage; 'if stages else
+                      f'the total case budget across all stages is {timeout} seconds; ')+
                     f'allocated resources: {json.dumps(resource,sort_keys=True)}. '
                     'The effective model cutoff is '+datetime.fromtimestamp(
                         self._evaluation_effective_deadline,UTC).isoformat()+'. '

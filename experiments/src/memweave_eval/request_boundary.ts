@@ -40,9 +40,22 @@ export function attachBoundaries(pi:any) {
     prepared={boundary_id:randomUUID(),expected_task_id:task,boundary_source:'atomic_journal_before_context_transform'};
     const evidence=contentEvidence();
     if(evidence){
+      const branch=ctx.sessionManager.getBranch();
+      const native=branch.filter((e:any)=>e.type==='message');
+      const ids=new Map<string,string[]>();
+      for(const entry of native){const key=hash(entry.message);ids.set(key,[...(ids.get(key)??[]),entry.id]);}
+      const prior=branch.findLast((e:any)=>e.type==='custom'&&e.customType==='memweave.window.v1');
+      prepared.native_shape={version:'native-window-shape-v1',session_id:ctx.sessionManager.getSessionId(),
+        previous_window:prior?.data??null,
+        unsupported_lifecycle:branch.some((e:any)=>e.type==='custom'&&/^memweave\.(?:resume|restart)\./.test(e.customType)),
+        messages:native.map((e:any)=>({id:e.id,parent_id:e.parentId??null,sha256:hash(e.message),
+          role:e.message.role,stop_reason:e.message.stopReason??null,
+          calls:(Array.isArray(e.message.content)?e.message.content:[]).filter((p:any)=>p.type==='toolCall').map((p:any)=>p.id),
+          result_id:e.message.toolCallId??null}))};
       const original=Array.isArray(_event.messages)?_event.messages:[];
       prepared.source_messages=original.map((m:any)=>({role:m.role,timestamp:m.timestamp??null,
-        sha256:hash(m),source_ref:evidence.put(m),tool_call_id:m.toolCallId??null,
+        sha256:hash(m),entry_id:ids.get(hash(m))?.length===1?ids.get(hash(m))![0]:null,
+        source_ref:evidence.put(m),tool_call_id:m.toolCallId??null,
         parts:(Array.isArray(m.content)?m.content:[]).map((p:any)=>({type:p.type,id:p.id??null,
           sha256:hash(p),arguments_sha256:p.type==='toolCall'?hash(p.arguments):null}))}));
       const system=original.find((m:any)=>m.role==='system');

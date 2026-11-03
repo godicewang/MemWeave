@@ -28,13 +28,13 @@ def sentence_chunks(sentences, encode, limit=4096):
     return chunks
 
 
-def mab_chunks(public, nltk_data: Path):
+def mab_chunks(public, nltk_data: Path, *,limit=4096):
     import nltk
     import tiktoken
     nltk.data.path.insert(0,str(nltk_data))
     encoder = tiktoken.encoding_for_model('gpt-4o-mini')
     return sentence_chunks(nltk.sent_tokenize(public['context']),
-                           lambda text:encoder.encode(text,allowed_special={'<|endoftext|>'}))
+                           lambda text:encoder.encode(text,allowed_special={'<|endoftext|>'}),limit=limit)
 
 
 def mab_task(case, public, private, chunks, output: Path):

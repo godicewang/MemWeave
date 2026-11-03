@@ -29,10 +29,12 @@ def pair_policy(record):
     if cpus>CPU or memory>MEMORY_MB:raise ValueError('one arm exceeds the safe local resource pool')
     parallel=2*cpus<=CPU and 2*memory<=MEMORY_MB
     stages=task.get('steps')or[{}]
-    verify=sum(s.get('verifier',{}).get('timeout_sec',verifier.get('timeout_sec',3600))for s in stages)
+    verify_stages=[s.get('verifier',{}).get('timeout_sec',verifier.get('timeout_sec',3600))for s in stages]
+    verify=sum(verify_stages)
     if record.get('family')=='slop':verify=900*len(stages)
     setup=120
-    actor_span=(record['seconds']+setup)*(1 if parallel else 2)+(0 if parallel else verify)
+    interleaved=sum(verify_stages[:-1])if record.get('time_policy')=='source-per-stage'and not record.get('host_scored')else 0
+    actor_span=(record['seconds']+setup+interleaved)*(1 if parallel else 2)+(0 if parallel else verify-interleaved)
     total_span=(record['seconds']+setup+verify)*(1 if parallel else 2)
     campaign=campaign_config(record)if 'campaign'in record else None
     model_cutoff=campaign['model_cutoff']if campaign else MODEL_CUTOFF

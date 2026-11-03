@@ -47,3 +47,13 @@ def test_schedule_uses_admission_campaign_clock_not_old_global(tmp_path):
     policy=pair_policy(dict(freeze(tmp_path),case_id='c',task_path=str(task),
         resources={'cpus':2,'memory_mb':4096},seconds=200))
     assert policy['latest_pair_start_unix']==1680
+
+
+def test_schedule_reserves_intermediate_verification_before_last_actor(tmp_path):
+    from memweave_eval.fixed35_schedule import pair_policy
+    task=tmp_path/'task';task.mkdir()
+    (task/'task.toml').write_text('[environment]\ncpus=2\nmemory_mb=4096\n[verifier]\ntimeout_sec=100\n[[steps]]\nname="a"\n[[steps]]\nname="b"\n')
+    record=dict(freeze(tmp_path),case_id='c',task_path=str(task),
+        resources={'cpus':2,'memory_mb':4096},seconds=1200,time_policy='source-per-stage')
+    assert pair_policy(record)['latest_pair_start_unix']==580
+    assert pair_policy(dict(record,host_scored=True))['latest_pair_start_unix']==680

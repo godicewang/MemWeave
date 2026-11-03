@@ -11,7 +11,16 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261102-v5'
+VERSION='fixed35-score-20261103-v6'
+
+
+def mark_checkpoint_collection(metrics,points):
+    """A known failure is still zero, but missing mandatory proof needs repair."""
+    for metric in metrics:
+        point=points.get(metric['id'])
+        if isinstance(point,dict)and point.get('collection_complete')is False and metric['status']!='DESIGN_NA':
+            metric.update(collection_status='REPAIR_REQUIRED',
+                collection_reason='Mandatory checkpoint assertion evidence missing; known failure does not waive collection')
 
 
 def weighted_profile(metrics,profile,*,allowed_ids=None):
@@ -106,12 +115,34 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                 row['contract_metrics'][name]=delivery[name]
         if contract.get('reference_contract')=='known-complete-text-v1':
             row['contract_metrics']['reference_integrity']=collection.get('known_reference_integrity',{})
+        if contract.get('window_contract',{}).get('kind')=='uncut-plain-text-v1':
+            from .fixed35_window import grade_small_windows
+            window=contract['window_contract']
+            row['contract_metrics']['window_integrity']=grade_small_windows(trial,
+                collection['delivery_metrics']['request_ids'],recent_turns=window['recent_turns'],
+                enabled=arm=='pi-memweave',max_source_bytes=window.get('max_source_bytes',100000))
+        if contract.get('window_contract',{}).get('kind')=='native-identity-plain-text-v1':
+            from .fixed35_identity_window import grade_identity_windows
+            window=contract['window_contract']
+            row['contract_metrics']['window_integrity']=grade_identity_windows(trial,
+                collection['delivery_metrics']['request_ids'],recent_turns=window['recent_turns'],
+                evict_turns=window['evict_turns'],enabled=arm=='pi-memweave',
+                max_source_bytes=window.get('max_source_bytes',4000000))
         row['_normalization_cost_pair']={'native':pair['arms'][0]['collection']['estimated_usd'],
             'plugin':pair['arms'][1]['collection']['estimated_usd'],
             'compatible':all(a['collection']['collection_complete']for a in pair['arms'])}
         def explicit(identity,score,reason=None,row=row,status=None):
             row['normalization_evidence'][identity]={'value':None if score is None else score/100,
                 'status':status or('unknown'if score is None else 'scored'),'reason':reason}
+        if contract.get('rule_gold'):
+            from .fixed35_rule import grade_rule_trial
+            gold=contract['rule_gold'];template=Path(gold['path'])
+            if file_digest(template)!=gold['sha256']:
+                raise ValueError('independent frozen Rule gold changed')
+            proof=grade_rule_trial(trial,template.read_text(),gold['variables'],
+                collection['delivery_metrics']['request_ids'],enabled=arm=='pi-memweave')
+            row['contract_metrics']['rule_integrity']=proof
+            row['normalization_evidence']['Q3.rule_integrity']=proof
         if admission['family']=='mab':
             explicit('S.common.protected_constraints',behavior['derived_action']['score'],
                 'MAB typed-action overlay: correct final answer AND exact one-value JSON schema AND correct file value')
@@ -170,6 +201,12 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                 item['collection_status']='REPAIR_REQUIRED'
             item['opportunity_ids']=spec['opportunity_ids'];item['mapping_version']=VERSION
             metrics.append(item)
+        if admission['family']=='mab':
+            memory=behavior.get('memory')or{}
+            mark_checkpoint_collection(metrics,{
+                'S.common.protected_constraints':behavior['derived_action'],
+                'F35.C5-correct-before-action':memory.get('correction'),
+                'F35.C4-three-window-checkpoints':memory.get('three_evictions')})
         row['normalized_metrics']=metrics
         row['profiles']={name:weighted_profile(metrics,name)for name in ('common_product','plugin_memory')}
         if arm=='pi-native':

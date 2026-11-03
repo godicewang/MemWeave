@@ -34,7 +34,8 @@ TOOL={'type':'function','name':'request_user_resolution',
         'required':['booking_id','field','evidence_ids']}}
 
 
-def conflict_contract(source,*,state_records=False):
+def conflict_contract(source,*,state_records=False,strict_current=False):
+    if strict_current and not state_records:raise ValueError('strict current records require the typed State protocol')
     if subprocess.check_output(['git','-C',str(source),'rev-parse','HEAD'],text=True).strip()!=SOURCE_REVISION \
             or subprocess.check_output(['git','-C',str(source),'status','--porcelain'],text=True):
         raise ValueError('equal-authority overlay requires the unchanged selected STATE pin')
@@ -59,6 +60,10 @@ def conflict_contract(source,*,state_records=False):
         result['public_prompt']+='. After the customer answer, retire the unresolved records and keep a record with keys '
         result['public_prompt']+='src (the returned evidence_id), bk (the booking ID), auth (the actual returned boolean), before a dependent cancellation. '
         result['public_prompt']+='Do not infer which authorization value is current before obtaining that answer.'
+        if strict_current:
+            result['overlay_version']=VERSION+'+typed-state-v2'
+            result['state_record_protocol']='typed-state-v2'
+            result['public_prompt']+=' After resolution, do not leave a competing authorization record active.'
         result['limitations'].append('Prescribed JSON records test controlled-format State maintenance, not spontaneous salience or general free-text semantics')
     return result
 
@@ -115,7 +120,7 @@ def common_checkpoint_rows(behavior,*,arm=None):
                 'status':'DESIGN_NA'if arm=='pi-native'else point['status']if point else'MISSING_EVIDENCE',
                 'reason':'Native Pi has no symbolic State'if arm=='pi-native'else
                     'Required pre-action State or resolution evidence is missing; repair before acceptance'if score is None else None,
-                'mapping_version':VERSION+'+typed-state-v1','weights':{'common_product':0,'plugin_memory':0},
+                'mapping_version':VERSION+'+'+behavior['state_record_protocol'],'weights':{'common_product':0,'plugin_memory':0},
                 'weight_reason':'New controlled-format successor rubric; does not overwrite frozen State semantics or profile weights',
                 'support_s':int(score==100),'support_f':int(score==0),'support_u':int(score is None and arm!='pi-native'),
                 'support_n':0 if arm=='pi-native'else 1,'collection_complete':True if arm=='pi-native'else bool(point and point['collection_complete']),
@@ -142,7 +147,7 @@ def verified_journal_prefix(candidate,reference):
     return prefix if len(prefix)==size and prefix.endswith(b'\n')and hashlib.sha256(prefix).hexdigest()==expected else None
 
 
-def state_record_points(pending,corrected,rows,*,complete,resolution_ref,resolution_valid):
+def state_record_points(pending,corrected,rows,*,complete,resolution_ref,resolution_valid,strict_current=False):
     known=complete is True and isinstance(pending,dict)and isinstance(corrected,dict)and isinstance(rows,list)
     initial={identity:typed_record(text)for identity,text in (pending or{}).items()if identity.startswith(('F','D'))}
     current={identity:typed_record(text)for identity,text in (corrected or{}).items()if identity.startswith(('F','D'))}
@@ -158,10 +163,15 @@ def state_record_points(pending,corrected,rows,*,complete,resolution_ref,resolut
             fact=event.get('append_fact')or{}
             if old_ids and old_ids<=set(event.get('archive',[]))and typed_record(fact.get('content'))==RESOLVED_RECORD \
                     and resolution_ref in(fact.get('evidence')or{}):linked=resolution_valid is True
-    correction=_point('corrected-State-before-cancellation',{
+    checks={
         'current_customer_authorization_preserved':RESOLVED_RECORD in current.values()if known else None,
         'prior_unresolved_records_no_longer_active':not any(value in PENDING_RECORDS for value in current.values())if known else None,
-        'explicit_atomic_replacement_with_resolution_evidence':linked if known else None})
+        'explicit_atomic_replacement_with_resolution_evidence':linked if known else None}
+    if strict_current:
+        checks['no_active_competing_authorization']=not any(value and value.get('bk')=='BK-A04'
+            and(value.get('auth')is not RESOLVED_RECORD['auth']or value.get('status')in {'pending','conflict'})
+            for value in current.values())if known else None
+    correction=_point('corrected-State-before-cancellation',checks)
     return {'pending_record':record,'corrected_record':correction,
         'scope':'Declared JSON record format and actual linear tool-result evidence linkage; not arbitrary free-text semantics'}
 
@@ -211,7 +221,8 @@ def grade_conflict_trial(trial,private,contract,*,arm):
     if contract.get('state_record_protocol'):
         result['state_record_protocol']=contract['state_record_protocol']
         if arm=='pi-memweave'and 'state_records'not in result:
-            result['state_records']=state_record_points(None,None,None,complete=False,resolution_ref=None,resolution_valid=None)
+            result['state_records']=state_record_points(None,None,None,complete=False,resolution_ref=None,resolution_valid=None,
+                strict_current=contract['state_record_protocol']=='typed-state-v2')
             result['collection_complete']=False
     return result
 
@@ -306,7 +317,8 @@ def _grade_conflict_trial(trial,private,contract,*,arm):
             before_action=resolver is not None and(cancel is None or calls.index(resolver)<calls.index(cancel))
             ref=next(iter(visible_refs))if len(visible_refs)==1 else ''if complete and not before_action else None
             valid=before_action if complete else None
-            result['state_records']=state_record_points(pending,corrected,journal,complete=complete,resolution_ref=ref,resolution_valid=valid)
+            result['state_records']=state_record_points(pending,corrected,journal,complete=complete,resolution_ref=ref,resolution_valid=valid,
+                strict_current=contract['state_record_protocol']=='typed-state-v2')
             result['state_collection_errors']=state_errors
             result['state_evidence_repairs']=state_repairs
             result['collection_complete']&=all(result['state_records'][name]['collection_complete']for name in ('pending_record','corrected_record'))

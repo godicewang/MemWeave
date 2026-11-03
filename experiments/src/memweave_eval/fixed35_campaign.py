@@ -41,7 +41,10 @@ def validate_paid_canary(record,ledger=None):
     if set(canary.get('per_arm',{}))!={'pi-native','pi-memweave'}:raise ValueError('both canary variants required')
     account=json.loads((ledger or BASE/'budgets/fixed35-20261102/quota.json').read_text())['requests']
     identities=[]
-    for evidence in canary['per_arm'].values():
+    for arm,evidence in canary['per_arm'].items():
+        rule=evidence.get('rule_integrity')or{}
+        if arm=='pi-memweave'and(rule.get('value')!=1 or rule.get('coverage')!=1):
+            raise ValueError('real plugin canary must prove complete frozen Rule delivery')
         ids=evidence.get('actor_request_ids')
         if not isinstance(ids,list)or len(ids)!=1 or type(evidence.get('guard_negative_upstream_requests'))is not int or evidence['guard_negative_upstream_requests']!=0:
             raise ValueError('canary must prove one actual actor request and zero negative-test upstream dispatch')
@@ -72,8 +75,12 @@ def validate_case_design(contract):
 def validate_episode_policy(record):
     declared=tomllib.loads((Path(record['task_path'])/'task.toml').read_text()).get('agent',{}).get('timeout_sec')
     seconds=record['seconds'];budget=record['episode_budget']
-    if any(type(value)not in (int,float)or not math.isfinite(value)for value in (declared,seconds,budget)) \
-            or not 0<seconds<=declared or budget<.31:
+    policy=record.get('time_policy','case-cap')
+    if policy=='source-per-stage':
+        from .fixed35_execution import source_stage_budgets
+        declared=sum(source_stage_budgets(Path(record['task_path'])))
+    if policy not in {'case-cap','source-per-stage'}or any(type(value)not in (int,float)or not math.isfinite(value)for value in (declared,seconds,budget)) \
+            or not 0<seconds<=declared or policy=='source-per-stage'and seconds!=declared or budget<.31:
         raise ValueError('episode must fit its frozen task agent timeout and bounded budget')
 
 
@@ -137,7 +144,8 @@ def run_pair(admission: Path, root: Path):
         cfg=job_config(root=root,task=Path(record['task_path']),case_id=record['case_id'],arm=arm,
             run_id=run_id,plan=Path(record['runtime_plan']),deadline=model_cutoff,resources=record['resources'],
             seconds=record['seconds'],host_scored=record.get('host_scored',False),
-            episode_budget=record['episode_budget'],task_config=record.get('task_config'))
+            episode_budget=record['episode_budget'],task_config=record.get('task_config'),
+            time_policy=record.get('time_policy','case-cap'))
         cfg['agents'][0]['kwargs']['evaluation_run_id']='fixed35-formal:'+cfg['agents'][0]['kwargs']['evaluation_run_id']
         episode=cfg['agents'][0]['kwargs']['evaluation_run_id']
         channel=add_channel(authority,arm=arm,episode=episode,max_output=8192,deadline=model_cutoff,

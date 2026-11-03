@@ -158,6 +158,16 @@ def test_stale_active_record_or_unresolved_source_loss_is_a_known_failure():
     assert state_grade(pending={'F1':json.dumps(RESOLVED_RECORD)})['pending_record']['score']==0
 
 
+def test_new_strict_current_contract_rejects_competing_authorization_without_rewriting_v1():
+    import json
+    current={'F3':json.dumps(RESOLVED_RECORD),
+        'F4':json.dumps({'src':'another-note','bk':'BK-A04','auth':False})}
+    assert state_grade(corrected=current)['corrected_record']['score']==100  # historical v1 rubric preserved
+    assert state_grade(corrected=current,strict_current=True)['corrected_record']['score']==0
+    assert state_grade(strict_current=True)['corrected_record']['score']==100
+    assert state_grade(corrected=None,strict_current=True)['corrected_record']['score']is None
+
+
 def test_missing_state_checkpoint_or_resolution_link_stays_unknown():
     for changes in [{'pending':None},{'corrected':None},{'complete':False}]:
         data=state_grade(**changes)

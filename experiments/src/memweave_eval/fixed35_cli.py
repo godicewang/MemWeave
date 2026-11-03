@@ -19,7 +19,7 @@ def register(sub):
     state.add_argument('case_id',choices=[f'INT-0{i}'for i in range(1,6)])
     state.add_argument('--source',type=Path,required=True)
     state.add_argument('--output',type=Path,required=True)
-    state.add_argument('--overlay',choices=['equal-authority-conflict-v1','equal-authority-conflict-v2'])
+    state.add_argument('--overlay',choices=['equal-authority-conflict-v1','equal-authority-conflict-v2','equal-authority-conflict-v3'])
     conflict=commands.add_parser('state-conflict',help='Replay the selected INT-04 typed-authority overlay; no paid judge')
     conflict.add_argument('trial',type=Path)
     conflict.add_argument('--private',type=Path,required=True)
@@ -44,6 +44,16 @@ def register(sub):
     mab=commands.add_parser('mab-contracts',help='Freeze all eight evaluator-only MAB action/correction components; not formal admissions')
     mab.add_argument('adapter',type=Path)
     mab.add_argument('--output',type=Path,required=True)
+    books=commands.add_parser('mab-book-contracts',help='Freeze selected book-event relation gold and public schema; evaluator-only, no model calls')
+    books.add_argument('adapter',type=Path)
+    books.add_argument('--output',type=Path,required=True)
+    books.add_argument('--derive-tasks',action='store_true',help='Copy only original actor files and append the public generic card schema; gold stays separate')
+    pressure=commands.add_parser('mab-pressure-tasks',help='Derive all eight source-only MAB pressure tasks and private current-source contracts; no model calls')
+    pressure.add_argument('adapter',type=Path)
+    pressure.add_argument('--design',type=Path,required=True)
+    pressure.add_argument('--data',type=Path,required=True)
+    pressure.add_argument('--nltk-data',type=Path,required=True)
+    pressure.add_argument('--output',type=Path,required=True)
     replay=commands.add_parser('replay',help='Verify exact request/tool evidence without model calls')
     replay.add_argument('root',type=Path)
     replay.add_argument('--transport',type=Path,required=True)
@@ -66,6 +76,34 @@ def register(sub):
 
 
 def execute(args):
+    if args.fixed35_command=='mab-pressure-tasks':
+        from .fixed35_adapters import mab_chunks
+        from .fixed35_mab_cards import BOOKS, book_contract
+        from .fixed35_mab_pressure import POLICY, VERSION, derive_pressure_task
+        from .fixed35_sources import load_mab_row
+        args.output.mkdir(parents=True,exist_ok=False)
+        records=[]
+        for case in read_design(args.design)['selection']['cases']:
+            identity=case['pack_case_id']
+            if identity not in POLICY:continue
+            public,private=load_mab_row(case,args.data)
+            chunks=mab_chunks(public,args.nltk_data,limit=POLICY[identity][0])
+            records.append(derive_pressure_task(args.adapter/'tasks'/identity,identity,chunks,
+                private['answers'],public['selector'],args.output,
+                book_gold=book_contract(args.adapter,identity)if identity in BOOKS else None))
+        atomic_json(args.output/'manifest.json',{'version':VERSION,'cases':records,
+            'paid_requests':0,'status':'SOURCE_BOUND_COMPONENTS_NOT_REAL_EVICTION_OR_MODEL_RESULTS'},immutable=True)
+        return {'components':len(records),'output':str(args.output),'paid_requests':0,'not_formal_admission':True}
+    if args.fixed35_command=='mab-book-contracts':
+        from .fixed35_mab_cards import BOOKS, book_contract, derive_book_task
+        args.output.mkdir(parents=True,exist_ok=False)
+        records=[book_contract(args.adapter,identity)for identity in BOOKS]
+        for record in records:atomic_json(args.output/(record['case_id']+'.json'),record,immutable=True)
+        if getattr(args,'derive_tasks',False):
+            tasks=[derive_book_task(args.adapter,identity,args.output)for identity in BOOKS]
+            atomic_json(args.output/'tasks.json',tasks,immutable=True)
+        return {'contracts':len(records),'output':str(args.output),'paid_requests':0,
+            'status':'DERIVED_TYPED_RECORDING_COMPONENT_NOT_AGENT_PERFORMANCE'}
     if args.fixed35_command=='state-conflict':
         from .state_conflict import grade_conflict_trial
         result=grade_conflict_trial(args.trial,args.private,json.loads(args.contract.read_text()),arm=args.arm)
@@ -109,7 +147,8 @@ def execute(args):
         if getattr(args,'overlay',None):
             if args.case_id!='INT-04':raise ValueError('equal-authority overlay is bound to selected INT-04')
             from .state_conflict import conflict_contract
-            record=conflict_contract(args.source,state_records=args.overlay.endswith('v2'))
+            record=conflict_contract(args.source,state_records=args.overlay!='equal-authority-conflict-v1',
+                strict_current=args.overlay=='equal-authority-conflict-v3')
         else:record=state_contract(args.source,args.case_id)
         atomic_json(args.output,record,immutable=True)
         return {'case_id':args.case_id,'output':str(args.output),'paid_requests':0,

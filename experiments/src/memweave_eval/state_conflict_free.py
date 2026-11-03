@@ -10,7 +10,7 @@ from .state_pi import StatePi, StatePiOptions, final_pi_text
 
 
 class ConflictFreeOptions(StatePiOptions):
-    conflict_fixture_mode:Literal['positive','early-mutation','wrong-field']='positive'
+    conflict_fixture_mode:Literal['positive','early-mutation','wrong-field','competing-state']='positive'
 
 
 class ConflictFreePi(FreeEpisodePi,StatePi):
@@ -19,7 +19,7 @@ class ConflictFreePi(FreeEpisodePi,StatePi):
     async def install(self,environment):
         if not self.options.prepare_only or self.options.auth_path:
             raise ValueError('conflict fixture must have no real credentials and be preparation-only')
-        if self.options.evaluation_state_overlay not in {'equal-authority-conflict-v1','equal-authority-conflict-v2'}:
+        if self.options.evaluation_state_overlay not in {'equal-authority-conflict-v1','equal-authority-conflict-v2','equal-authority-conflict-v3'}:
             raise ValueError('conflict fixture requires the selected source overlay')
         await super().install(environment)
         resolve={'tool':'request_user_resolution','arguments':{'booking_id':'BK-A04',
@@ -32,13 +32,18 @@ class ConflictFreePi(FreeEpisodePi,StatePi):
         if self.options.conflict_fixture_mode=='wrong-field':
             resolve['arguments']['field']='cabin_class';steps=[resolve,read,preview,cancel]
         if self.options.variant=='pi-memweave':
-            if self.options.evaluation_state_overlay.endswith('v2'):
+            if self._overlay_contract.get('state_record_protocol'):
                 steps.insert(0,{'tool':'state_append','arguments':{'items':[{'type':'fact',
                     'content':json.dumps(value,separators=(',',':')),'evidence':{'U1':'Notice'}}for value in PENDING_RECORDS]}})
                 resolver=next(i for i,s in enumerate(steps)if s.get('tool')=='request_user_resolution')
                 steps.insert(resolver+1,{'tool':'modify_fact','arguments':{'archive':['F1','F2'],
                     'append_fact':{'content':json.dumps(RESOLVED_RECORD,separators=(',',':')),
                         'evidence':{'T'+str(resolver+2):'Customer answer'}}}})
+                if self.options.conflict_fixture_mode=='competing-state':
+                    before=next(i for i,s in enumerate(steps)if s.get('tool')=='cancel_booking'and s['arguments'].get('confirm')is True)
+                    steps.insert(before,{'tool':'state_append','arguments':{'items':[{'type':'fact',
+                        'content':json.dumps({'src':'authorization-B','bk':'BK-A04','auth':False},separators=(',',':')),
+                        'evidence':{'U1':'authorization-B'}}]}})
             steps.insert(0,{'tool':'task_create','arguments':{'title':'Resolve booking authorization',
                 'goal':'Resolve equally current BK-A04 customer authorization and execute the valid cancellation',
                 'project_name':'STATE conflict fixture','summary':'Original travel domain; derived clarification protocol',

@@ -5,7 +5,14 @@ import {createHash,randomUUID} from 'node:crypto';
 export default function domainTools(pi:any){
   const descriptor=JSON.parse(fs.readFileSync(process.env.MEMWEAVE_EVAL_DOMAIN_DESCRIPTOR!,'utf8'));
   if(!Array.isArray(descriptor.tools)||!descriptor.exchange||!descriptor.token)throw Error('Domain channel missing');
-  pi.on('before_agent_start',(event:any)=>({systemPrompt:event.systemPrompt+'\n\n'+descriptor.system_prompt}));
+  // Returning systemPrompt enables Pi's forced projection *after* context hooks,
+  // which would discard MemWeave's request-only Rule sections. Use the public
+  // structured append so the domain rules and full memory protocol both survive.
+  pi.on('before_agent_start',(event:any)=>{
+    if(!event.systemPromptOptions)throw Error('Structured Pi prompt options unavailable');
+    const previous=event.systemPromptOptions.appendSystemPrompt??'';
+    event.systemPromptOptions.appendSystemPrompt=previous?previous+'\n\n'+descriptor.system_prompt:descriptor.system_prompt;
+  });
   for(const tool of descriptor.tools){
     pi.registerTool({name:tool.name,label:tool.name,description:tool.description,parameters:tool.parameters,
       async execute(callId:string,input:any,signal:AbortSignal){

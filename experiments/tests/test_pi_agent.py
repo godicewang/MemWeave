@@ -256,8 +256,9 @@ def test_fixed_case_identity_rejects_wrong_scope_before_credentials(tmp_path,ser
     plan=tmp_path/'plan.json';plan.write_text(json.dumps({'entries':{'fixed':{'image':{'id':'sha256:wanted'}}}}))
     agent=ExperimentPi(version='1.4.0',logs_dir=tmp_path,model_name='deepseek/deepseek-flash',
         node_version='24.22.0',variant='pi-native',package_path='/missing',package_sha256='a'*64,
-        auth_path='',protocol='fixed35',prepare_only=True,runtime_plan=str(plan),runtime_plan_sha256=file_digest(plan))
-    actual={'Id':'a'*64,'Image':'sha256:wrong','Config':{'Labels':{
+        auth_path='',protocol='fixed35',prepare_only=True,evaluation_resources={'cpus':2,'memory_mb':4096},
+        runtime_plan=str(plan),runtime_plan_sha256=file_digest(plan))
+    actual={'Id':'a'*64,'Image':'sha256:wrong','HostConfig':{'NanoCpus':2000000000,'Memory':4294967296},'Config':{'Labels':{
         'com.docker.compose.project':'trusted-session','com.docker.compose.service':service}}}
     def inspect(command,**kwargs):
         if command[1]=='ps':
