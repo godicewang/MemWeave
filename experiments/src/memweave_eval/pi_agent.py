@@ -667,13 +667,13 @@ positive:true,lost_guard_upstream_requests:0,actual_cli_pid_deadline:true}));
                 result = await environment.exec(command=capture, user="root", timeout_sec=30)
                 if result.return_code != 0:
                     raise RuntimeError("official Pro patch capture failed")
-            if self.options.variant == "pi-memweave" and hasattr(self, "_experiment_home"):
-                # Snapshot only original runtime evidence, not credentials or model weights.
-                home = shlex.quote(self._experiment_home)
-                result = await environment.exec(
-                    command=f"test ! -d {home}/.pi/memory || tar -czf /logs/agent/memory.tar.gz "
-                    f"--exclude=models --exclude=search -C {home}/.pi memory",
-                    timeout_sec=120,
-                )
-                if result.return_code != 0:
-                    raise RuntimeError("memory evidence collection failed")
+            await self.capture_memory_evidence(environment)
+
+    async def capture_memory_evidence(self,environment):
+        if self.options.variant == "pi-memweave" and hasattr(self, "_experiment_home"):
+            # Snapshot only original runtime evidence, not credentials or model weights.
+            home = shlex.quote(self._experiment_home)
+            result = await environment.exec(
+                command=f"test ! -d {home}/.pi/memory || tar -czf /logs/agent/memory.tar.gz "
+                f"--exclude=models --exclude=search -C {home}/.pi memory",timeout_sec=120)
+            if result.return_code != 0:raise RuntimeError("memory evidence collection failed")

@@ -127,7 +127,16 @@ def collect_episode(trial: Path, *, arm, ledger: Path,auxiliary_roots=(),expecte
             'max':max(durations)if durations else None}
     sessions=unique_sessions(trial)
     archives=sorted(trial.rglob('memory.tar.gz'),key=lambda p:p.stat().st_mtime_ns)
-    state=task_state_metrics(sessions,archives[-1] if archives else None,enabled=arm=='pi-memweave')
+    from .fixed35_business import execution_boundaries
+    from .stage_execution import stage_execution
+    from .state_journal_sources import registry_journals
+    boundary=execution_boundaries(trial,events)
+    stages=stage_execution(trial,events)
+    source=registry_journals(events,locations,complete=boundary['complete']and stages['evidence_complete']is True)if arm=='pi-memweave'else {'complete':False}
+    state=task_state_metrics(sessions,archives or None,enabled=arm=='pi-memweave',
+        committed_journals=source.get('journals'),baseline_journals=source.get('baseline'),
+        episode_returns=sum(e['event']=='assistant_return'for e in events),require_initial_inventory=True)
+    state['registry_recovery_evidence']={k:v for k,v in source.items()if k not in {'journals','baseline'}}
     settled=[account[i]for i in requests if account[i]['status']=='settled']
     unresolved=[i for i in requests if account[i]['status']!='settled']
     def totals(ids):
@@ -144,13 +153,9 @@ def collect_episode(trial: Path, *, arm, ledger: Path,auxiliary_roots=(),expecte
     qualified=qualified_actor_calls({i:requests[i]for i in actor_http},responses,fixture_control=fixture_control)
     from .fixed35_delivery import delivery_metrics
     delivery=delivery_metrics(transport_records,actor_http,enabled=arm=='pi-memweave')
-    from .fixed35_business import execution_boundaries
-    boundary=execution_boundaries(trial,events)
     tools=known_zero_tools(tools,complete=boundary['complete'])
     from .fixed35_references import grade_known_references
     references=grade_known_references(trial,events=events,locations=locations)
-    from .stage_execution import stage_execution
-    stages=stage_execution(trial,events)
     return {'collection_complete':not unresolved and boundary['complete']and delivery['complete']and stages['evidence_complete']is True,
         'stage_execution':stages,'protocol_execution_complete':stages['protocol_execution_complete'],
         'fixture_control':fixture_control,

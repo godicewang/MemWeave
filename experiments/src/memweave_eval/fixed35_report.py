@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261103-v15'
+VERSION='fixed35-score-20261103-v16'
 
 
 def mark_checkpoint_collection(metrics,points):

@@ -56,11 +56,11 @@ def _sessions(paths):
     return sessions, errors
 
 
-def _committed(archive):
-    """Read tar members without extracting files or loading prompts into a new store."""
+def _archive_journals(archive):
+    """Read originals without extracting files or synthesizing a runtime store."""
     if archive is None:
-        return None, None
-    operations, active = {}, 0
+        return None
+    journals={}
     try:
         with tarfile.open(archive, "r:gz") as source:
             for member in source:
@@ -72,51 +72,78 @@ def _committed(archive):
                 if len(path.parts) < 4 or path.parts[-3] != "tasks":
                     raise ValueError("unexpected State path")
                 task = path.parts[-2]
-                stream = source.extractfile(member)
-                entries, counts = {}, {"fact": 0, "decision": 0}
-                lines = stream.read().decode().splitlines()
-                if not lines:
-                    raise ValueError("empty State")
-                for position, line in enumerate(lines, 1):
-                    event = json.loads(line)
-                    op, operation = event["op"], event["op_id"]
-                    if not isinstance(operation, str) or not operation:
-                        raise ValueError("invalid State operation ID")
-                    key = (task, operation)
-                    if key in operations:
-                        raise ValueError("duplicate State operation")
-                    if position == 1 and op != "update_goal":
-                        raise ValueError("missing initial Goal")
-                    added = op in ("append_fact", "append_decision", "modify_fact")
-                    if op == "modify_fact":
-                        if not event["archive"]:
-                            raise ValueError("empty archive")
-                        for identity in event["archive"]:
-                            entry = entries[identity]
-                            if entry["archived"]:
-                                raise ValueError("already archived")
-                            entry.update(active=False, archived=True)
-                    if added:
-                        kind = "decision" if op == "append_decision" else "fact"
-                        counts[kind] += 1
-                        identity = ("D" if kind == "decision" else "F") + str(counts[kind])
-                        if op != "modify_fact" and event["id"] != identity:
-                            raise ValueError("noncontiguous State IDs")
-                        entries[identity] = {"position": position, "active": True, "archived": False}
-                    elif op == "slide_window":
-                        bounds, kept = event["evicted_range"], set(event["retained_ids"])
-                        if event["status"] != "committed" or bounds["from"] > bounds["to"]:
-                            raise ValueError("invalid State slide")
-                        for identity, entry in entries.items():
-                            if bounds["from"] <= entry["position"] <= bounds["to"] and identity not in kept:
-                                entry["active"] = False
-                    elif op != "update_goal":
-                        raise ValueError("unknown State operation")
-                    operations[key] = {"op": op, "added": int(added)}
-                active += sum(e["active"] and not e["archived"] for e in entries.values())
-        return operations, active
+                if task in journals:raise ValueError('duplicate Task in archive')
+                journals[task]=[json.loads(line)for line in source.extractfile(member).read().decode().splitlines()]
+        return journals
     except (OSError, ValueError, KeyError, TypeError, AttributeError, tarfile.TarError, EOFError):
+        return None
+
+
+def _reduce_committed(journals):
+    operations,active={},0
+    try:
+        if not isinstance(journals,dict):raise TypeError('Task journal mapping required')
+        for task,rows in journals.items():
+            if not isinstance(task,str)or not task or not isinstance(rows,list)or not rows:raise ValueError('empty or invalid State')
+            entries,counts={},{'fact':0,'decision':0}
+            for position,event in enumerate(rows,1):
+                op, operation = event["op"], event["op_id"]
+                if not isinstance(operation, str) or not operation:
+                    raise ValueError("invalid State operation ID")
+                key = (task, operation)
+                if key in operations:
+                    raise ValueError("duplicate State operation")
+                if position == 1 and op != "update_goal":
+                    raise ValueError("missing initial Goal")
+                added = op in ("append_fact", "append_decision", "modify_fact")
+                if op == "modify_fact":
+                    if not event["archive"]:
+                        raise ValueError("empty archive")
+                    for identity in event["archive"]:
+                        entry = entries[identity]
+                        if entry["archived"]:
+                            raise ValueError("already archived")
+                        entry.update(active=False, archived=True)
+                if added:
+                    kind = "decision" if op == "append_decision" else "fact"
+                    counts[kind] += 1
+                    identity = ("D" if kind == "decision" else "F") + str(counts[kind])
+                    if op != "modify_fact" and event["id"] != identity:
+                        raise ValueError("noncontiguous State IDs")
+                    entries[identity] = {"position": position, "active": True, "archived": False}
+                elif op == "slide_window":
+                    bounds, kept = event["evicted_range"], set(event["retained_ids"])
+                    if event["status"] != "committed" or bounds["from"] > bounds["to"]:
+                        raise ValueError("invalid State slide")
+                    for identity, entry in entries.items():
+                        if bounds["from"] <= entry["position"] <= bounds["to"] and identity not in kept:
+                            entry["active"] = False
+                elif op != "update_goal":
+                    raise ValueError("unknown State operation")
+                operations[key] = {"op": op, "added": int(added)}
+            active += sum(e["active"] and not e["archived"] for e in entries.values())
+        return operations, active
+    except (ValueError, KeyError, TypeError, AttributeError):
         return None, None
+
+
+def _committed(archive):
+    """Compatibility adapter for existing report/contract readers."""
+    journals,_=_select_journals(archive,None)
+    return _reduce_committed(journals)
+
+
+def _select_journals(archives,committed):
+    paths=archives if isinstance(archives,list)else[archives]if archives is not None else[]
+    candidates=[_archive_journals(p)for p in paths];valid=[v for v in candidates if v is not None]
+    def prefix(older,newer):
+        return all(task in newer and newer[task][:len(rows)]==rows for task,rows in older.items())
+    if committed is not None:
+        if not isinstance(committed,dict)or any(not prefix(v,committed)for v in valid):return None,'conflicting_state_originals'
+        return committed,'memory_archive'if committed in valid else'terminal_task_registry'
+    if not valid or len(valid)!=len(candidates):return None,'missing_or_invalid_state'
+    dominant=[v for v in valid if all(prefix(other,v)for other in valid)]
+    return (dominant[0],'memory_archive')if dominant else(None,'conflicting_state_originals')
 
 
 def _uniformity(positions, total, known):
@@ -138,7 +165,9 @@ def _uniformity(positions, total, known):
     }
 
 
-def task_state_metrics(paths: list[Path], archive: Path | None, *, enabled=True) -> dict:
+def task_state_metrics(paths: list[Path], archive: Path | list[Path] | None, *, enabled=True,
+                       committed_journals=None,baseline_journals=None,episode_returns=None,
+                       require_initial_inventory=False) -> dict:
     sessions, errors = _sessions(paths)
     calls, results, seen_entries = {}, {}, {}
     responses = missing_usage = 0
@@ -192,8 +221,17 @@ def task_state_metrics(paths: list[Path], archive: Path | None, *, enabled=True)
         writes[name] = {"attempts": len(outcomes), "successes": success, "failures": failure,
                         "unknown": unknown,
                         "success_rate": success / len(outcomes) if outcomes and not unknown else None}
-    operations, active = _committed(archive) if enabled else (None, None)
-    added = sum(e["added"] for e in operations.values()) if operations is not None else None
+    journals,evidence_source=_select_journals(archive,committed_journals)if enabled else(None,'not_applicable')
+    operations, active = _reduce_committed(journals) if enabled else (None, None)
+    baseline_keys=set()
+    if enabled and baseline_journals is not None and operations is not None:
+        baseline,_=_reduce_committed(baseline_journals)
+        if baseline is None or any(key not in operations or operations[key]!=value for key,value in baseline.items()):
+            operations,active=None,None;evidence_source='invalid_initial_inventory'
+        else:baseline_keys=set(baseline)
+    added = sum(e["added"] for key,e in operations.items()if key not in baseline_keys) if operations is not None else None
+    journal_total=sum(e['added']for e in operations.values())if operations is not None else None
+    if require_initial_inventory and baseline_journals is None:added=None
     tasks = sorted({task for task, _ in operations}) if operations is not None else []
     located, positions = set(), []
     if operations is not None:
@@ -212,7 +250,7 @@ def task_state_metrics(paths: list[Path], archive: Path | None, *, enabled=True)
                 else:
                     keys = [(task, operation)]
                 committed.update(k for k in keys if k in operations and operations[k]["added"])
-            committed -= located
+            committed -= located|baseline_keys
             if committed and call["position"] is not None:
                 located.update(committed)
                 positions.append(call["position"])
@@ -241,21 +279,28 @@ def task_state_metrics(paths: list[Path], archive: Path | None, *, enabled=True)
             matrix['partial_commit']+=1
         else:
             matrix[('error' if receipt else 'success')+('_committed' if committed_count else '_not_committed')]+=1
-    known = bool(paths) and not errors and not missing_usage
+    response_scope_consistent=episode_returns is None or responses==episode_returns
+    known = bool(paths) and not errors and not missing_usage and response_scope_consistent
     ratio_known = known and added is not None
     ratio = added / responses if ratio_known and responses else None
     ratio_status = ("not_applicable" if not enabled else "unknown" if not ratio_known
                     else "zero_model_responses" if not responses else "too_sparse" if ratio < 0.05
                     else "too_dense" if ratio > 0.10 else "ok")
     return {
-        "model_responses_with_usage": responses if paths and not errors else None,
+        "model_responses_with_usage": responses if paths and not errors and response_scope_consistent else None,
+        "session_model_responses_with_usage":responses if paths and not errors else None,
         "model_responses_without_usage": missing_usage if paths and not errors else None,
+        "episode_return_scope_consistent":response_scope_consistent,
         "session_counts_status": "missing" if not paths else "observed_partial" if errors else "complete",
         "model_request_attempts": None,
         "request_attempts_status": "unknown_not_recorded_in_session",
         "sample_status": "unknown" if not known else "short_sample" if responses < 20 else "ok",
-        "writes": writes if paths and not errors else None,
+        "writes": writes if paths and not errors and response_scope_consistent else None,
         "fd_events_added": added, "fd_events_active": active,
+        "fd_events_journal_total":journal_total,
+        "commit_evidence_source":evidence_source,
+        "fd_added_scope":"not_applicable"if not enabled else"episode_delta_from_initial_inventory"if baseline_journals is not None else
+            "unknown_initial_inventory"if require_initial_inventory else"final_journal_total_without_initial_baseline",
         "fd_events_located": len(located) if operations is not None else None,
         "fd_write_receipt_commit_matrix": matrix if enabled else None,
         "receipt_commit_scope": 'state_append/modify_fact only; actual journal operations, not tool success or input guesses',
@@ -269,7 +314,9 @@ def task_state_metrics(paths: list[Path], archive: Path | None, *, enabled=True)
         "uniformity_distinct_return_positions": _uniformity(sorted(set(positions)), responses if paths else None,
                                   known and added is not None and added == len(located)),
         "source_status": "invalid_session" if errors else "missing_session" if not paths
+        else "ambiguous_session_return_scope"if not response_scope_consistent
         else "not_applicable" if not enabled else "missing_or_invalid_state" if operations is None
+        else "missing_initial_inventory"if require_initial_inventory and baseline_journals is None
         else "ok",
     }
 

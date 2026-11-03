@@ -38,4 +38,5 @@ class FreeEpisodePi(ExperimentPi):
         self._agent_started=time.monotonic()
         self._evaluation_stage=getattr(self,'_evaluation_stage',0)+1
         await self.upload_private(environment,instruction,self._asset_root+'/evaluation/instruction.md')
-        await Pi.run(self,instruction,environment,context)
+        try:await Pi.run(self,instruction,environment,context)
+        finally:await self.capture_memory_evidence(environment)
