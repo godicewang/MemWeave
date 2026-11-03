@@ -2,8 +2,8 @@
 
 No production reducer is imported. Native IDs/links and earlier committed
 metadata establish the expected range; actual HTTP bodies establish delivery.
-Same-Session resume is checked from raw branch metadata. Foreign resume,
-restart, compaction, multimedia and token truncation remain explicit unknowns.
+Same-Session resume and explicit restart are checked from raw branch metadata.
+Foreign resume, compaction, multimedia and token truncation remain unknowns.
 """
 from __future__ import annotations
 
@@ -61,9 +61,17 @@ def identity_selection(shape,*,recent_turns,evict_turns):
     if shape.get('unsupported_lifecycle')is not False:
         if shape['version']!='native-window-shape-v2':
             raise MissingWindowEvidence('resume/restart requires a separately frozen seed projection oracle')
+        from .restart_window_evidence import MissingRestartEvidence, restarted_history
         from .resume_window_evidence import MissingResumeEvidence, same_session_resume
-        try:events,_=same_session_resume(shape,native_events,n)
-        except MissingResumeEvidence as error:raise MissingWindowEvidence(str(error))from error
+        ledger=shape.get('branch_ledger')
+        if isinstance(ledger,list)and any(not isinstance(e,dict)for e in ledger):
+            raise MissingWindowEvidence('invalid native lifecycle branch record')
+        latest=next((e.get('custom_type')for e in reversed(ledger)if e.get('custom_type')in {
+            'memweave.restart.v1','memweave.resume.v1'}),None)if isinstance(ledger,list)else None
+        try:
+            if latest=='memweave.restart.v1':events,_=restarted_history(shape,native_events,n,b)
+            else:events,_=same_session_resume(shape,native_events,n)
+        except (MissingResumeEvidence,MissingRestartEvidence)as error:raise MissingWindowEvidence(str(error))from error
     ids=[e['id']for e in events];prior=shape['previous_window']
     boundary=None;old_batches=[];reset=False
     if prior is not None:

@@ -12,7 +12,8 @@ from .contract_metrics import _item, summarize
 from .evidence_replay import read_object
 from .fixed35_business import case_events
 
-TRANSIENT_PREFIXES=('# Symbolic State','Recent Window 移出提醒：','当前未绑定 Task。\n\n【本次预算快照')
+TRANSIENT_PREFIXES=('# Symbolic State','Recent Window 移出提醒：','当前未绑定 Task。\n\n【本次预算快照',
+    '【新 Task 初始化｜程序状态，不是用户目标或证据】\n')
 
 
 def _text(message):
