@@ -101,12 +101,13 @@ def card_snapshot(texts,contract):
     gold=contract['card'];aliases=contract['aliases']
     allowed={k:{_normalized(v)for v in [value,*aliases.get(k,[])]}for k,value in gold.items()}
     correct=any(all(c[k]in allowed[k]for k in gold)for c in cards)
-    # Every valid card with this subject is current. An incompatible alternative
-    # must be invalidated, even when the correct event is also present.
+    # A contradictory alternative must belong to this target event. Other facts
+    # about the same actor, with a different action or qualification, may coexist.
     wrong=False
     for card in cards:
         if card['s']not in allowed['s']:continue
-        if any(all(card[k]==_normalized(v)for k,v in bad.items())for bad in contract['incompatible']):wrong=True
+        if any(all(card[k]==_normalized(v)for k,v in bad.items())and
+                all(card[k]in allowed[k]for k in gold if k not in bad)for bad in contract['incompatible']):wrong=True
     return {'correct_typed_event_relation':correct,'no_incompatible_current_event':not wrong}
 
 
