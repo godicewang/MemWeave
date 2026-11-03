@@ -9,7 +9,7 @@ import {captureCommittedState}from'./request_boundary.ts';
 export function captureReferenceSources(ctx:any,input:any,options:any={}){
   const evidence=contentEvidence(),branch=ctx?.sessionManager?.getBranch?.();
   if(!Array.isArray(branch)||!Array.isArray(input?.items))return {complete:false,reason:'reference context or arguments missing',items:[]};
-  const current=options.taskId??captureCommittedState(ctx).task_id;
+  const current=options.taskId??captureCommittedState(ctx,options).task_id;
   const entries=ctx.sessionManager.getEntries?.()??branch;
   const session=ctx.sessionManager.getSessionId?.();
   const snapshots=(type:string,task:string)=>branch.filter((e:any)=>e.type==='custom'&&e.customType===type&&e.data?.task_id===task).flatMap((e:any)=>(e.data.bindings??[]).map((b:any)=>({...b,source_session_id:b.source_session_id??e.data.source_session_id})));

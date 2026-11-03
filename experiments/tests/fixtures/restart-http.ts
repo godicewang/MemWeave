@@ -21,7 +21,7 @@ test('real Pi explicit restart delivers its declared native seed and later reset
   t.after(()=>{delete process.env.MEMWEAVE_EVAL_CONTENT_STORE;});
   const errors:string[]=[];
   h=await nativeSession(t,[pi=>{
-    attachBoundaries(pi);
+    attachBoundaries(pi,{memoryRoot:memory});
     registerMemweave(pi,{paths,verifyCapacity:async model=>model.contextWindow,
       embedder:async texts=>({vectors:texts.map(()=>Array(384).fill(0)),truncated:texts.map(()=>false)}),
       report:error=>errors.push(String(error))});

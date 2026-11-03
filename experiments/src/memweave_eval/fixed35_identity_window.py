@@ -2,8 +2,8 @@
 
 No production reducer is imported. Native IDs/links and earlier committed
 metadata establish the expected range; actual HTTP bodies establish delivery.
-Same-Session resume and explicit restart are checked from raw branch metadata.
-Foreign resume, compaction, multimedia and token truncation remain unknowns.
+Resume and explicit restart are checked from raw branch metadata/originals.
+Compaction, multimedia and token truncation remain explicit unknowns.
 """
 from __future__ import annotations
 
@@ -107,6 +107,8 @@ def identity_window_checkpoint(shape,descriptors,source,payload,observed_window,
     if not isinstance(descriptors,list)or not isinstance(source,list)or len(descriptors)!=len(source):
         return None,'independent source content references missing',{}
     expected_hash={m['id']:m.get('sha256')for m in shape['messages']}
+    evidence=shape.get('foreign_source');foreign=evidence.get('shape',{})if isinstance(evidence,dict)else{}
+    expected_hash.update({foreign['session_id']+':'+m['id']:m.get('sha256')for m in foreign.get('messages',[])})
     lookup={}
     for descriptor,message in zip(descriptors,source,strict=True):
         identity=descriptor.get('entry_id')
@@ -137,7 +139,7 @@ def grade_identity_windows(trial,request_ids,*,recent_turns,evict_turns,enabled,
     for e in events:
         if e['event']=='memory_projection_boundary':
             projections[e['boundary_id']]=json.loads(read_object(locations[(e['producer_id'],e['sequence'])],e['metadata_ref']))
-    items=[]
+    items=[];originals=None
     for identity in sorted(request_ids):
         event=ready.get(identity);boundary=(event or{}).get('prepared_boundary')or{}
         if not event or not event.get('payload_ref')or not isinstance(boundary.get('source_messages'),list):
@@ -146,11 +148,28 @@ def grade_identity_windows(trial,request_ids,*,recent_turns,evict_turns,enabled,
         descriptors=boundary['source_messages']
         source=[json.loads(read_object(store,m['source_ref']))for m in descriptors]
         projection=projections.get(boundary.get('boundary_id'),{}).get('memweave.window.v1',{}).get('data')
-        value,reason,checks=identity_window_checkpoint(boundary.get('native_shape'),descriptors,source,
+        shape=boundary.get('native_shape');original_proof={}
+        if isinstance(shape,dict)and isinstance(shape.get('branch_ledger'),list)and all(isinstance(e,dict)for e in shape['branch_ledger']):
+            latest=next((e for e in reversed(shape['branch_ledger'])if e.get('custom_type')in {'memweave.resume.v1','memweave.restart.v1'}),{})
+            data=latest.get('data')or{}
+            if latest.get('custom_type')=='memweave.resume.v1'and data.get('source_session_id')!=shape.get('session_id'):
+                from .session_originals import (
+                    MissingSessionOriginals,
+                    load_original_sessions,
+                    with_foreign_originals,
+                )
+                try:
+                    if originals is None:originals=load_original_sessions(trial)
+                    shape,descriptors,source,original_proof=with_foreign_originals(shape,descriptors,source,originals,event['timestamp'])
+                except MissingSessionOriginals as error:
+                    items.append(_item(identity,reason=str(error)));continue
+                except (ValueError,TypeError,KeyError)as error:
+                    items.append(_item(identity,False,str(error)));continue
+        value,reason,checks=identity_window_checkpoint(shape,descriptors,source,
             json.loads(read_object(store,event['payload_ref'])),projection,
             recent_turns=recent_turns,evict_turns=evict_turns,max_source_bytes=max_source_bytes)
-        items.append(dict(_item(identity,value,reason),assertions=checks))
-    return dict(summarize(items),version='native-identity-plain-text-v2',
+        items.append(dict(_item(identity,value,reason),assertions=checks,original_source_proof=original_proof))
+    return dict(summarize(items),version='native-identity-plain-text-v3',
         scope='Independent native-entry range, complete tool events, exact plain-text HTTP projection and durable candidate metadata. '
-            'Same-Session declared resume seed fidelity is supported; source-choice optimality, foreign resume, restart, '
-            'token-allocation, compaction or multimodal projections remain outside this oracle; unsupported evidence is unknown.')
+            'Declared same/foreign Session resume fidelity and explicit restart are supported when original evidence is complete. '
+            'Source-choice optimality, token-allocation, compaction and multimodal projections remain outside this oracle; unsupported evidence is unknown.')

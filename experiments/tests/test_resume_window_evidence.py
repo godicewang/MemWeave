@@ -52,7 +52,7 @@ def test_same_session_frozen_seed_excludes_other_goal_and_preserves_complete_res
     assert identity_window_checkpoint(shape,descriptors,source,payload,window,recent_turns=20,evict_turns=4)[0]is False
 
 
-@pytest.mark.parametrize('part',['seed','task','source_anchor','tool_pair'])
+@pytest.mark.parametrize('part',['seed','task','source_anchor','tool_pair','empty_owner'])
 def test_known_wrong_resume_metadata_or_pair_is_not_accepted(part):
     shape,descriptors,source,payload=resumed_fixture();_,window=identity_selection(shape,recent_turns=20,evict_turns=4)
     receipt=shape['branch_ledger'][8]['data']
@@ -60,6 +60,7 @@ def test_known_wrong_resume_metadata_or_pair_is_not_accepted(part):
     if part=='task':receipt['task_id']='B'
     if part=='source_anchor':receipt['source_anchor_entry_id']='receipt'
     if part=='tool_pair':shape['messages'][-1]['result_id']='another-call'
+    if part=='empty_owner':receipt.update(task_id='missing-task',seed_event_ids=[])
     assert identity_window_checkpoint(shape,descriptors,source,payload,window,recent_turns=20,evict_turns=4)[0]is False
 
 

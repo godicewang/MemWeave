@@ -19,7 +19,7 @@ export function nativeShape(branch:any[],sessionId:string){
       calls:(Array.isArray(e.message.content)?e.message.content:[]).filter((p:any)=>p.type==='toolCall').map((p:any)=>p.id),
       result_id:e.message.toolCallId??null}))};
 }
-export function captureCommittedState(ctx:any){
+export function captureCommittedState(ctx:any,options:any={}){
   const evidence=contentEvidence();let task:any=null;
   if(!ctx?.sessionManager?.getBranch)return {task_id:null,status:'SESSION_CONTEXT_UNAVAILABLE'};
   for(const entry of ctx.sessionManager.getBranch()){
@@ -30,7 +30,7 @@ export function captureCommittedState(ctx:any){
   if(!task)return {...record,status:'NO_BOUND_TASK'};
   try{
     if(!/^[^/\\:\x00]+$/.test(task))throw Error('invalid task identifier');
-    const memory=path.join(os.homedir(),'.pi','memory');
+    const memory=options.memoryRoot??path.join(os.homedir(),'.pi','memory');
     const files=fs.readdirSync(memory,{withFileTypes:true}).filter(e=>e.isDirectory())
       .map(e=>path.join(memory,e.name,'tasks',task,'state.json')).filter(f=>fs.existsSync(f));
     if(files.length!==1)throw Error('ambiguous journal');
@@ -42,7 +42,9 @@ export function captureCommittedState(ctx:any){
       journal_ref:evidence?.put(bytes)??null};
   }catch{return {...record,status:'AUTHORITATIVE_JOURNAL_UNAVAILABLE'};}
 }
-export function attachBoundaries(pi:any) {
+export function attachBoundaries(pi:any,options:any={}) {
+  const memoryRoot=options.memoryRoot??path.join(os.homedir(),'.pi','memory');
+  if(typeof memoryRoot!=='string'||!path.isAbsolute(memoryRoot))throw Error('Absolute evaluation memory root required');
   let prepared:any=null;
   pi.on('context_with_system',(_event:any,ctx:any)=>{
     let task:any=null;
@@ -66,12 +68,12 @@ export function attachBoundaries(pi:any) {
           sha256:hash(p),arguments_sha256:p.type==='toolCall'?hash(p.arguments):null}))}));
       const system=original.find((m:any)=>m.role==='system');
       if(system)prepared.source_system_ref=evidence.put(system);
-      const rule=path.join(os.homedir(),'.pi','memory','rule.md');
+      const rule=path.join(memoryRoot,'rule.md');
       if(fs.existsSync(rule))prepared.expected_rule_template_ref=evidence.put(fs.readFileSync(rule));
     }
     if(task && /^[^/\\:\x00]+$/.test(task)) {
       try {
-        const memory=path.join(os.homedir(),'.pi','memory');
+        const memory=memoryRoot;
         // Task IDs are global; require a unique journal, never choose a same-name candidate.
         const files=fs.readdirSync(memory,{withFileTypes:true}).filter(e=>e.isDirectory())
           .map(e=>path.join(memory,e.name,'tasks',task,'state.json')).filter(f=>fs.existsSync(f));
