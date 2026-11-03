@@ -9,6 +9,7 @@ from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
 
 from .fixed35_campaign import run_pair, validate_admission
+from .fixed35_campaign_config import campaign_config
 from .fixed35_execution import MODEL_CUTOFF
 from .storage import atomic_json
 
@@ -33,7 +34,10 @@ def pair_policy(record):
     setup=120
     actor_span=(record['seconds']+setup)*(1 if parallel else 2)+(0 if parallel else verify)
     total_span=(record['seconds']+setup+verify)*(1 if parallel else 2)
-    latest=min(MODEL_CUTOFF-actor_span,CONTAINER_STOP-total_span)
+    campaign=campaign_config(record)if 'campaign'in record else None
+    model_cutoff=campaign['model_cutoff']if campaign else MODEL_CUTOFF
+    container_stop=campaign['container_cutoff']if campaign else CONTAINER_STOP
+    latest=min(model_cutoff-actor_span,container_stop-total_span)
     first='pi-native'if int(hashlib.sha256(record['case_id'].encode()).hexdigest(),16)%2==0 else'pi-memweave'
     return {'parallel_arms':parallel,'reserved_cpus':cpus*(2 if parallel else 1),
         'reserved_memory_mb':memory*(2 if parallel else 1),'actor_seconds_per_arm':record['seconds'],

@@ -29,7 +29,7 @@ def _start_authority(root:Path,ledger:Path,env):
     if manifest.exists():
         record=json.loads(manifest.read_text())
         actual=json.loads(subprocess.check_output(['docker','inspect',record['container_id']],env=env,text=True,timeout=15))[0]
-        if not actual['State']['Running']or actual['Image']!=IMAGE or actual['Config']['Labels'].get('org.memweave.eval.quota')!='fixed35-20261102':
+        if record['ledger']!=str(ledger)or not actual['State']['Running']or actual['Image']!=IMAGE or actual['Config']['Labels'].get('org.memweave.eval.quota')!=record.get('budget_id','fixed35-20261102'):
             raise RuntimeError('quota authority identity or lifecycle mismatch')
         heartbeat=json.loads((root/'heartbeat.json').read_text())
         if heartbeat['service_id']!=record['service_id']or not -5<time.time()-heartbeat['timestamp']<10:
@@ -44,9 +44,9 @@ def _start_authority(root:Path,ledger:Path,env):
     for name in ('quota_service.py','budget_guard.py'):
         shutil.copy2(Path(__file__).with_name(name),root/'code'/name)
         hashes[name]=file_digest(root/'code'/name)
-    identity=uuid4().hex
+    identity=uuid4().hex;budget_id=ledger.parent.name
     container=subprocess.check_output(['docker','run','--rm','--detach','--platform','linux/amd64',
-        '--name','memweave-quota-'+identity[:12],'--label','org.memweave.eval.quota=fixed35-20261102',
+        '--name','memweave-quota-'+identity[:12],'--label','org.memweave.eval.quota='+budget_id,
         '--network','none','--cpus','.25','--memory','128m',
         '--mount','type=bind,source='+str(root)+',target=/control',
         '--mount','type=bind,source='+str(ledger.parent)+',target=/control/ledger',
@@ -59,10 +59,11 @@ def _start_authority(root:Path,ledger:Path,env):
         time.sleep(.05)
     else:
         raise RuntimeError('quota authority has no verified startup heartbeat')
-    record={'service_id':identity,'container_id':container,'root':str(root),'ledger':str(ledger),
+    account=json.loads(ledger.read_text())
+    record={'service_id':identity,'container_id':container,'root':str(root),'ledger':str(ledger),'budget_id':budget_id,
         'image_id':IMAGE,'code_sha256':hashes,'network':'none','single_writer_kernel':'Docker VM',
-        'started_at':time.time(),'subbudgets_usd':{'formal_work_and_simulators_per_arm':7.99,
-            'formal_judges_per_arm':1.,'shared_preflight':1.,'all_operations_hard_limit':19.}}
+        'started_at':time.time(),'subbudgets_usd':{'arm_limits':account['arm_limits'],
+            'all_operations_hard_limit':account['maximum_usd']}}
     atomic_json(manifest,record,immutable=True)
     return record
 
@@ -91,7 +92,7 @@ def add_channel(authority,*,arm,episode,max_output,deadline,episode_budget=None,
 def stop_authority(authority,env):
     root=Path(authority['root']);identity=authority['container_id']
     actual=json.loads(subprocess.check_output(['docker','inspect',identity],env=env,text=True,timeout=15))[0]
-    if actual['Config']['Labels'].get('org.memweave.eval.quota')!='fixed35-20261102':
+    if actual['Config']['Labels'].get('org.memweave.eval.quota')!=authority.get('budget_id','fixed35-20261102'):
         raise ValueError('refusing to stop an unrelated container')
     (root/'stop').touch()
     stopped=False

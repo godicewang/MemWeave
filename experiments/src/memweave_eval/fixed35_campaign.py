@@ -12,8 +12,9 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .fixed35_campaign_config import campaign_config, verify_account
 from .fixed35_collection import collect_episode
-from .fixed35_execution import BASE, MODEL_CUTOFF, job_config
+from .fixed35_execution import BASE, job_config
 from .runner import execute_harbor, trial_results, verify_package
 from .storage import atomic_json, file_digest
 from .suites import task_digest
@@ -82,7 +83,8 @@ def validate_admission(record):
                 'preflight_evidence'):
         if key not in record:
             raise ValueError('missing admission field '+key)
-    validate_paid_canary(record)
+    campaign=campaign_config(record)
+    validate_paid_canary(record,Path(campaign['ledger']))
     if not record['preflight_evidence']:
         raise ValueError('no preflight evidence')
     for source in record['preflight_evidence']:
@@ -114,32 +116,31 @@ def run_pair(admission: Path, root: Path):
     atomic_json(root/'experiment.lock.json',{'schema_version':3,'protocol':'fixed35',
         'admission_sha256':file_digest(root/'admission.json'),'evaluator_version':VERSION},immutable=True)
     run_id=root.name
-    ledger=BASE/'budgets/fixed35-20261102/quota.json'
-    account=json.loads(ledger.read_text())
-    if account['maximum_usd']!=19 or account['arm_limits']!={'pi-native':9.,'pi-memweave':9.,'preflight':1.}:
-        raise ValueError('unexpected fixed35 global budget')
+    campaign=campaign_config(record);verify_account(campaign)
+    ledger=Path(campaign['ledger']);model_cutoff=campaign['model_cutoff']
+    container_cutoff=campaign['container_cutoff']
     from .fixed35_execution import PACKAGE, PACKAGE_SHA256, SUBJECT_COMMIT
     verify_package(PACKAGE,PACKAGE_SHA256,SUBJECT_COMMIT)
     env=trusted_environment(Path(record['code_path']))
     from .quota_authority import add_channel, start_authority
-    authority=start_authority(BASE/'fixed35-20261102/quota-authority-v1',ledger,env)
+    authority=start_authority(Path(campaign['authority_root']),ledger,env)
     atomic_json(root/'quota-authority.json',authority,immutable=True)
     parallel=policy['parallel_arms']
     atomic_json(root/'resource-policy.json',policy,immutable=True)
     atomic_json(root/'run.json',{'run_id':run_id,'case_id':record['case_id'],'started_at':datetime.now(UTC).isoformat(),
         'status':'RUNNING','parallel_arms':parallel,'ledger':str(ledger),'arms':{}},immutable=True)
     watch=subprocess.Popen([sys.executable,'-m','memweave_eval.deadline_watchdog',str(root),run_id,
-        str(MODEL_CUTOFF),str(1793661732.)],env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True)
+        str(model_cutoff),str(container_cutoff)],env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True)
     sleep_guard=subprocess.Popen(['caffeinate','-i','-w',str(os.getpid())],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 
     def arm_run(arm):
         cfg=job_config(root=root,task=Path(record['task_path']),case_id=record['case_id'],arm=arm,
-            run_id=run_id,plan=Path(record['runtime_plan']),deadline=MODEL_CUTOFF,resources=record['resources'],
+            run_id=run_id,plan=Path(record['runtime_plan']),deadline=model_cutoff,resources=record['resources'],
             seconds=record['seconds'],host_scored=record.get('host_scored',False),
             episode_budget=record['episode_budget'],task_config=record.get('task_config'))
         cfg['agents'][0]['kwargs']['evaluation_run_id']='fixed35-formal:'+cfg['agents'][0]['kwargs']['evaluation_run_id']
         episode=cfg['agents'][0]['kwargs']['evaluation_run_id']
-        channel=add_channel(authority,arm=arm,episode=episode,max_output=8192,deadline=MODEL_CUTOFF,
+        channel=add_channel(authority,arm=arm,episode=episode,max_output=8192,deadline=model_cutoff,
             episode_budget=record['episode_budget'])
         overlay=root/(arm+'-platform.yaml')
         overlay.write_text('services:\n  main:\n    platform: '+record.get('platform','linux/amd64')+
@@ -153,7 +154,7 @@ def run_pair(admission: Path, root: Path):
             aux={}
             for role in ('user_simulator','official_judge'):
                 scope=add_channel(authority,arm=arm,episode=episode+(':judge'if role=='official_judge'else''),max_output=8192,
-                    deadline=1793661132. if role=='official_judge'else MODEL_CUTOFF,
+                    deadline=campaign['judge_cutoff'] if role=='official_judge'else model_cutoff,
                     episode_budget=.4 if role=='official_judge'else record['episode_budget'],role=role)
                 aux[role]=scope['host_path']
             cfg['agents'][0]['kwargs']['evaluation_aux_quota_channels']=aux
@@ -161,7 +162,7 @@ def run_pair(admission: Path, root: Path):
             cfg['agents'][0]['kwargs']['evaluation_pair_barrier']=str(root/'start-barrier')
         if record.get('agent_import'):
             cfg['agents'][0]['import_path']=record['agent_import']
-        code=execute_harbor(cfg,root,env,time.monotonic()+max(60,1793661732.-time.time()),20.)
+        code=execute_harbor(cfg,root,env,time.monotonic()+max(1,container_cutoff-time.time()),20.)
         results=trial_results(root/'harbor'/cfg['job_name'])
         if len(results)!=1:
             raise RuntimeError('expected exactly one actual trial')
