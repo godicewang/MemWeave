@@ -58,7 +58,8 @@ def prepare_mab_components(adapter:Path,output:Path):
     return {'components':8,'correction_components':len(MAB_RELATIONS),'paid_requests':0,'output':str(output)}
 
 
-def active_text(journal):
+def state_text_projection(journal):
+    """Window visibility and semantic retirement are separate State contracts."""
     entries={};counts={'F':0,'D':0};seen=set()
     for row in journal:
         if row['op_id']in seen:
@@ -66,21 +67,27 @@ def active_text(journal):
         seen.add(row['op_id']);op=row['op']
         if op=='modify_fact':
             for identity in row['archive']:
-                entries[identity]['active']=False
+                entries[identity].update(visible=False,archived=True)
             counts['F']+=1
-            entries['F'+str(counts['F'])]={'text':row['append_fact']['content'],'active':True,'position':len(seen)}
+            entries['F'+str(counts['F'])]={'text':row['append_fact']['content'],'visible':True,'archived':False,'position':len(seen)}
         elif op in {'append_fact','append_decision'}:
             kind='F'if op=='append_fact'else'D';counts[kind]+=1
             if row['id']!=kind+str(counts[kind]):
                 raise ValueError('non-contiguous State identifier')
-            entries[row['id']]={'text':row['fact'if kind=='F'else'decision'],'active':True,'position':len(seen)}
+            entries[row['id']]={'text':row['fact'if kind=='F'else'decision'],'visible':True,'archived':False,'position':len(seen)}
         elif op=='slide_window':
             for identity,entry in entries.items():
                 if row['evicted_range']['from']<=entry['position']<=row['evicted_range']['to'] and identity not in row['retained_ids']:
-                    entry['active']=False
+                    entry['visible']=False
         elif op!='update_goal':
             raise ValueError('unsupported State operation')
-    return [e['text']for e in entries.values()if e['active']]
+    return {'visible':[e['text']for e in entries.values()if e['visible']and not e['archived']],
+        'unarchived':[e['text']for e in entries.values()if not e['archived']]}
+
+
+def active_text(journal):
+    """Historical API for the currently visible, unarchived State display."""
+    return state_text_projection(journal)['visible']
 
 
 def literal_snapshot(texts, contract):
@@ -111,10 +118,15 @@ def grade_action(prediction, answers, action, *, action_observation_complete):
     return {'native':score,'derived_action':point}
 
 
-def grade_correction(texts, contract, *, correct_action, snapshot_before_action):
+_UNSPECIFIED=object()
+
+
+def grade_correction(texts, contract, *, correct_action, snapshot_before_action,unarchived_texts=_UNSPECIFIED):
     checks=literal_snapshot(texts,contract)
+    checks['obsolete_relations_absent']=literal_snapshot(
+        texts if unarchived_texts is _UNSPECIFIED else unarchived_texts,contract)['obsolete_relations_absent']
     checks.update(action_uses_current_value=correct_action,snapshot_precedes_action=snapshot_before_action)
-    return checkpoint_verdict({'id':'F35.C5.current-memory-before-action-v1','required_assertions':list(checks)},checks)
+    return checkpoint_verdict({'id':'F35.C5.current-memory-before-action-v2','required_assertions':list(checks)},checks)
 
 
 def grade_three_evictions(snapshots, *, observation_complete, require_identity=False):
@@ -207,7 +219,7 @@ def grade_mab_trial(trial:Path,contract,*,arm):
     events=sorted(records.values(),key=lambda e:(e['timestamp'],e['producer_id'],e['sequence']))
     from .fixed35_business import execution_boundaries
     complete=execution_boundaries(trial,events)['complete']
-    texts=None;before=None;action_seen=False;evictions=[];boundaries=set();first_action_correct=None
+    texts=None;semantic_texts=None;before=None;action_seen=False;evictions=[];boundaries=set();first_action_correct=None
     source=Path(contract['source_instruction_path'])
     if contract.get('source_instruction_sha256')and file_digest(source)!=contract['source_instruction_sha256']:
         raise ValueError('frozen original MAB source instruction changed')
@@ -234,9 +246,10 @@ def grade_mab_trial(trial:Path,contract,*,arm):
             state=event.get('binding')or{}
             if state.get('journal_ref'):
                 rows=[json.loads(line)for line in read_object(store,state['journal_ref']).decode().splitlines()]
-                before_calls[(event['producer_id'],event['call_id'])]=(active_text(rows),True)
-            elif state.get('status')=='NO_BOUND_TASK':before_calls[(event['producer_id'],event['call_id'])]=([],True)
-            else:before_calls[(event['producer_id'],event['call_id'])]=(None,None)
+                views=state_text_projection(rows)
+                before_calls[(event['producer_id'],event['call_id'])]=(views['visible'],views['unarchived'],True)
+            elif state.get('status')=='NO_BOUND_TASK':before_calls[(event['producer_id'],event['call_id'])]=([],[],True)
+            else:before_calls[(event['producer_id'],event['call_id'])]=(None,None,None)
         if workspace_v2 and event['event']=='workspace_checkpoint'and event.get('stage_id')==contract.get('query_stage_id'):
             workspace=event.get('workspace')or{};files=workspace.get('files')or{}
             if 'answer.json'in files:
@@ -245,7 +258,7 @@ def grade_mab_trial(trial:Path,contract,*,arm):
                 if event.get('phase')=='agent_start'and not initial_action_observed:
                     initial_action_observed=status.get('status')=='absent'and current_hash is None
                 if event.get('phase')in {'tool_end','tool_result'}and initial_action_observed and current_hash!=previous_action_hash:
-                    action_seen=True;texts,before=before_calls.get((event['producer_id'],event.get('call_id')),(None,None))
+                    action_seen=True;texts,semantic_texts,before=before_calls.get((event['producer_id'],event.get('call_id')),(None,None,None))
                     ref=workspace.get('file_refs',{}).get('answer.json')
                     if ref and ref.get('sha256')==current_hash:
                         try:first_action_correct=bool(score_mab('',contract['answers'],json.loads(read_object(store,ref)))['typed_action'])
@@ -256,12 +269,12 @@ def grade_mab_trial(trial:Path,contract,*,arm):
         if event['event']=='request_ready':
             boundary=event.get('prepared_boundary')or{}
             ref=boundary.get('expected_journal_ref')
-            texts=None;before=None
+            texts=None;semantic_texts=None;before=None
             if ref:
                 rows=[json.loads(line)for line in read_object(store,ref).decode().splitlines()]
-                texts=active_text(rows);before=True
+                views=state_text_projection(rows);texts=views['visible'];semantic_texts=views['unarchived'];before=True
             elif boundary.get('expected_task_id')is None and 'expected_task_id'in boundary:
-                texts=[];before=True
+                texts=[];semantic_texts=[];before=True
             window=projection.get(boundary.get('boundary_id'),{}).get('memweave.window.v1',{}).get('data',{})
             cut=window.get('boundary_entry_id')
             payload=json.loads(read_object(store,event['payload_ref']))
@@ -318,11 +331,11 @@ def grade_mab_trial(trial:Path,contract,*,arm):
                     evictions[-1].update(window_projection_correct=proof.get('value'),independent_window_proof=proof)
             source_seen|=visible
         elif event['event']=='state_after_tool':
-            snapshot=event.get('state',{});texts=None;before=None
+            snapshot=event.get('state',{});texts=None;semantic_texts=None;before=None
             if snapshot.get('journal_ref'):
                 rows=[json.loads(line)for line in read_object(store,snapshot['journal_ref']).decode().splitlines()]
-                texts=active_text(rows);before=True
-            elif snapshot.get('status')=='NO_BOUND_TASK':texts=[];before=True
+                views=state_text_projection(rows);texts=views['visible'];semantic_texts=views['unarchived'];before=True
+            elif snapshot.get('status')=='NO_BOUND_TASK':texts=[];semantic_texts=[];before=True
         elif event['event']=='tool_call':
             value=json.loads(read_object(store,event['record_ref']))
             path=(value.get('input')or{}).get('path')
@@ -338,14 +351,17 @@ def grade_mab_trial(trial:Path,contract,*,arm):
     if contract.get('typed_book_memory'):
         from .fixed35_mab_cards import grade_book_card
         result['typed_book_memory']=grade_book_card(texts,contract['typed_book_memory'],
+            unarchived_texts=semantic_texts,
             before_dependency=before if action_seen else False if complete else None,
             business_action_correct=first_action_correct if action_seen else False if complete else None)
     correction=grade_correction(texts,literal,
+        unarchived_texts=semantic_texts,
         correct_action=first_action_correct,
         snapshot_before_action=before if action_seen else None)if literal else None
     if contract.get('typed_fact_memory'):
         from .fixed35_fact_cards import grade_fact_cards
         correction=grade_fact_cards(texts,contract['typed_fact_memory'],
+            unarchived_texts=semantic_texts,
             correct_action=first_action_correct if action_seen else False if complete else None,
             before=before if action_seen else False if complete else None)
     result['memory']={'correction':correction,
@@ -354,4 +370,5 @@ def grade_mab_trial(trial:Path,contract,*,arm):
         'eviction_snapshots':evictions[:3],
         'parser_scope':'finite canonical entity/value literal predicates; not general free-text semantics',
         'literal_contract':literal,'dependent_write_observed':action_seen}
+    result['memory']['semantic_invalidation_policy']='unarchived-conflicts-v2; display-window eviction alone does not retire a fact'
     return result

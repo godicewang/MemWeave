@@ -6,6 +6,8 @@ import json
 from .fixed35 import checkpoint_verdict
 
 VERSION='fixed35-current-fact-cards-20261103-v1'
+GRADE_VERSION='fixed35-current-fact-invalidation-20261103-v2'
+_UNSPECIFIED=object()
 PUBLIC_PROTOCOL='''
 Derived serial-fact recording protocol (identical input for both variants): when
 retaining an important supplied serial-numbered fact in persistent notes, use
@@ -59,8 +61,10 @@ def fact_snapshot(texts,contract):
     return {'all_current_relations':bool(correct),'no_competing_current_relation':not competing}
 
 
-def grade_fact_cards(texts,contract,*,before,correct_action):
+def grade_fact_cards(texts,contract,*,before,correct_action,unarchived_texts=_UNSPECIFIED):
     checks=fact_snapshot(texts,contract)
+    checks['no_competing_current_relation']=fact_snapshot(
+        texts if unarchived_texts is _UNSPECIFIED else unarchived_texts,contract)['no_competing_current_relation']
     checks.update(snapshot_precedes_dependency=before,action_uses_current_value=correct_action)
-    return dict(checkpoint_verdict({'id':VERSION,'required_assertions':list(checks)},checks),
+    return dict(checkpoint_verdict({'id':GRADE_VERSION,'required_assertions':list(checks)},checks),
         scope='Controlled JSON fact grammar, exact subject/relation/object/serial and active alternatives; not a universal semantic parser.')

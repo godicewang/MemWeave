@@ -14,6 +14,8 @@ from .storage import atomic_json, file_digest
 from .suites import task_digest
 
 VERSION='fixed35-mab-event-cards-20261103-v1'
+GRADE_VERSION='fixed35-mab-event-invalidation-20261103-v2'
+_UNSPECIFIED=object()
 PUBLIC_PROTOCOL='''
 Derived event-card recording protocol (same input for both variants): when you
 retain an important narrative event in persistent notes, represent its meaning
@@ -111,8 +113,10 @@ def card_snapshot(texts,contract):
     return {'correct_typed_event_relation':correct,'no_incompatible_current_event':not wrong}
 
 
-def grade_book_card(texts,contract,*,before_dependency,business_action_correct):
+def grade_book_card(texts,contract,*,before_dependency,business_action_correct,unarchived_texts=_UNSPECIFIED):
     checks=card_snapshot(texts,contract)
+    checks['no_incompatible_current_event']=card_snapshot(
+        texts if unarchived_texts is _UNSPECIFIED else unarchived_texts,contract)['no_incompatible_current_event']
     checks.update(before_dependency=before_dependency,business_action_correct=business_action_correct)
-    return dict(checkpoint_verdict({'id':VERSION+':'+contract['case_id'],
+    return dict(checkpoint_verdict({'id':GRADE_VERSION+':'+contract['case_id'],
         'required_assertions':contract['assertions']},checks),scope=contract['scope'])
