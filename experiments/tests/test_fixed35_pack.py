@@ -96,6 +96,11 @@ def test_existing_cli_writes_all_35_rows_even_with_no_run_reports(tmp_path):
     result=execute(SimpleNamespace(fixed35_command='pack-report',manifest=manifest,output=tmp_path/'report'))
     assert result['expected_cells']==35*2*len(catalogue()['metrics'])
     assert result['observed_cells']==0 and not result['collection_accepted']
+    import json
+    saved=json.loads((tmp_path/'report/results.json').read_text())
+    assert result['package_accepted']is False
+    assert saved['capability_coverage']['observed_group_count']==0
+    assert saved['long_qualification']['qualified_cases']is None
     table=list(csv.DictReader((tmp_path/'report/pi-memweave-wide.csv').open()))
     assert len(table)==35 and all(r['S3.original_reward']=='NOT_RUN'for r in table)
 

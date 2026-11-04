@@ -5,6 +5,7 @@ import csv
 import json
 from pathlib import Path
 
+from .capability_coverage import capability_coverage, long_qualification_proof
 from .fixed35 import aggregate_metric, collection_exception
 from .fixed35_report import metric_alias
 from .normalized_scores import catalogue
@@ -212,7 +213,10 @@ def pack_report(manifest:Path,output:Path):
                         status='SCORED'if metric['status']=='scored'else'DIAGNOSTIC'if metric['status']=='diagnostic'else metric['status'],
                         collection_complete=metric.get('collection_status')!='REPAIR_REQUIRED'))
     result=package_metrics(rows,expected,registry)
-    result.update(version='fixed35-pack-20261104-v5',manifest_sha256=file_digest(manifest),source_sha256=source_hashes,
+    result['capability_coverage']=capability_coverage(result['rows'])
+    result['long_qualification']=long_qualification_proof(frozen.get('long_qualification'))
+    result['package_accepted']=result['collection_accepted']and result['capability_coverage']['complete']and result['long_qualification']['complete']
+    result.update(version='fixed35-pack-20261104-v6',manifest_sha256=file_digest(manifest),source_sha256=source_hashes,
         aggregation='valid cases equally within benchmark, then valid benchmark means equally; no test-count weighting')
     output.mkdir(parents=True,exist_ok=False);atomic_json(output/'results.json',result,immutable=True)
     with (output/'metrics.csv').open('w',newline='')as stream:
@@ -267,6 +271,6 @@ def pack_report(manifest:Path,output:Path):
             writer.writerow(row)
     (output/'report.md').write_text('# 固定35案例整包报告\n\n完整冻结单元格：'+str(result['expected_cells'])+
         '；实际结果单元格：'+str(result['observed_cells'])+'；采集验收：'+str(result['collection_accepted'])+
-        '。\n\n`-`仅表示预注册设计不适用；NOT_RUN/缺证据不伪装成0或不适用。明确记录修复失败的采集例外从有效评分分母剔除，仍阻止采集验收；排除前覆盖率、排除权重及原因独立展示。有效子集分数不代表完整设计覆盖。公式和原始分母见JSON/metrics.csv。\n')
-    return {'output':str(output),'collection_accepted':result['collection_accepted'],
+        '；整包验收：'+str(result['package_accepted'])+'；真实能力组观测：'+str(result['capability_coverage']['observed_group_count'])+'/24；千调用成功案例：'+str(result['long_qualification']['qualified_cases'])+'/5。\n\n`-`仅表示预注册设计不适用；NOT_RUN/缺证据不伪装成0或不适用。明确记录修复失败的采集例外从有效评分分母剔除，仍阻止采集验收；排除前覆盖率、排除权重及原因独立展示。有效子集分数不代表完整设计覆盖。能力组观测不等于行为通过，五个长例须由原件验证成功及去重真实调用数，不以fixture或调用累加代替。公式和原始分母见JSON/metrics.csv。\n')
+    return {'output':str(output),'collection_accepted':result['collection_accepted'],'package_accepted':result['package_accepted'],
         'expected_cells':result['expected_cells'],'observed_cells':result['observed_cells']}
