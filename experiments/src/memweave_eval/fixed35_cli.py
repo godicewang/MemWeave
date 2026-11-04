@@ -15,6 +15,17 @@ def register(sub):
     sources.add_argument('design',type=Path)
     sources.add_argument('--sources',type=Path,required=True)
     sources.add_argument('--output',type=Path,required=True)
+    slop_business=commands.add_parser('slop-business-contract',help='Freeze SCB-01/03 source feature/regression identities from isolated source collection controls')
+    slop_business.add_argument('case_id',choices=['SCB-01','SCB-03'])
+    slop_business.add_argument('--design',type=Path,required=True)
+    slop_business.add_argument('--sources',type=Path,required=True)
+    slop_business.add_argument('--controls',type=Path,required=True)
+    slop_business.add_argument('--output',type=Path,required=True)
+    slop_business_replay=commands.add_parser('slop-business',help='Replay exact selected source current-feature and retained-regression assertions')
+    slop_business_replay.add_argument('official_outcome',type=Path)
+    slop_business_replay.add_argument('--contract',type=Path,required=True)
+    slop_business_replay.add_argument('--fixture-control',action='store_true')
+    slop_business_replay.add_argument('--output',type=Path,required=True)
     ruby=commands.add_parser('ruby-contract',help='Freeze LONG-05 exact source gates and expanded parameter IDs; no actor execution')
     ruby.add_argument('--design',type=Path,required=True)
     ruby.add_argument('--source',type=Path,required=True)
@@ -186,6 +197,22 @@ def execute(args):
         value=freeze_contract(case,args.source,args.output,metric_matrix=matrix)
         return {'case_id':'TB-09','output':str(args.output),'weighted_source_checks':len(value['weighted_checks']),
             'source_commands':len(value['commands']),'not_formal_admission':True,'paid_requests':0}
+    if args.fixed35_command=='slop-business-contract':
+        from .slop_source_business import freeze_contract
+        design=read_design(args.design);case=next(c for c in design['selection']['cases']if c['pack_case_id']==args.case_id)
+        matrix=[r for r in applicability_matrix(design)if r['case_id']==args.case_id]
+        for row in matrix:
+            if row['metric_id']in {'S.common.protected_constraints','S.common.process_validation'}:
+                row.update(design_status='PLANNED',opportunity_ids=['slop-exact-source-feature-and-regression'],
+                    reason='Source-specific original feature/regression tests, not State/adoption or full case admission')
+        value=freeze_contract(case,args.sources,args.controls,args.output,metric_matrix=matrix)
+        return {'case_id':args.case_id,'output':str(args.output),'stages':len(value['stages']),'paid_requests':0}
+    if args.fixed35_command=='slop-business':
+        from .slop_source_business import grade_official
+        value=grade_official(json.loads(args.official_outcome.read_text()),json.loads(args.contract.read_text()),fixture_control=args.fixture_control)
+        atomic_json(args.output,value,immutable=True)
+        return {'case_id':value['case_id'],'output':str(args.output),'collection_complete':value['collection_complete'],
+            'fixture_only':value['fixture_only'],'paid_requests':0}
     if args.fixed35_command=='ruby-contract':
         from .ruby_source import freeze_contract
         design=read_design(args.design);case=next(c for c in design['selection']['cases']if c['pack_case_id']=='LONG-05')

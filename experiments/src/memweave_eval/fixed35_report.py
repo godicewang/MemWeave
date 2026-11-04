@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261104-v32'
+VERSION='fixed35-score-20261104-v33'
 
 
 def raw_display(metric):
@@ -162,6 +162,9 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             from .fixed35_slop import score_channels
             behavior=official['arms'][arm];slop_channels=score_channels(behavior)
             original=slop_channels['original_strict']['score'];reward=original/100 if original is not None else None
+            if contract.get('adapter_kind')=='slop-source-business-v1':
+                from .slop_source_business import grade_official
+                behavior=grade_official(official['arms'][arm],contract,fixture_control=fixture_control)
         row_official=None
         if admission['family']=='state'and outcome.get('host_official_score')and 'official_status'in outcome['host_official_score']:
             status=outcome['host_official_score'];score_path=Path(status['scored_file'])
@@ -193,6 +196,9 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             original=behavior['original_metrics']
             row['behavior_metrics']={'native_metrics':{'passed':original['tests_passed'],'total':original['tests_total'],
                 'unit':'Original source CTRF collapsed function rows, not expanded parameter sample count'}if behavior['collection_complete']else{}}
+        if contract.get('adapter_kind')=='slop-source-business-v1':
+            from .slop_source_business import checkpoint_rows
+            row['slop_business_component']=behavior;row['derived_behavior_checkpoints']=checkpoint_rows(behavior)
         if contract.get('adapter_kind')=='dispatch-source-v1':
             from .dispatch_gold import checkpoint_rows
             row['dispatch_component']=behavior;row['derived_behavior_checkpoints']=checkpoint_rows(behavior)
@@ -311,6 +317,15 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                 'Six frozen source business groups AND; documented Markdown skips excluded from these strict groups; no State/Task/adoption inference')
             explicit('S.common.process_validation',behavior['process_checkpoint']['score'],
                 'Original source gate acceptance with its declared Markdown skip policy AND complete captured source protocol; expanded samples separate')
+        elif contract.get('adapter_kind')=='slop-source-business-v1':
+            for identity,point,reason in [
+                ('S.common.protected_constraints',behavior['common_checkpoint'],
+                    'Mean across fixed old-checkpoint regression opportunities; AND of all exact source parameter identities within each checkpoint; no State/adoption inference'),
+                ('S.common.process_validation',behavior['process_checkpoint'],
+                    'Mean across fixed current-feature opportunities; AND of all source Core/Functionality/Error identities per checkpoint; original strict whole-case result separate')]:
+                row['normalization_evidence'][identity]={'value':point['score']/100 if point['score']is not None else None,
+                    'numerator':point['numerator'],'denominator':point['denominator']-point['unknown'],
+                    'unknown':point['unknown'],'status':'scored'if point['score']is not None else'unknown','reason':reason}
         elif contract.get('adapter_kind')=='dispatch-source-v1':
             explicit('S.common.protected_constraints',behavior['common_checkpoint']['score'],
                 'AND of original temporal visibility and current-correction/ledger source cases; not MemWeave memory adoption')
@@ -424,6 +439,13 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                     if metric['id']in {'S3.original_reward','S3.partial_pass_rate','S.common.protected_constraints',
                             'S.common.process_validation'}and metric['status']!='DESIGN_NA':
                         metric.update(collection_status='REPAIR_REQUIRED',collection_reason='Ruby source gate, collapsed/expanded identity or original outcome evidence requires repair')
+        if contract.get('adapter_kind')=='slop-source-business-v1':
+            mark_checkpoint_collection(metrics,{'S.common.protected_constraints':behavior['common_checkpoint'],
+                'S.common.process_validation':behavior['process_checkpoint']})
+            if not behavior['collection_complete']:
+                for metric in metrics:
+                    if metric['id']in {'S.common.protected_constraints','S.common.process_validation'}and metric['status']!='DESIGN_NA':
+                        metric.update(collection_status='REPAIR_REQUIRED',collection_reason='Frozen Slop source feature/regression inventory evidence requires repair')
         if contract.get('adapter_kind')=='dispatch-source-v1':
             mark_checkpoint_collection(metrics,{'S.common.protected_constraints':behavior['common_checkpoint'],
                 'S.common.process_validation':behavior['process_checkpoint']})
@@ -457,6 +479,7 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             and all(r.get('wal_component',{}).get('collection_complete',True)for r in rows)
             and all(r.get('selected_source_component',{}).get('collection_complete',True)for r in rows)
             and all(r.get('ruby_component',{}).get('collection_complete',True)for r in rows)
+            and all(r.get('slop_business_component',{}).get('collection_complete',True)for r in rows)
             and all(r.get('dispatch_component',{}).get('collection_complete',True)for r in rows)
             and not any(m.get('collection_status')=='REPAIR_REQUIRED'for r in rows for m in r['normalized_metrics']),
         'fixture_scores_included':fixture_control,'official_outcomes_sha256':file_digest(official_outcomes)if official_outcomes else None,
