@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261104-v31'
+VERSION='fixed35-score-20261104-v32'
 
 
 def raw_display(metric):
@@ -130,6 +130,9 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
         if contract.get('adapter_kind')=='pytest-selected-source-v1':
             from .pytest_source_gold import grade_trial
             behavior=grade_trial(trial,contract,fixture_control=fixture_control)
+        if contract.get('adapter_kind')=='ruby-source-v1':
+            from .ruby_source import grade_trial
+            behavior=grade_trial(trial,contract,fixture_control=fixture_control)
         if contract.get('adapter_kind')=='dispatch-source-v1':
             from .dispatch_gold import grade_trial
             behavior=grade_trial(trial,contract,fixture_control=fixture_control)
@@ -183,6 +186,13 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             row['selected_source_component']=behavior;row['derived_behavior_checkpoints']=checkpoint_rows(behavior)
             row['native_reward']=behavior['original_reward']
             row['behavior_metrics']={'native_metrics':behavior['native_metrics']or{}}
+        if contract.get('adapter_kind')=='ruby-source-v1':
+            from .ruby_source import checkpoint_rows
+            row['ruby_component']=behavior;row['derived_behavior_checkpoints']=checkpoint_rows(behavior)
+            row['native_reward']=behavior['original_reward']
+            original=behavior['original_metrics']
+            row['behavior_metrics']={'native_metrics':{'passed':original['tests_passed'],'total':original['tests_total'],
+                'unit':'Original source CTRF collapsed function rows, not expanded parameter sample count'}if behavior['collection_complete']else{}}
         if contract.get('adapter_kind')=='dispatch-source-v1':
             from .dispatch_gold import checkpoint_rows
             row['dispatch_component']=behavior;row['derived_behavior_checkpoints']=checkpoint_rows(behavior)
@@ -296,6 +306,11 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                 ('S.common.dependency_constraints',behavior['dependency_checkpoint'])]:
                 if point is not None:explicit(identity,point['score'],
                     'Exact selected source business cases and matched console/CTRF evidence; no memory-adoption or general cleanroom-origin inference')
+        elif contract.get('adapter_kind')=='ruby-source-v1':
+            explicit('S.common.protected_constraints',behavior['common_checkpoint']['score'],
+                'Six frozen source business groups AND; documented Markdown skips excluded from these strict groups; no State/Task/adoption inference')
+            explicit('S.common.process_validation',behavior['process_checkpoint']['score'],
+                'Original source gate acceptance with its declared Markdown skip policy AND complete captured source protocol; expanded samples separate')
         elif contract.get('adapter_kind')=='dispatch-source-v1':
             explicit('S.common.protected_constraints',behavior['common_checkpoint']['score'],
                 'AND of original temporal visibility and current-correction/ledger source cases; not MemWeave memory adoption')
@@ -396,6 +411,19 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                     if metric['id']in {'S3.original_reward','S3.partial_pass_rate','S.common.protected_constraints',
                             'S.common.process_validation','S.common.dependency_constraints'}and metric['status']!='DESIGN_NA':
                         metric.update(collection_status='REPAIR_REQUIRED',collection_reason='Selected source test identity/reward evidence requires repair')
+        if contract.get('adapter_kind')=='ruby-source-v1':
+            for metric in metrics:
+                if metric['id']=='S3.partial_pass_rate':
+                    metric.update(meaning='Original LONG-05 partial score over collapsed CTRF function rows; expanded parameter samples are a separate diagnostic',
+                        raw_formula='original metrics.tests_passed / original metrics.tests_total; original pytest-json-ctrf 0.3.5 collapses parameter IDs',
+                        reason='Preserved original source partial; see ruby-source-counts.csv for expanded parameter passed/failed/skipped and unexecuted counts')
+            mark_checkpoint_collection(metrics,{'S.common.protected_constraints':behavior['common_checkpoint'],
+                'S.common.process_validation':behavior['process_checkpoint']})
+            if not behavior['collection_complete']:
+                for metric in metrics:
+                    if metric['id']in {'S3.original_reward','S3.partial_pass_rate','S.common.protected_constraints',
+                            'S.common.process_validation'}and metric['status']!='DESIGN_NA':
+                        metric.update(collection_status='REPAIR_REQUIRED',collection_reason='Ruby source gate, collapsed/expanded identity or original outcome evidence requires repair')
         if contract.get('adapter_kind')=='dispatch-source-v1':
             mark_checkpoint_collection(metrics,{'S.common.protected_constraints':behavior['common_checkpoint'],
                 'S.common.process_validation':behavior['process_checkpoint']})
@@ -428,6 +456,7 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             and all(r.get('warranty_component',{}).get('collection_complete',True)for r in rows)
             and all(r.get('wal_component',{}).get('collection_complete',True)for r in rows)
             and all(r.get('selected_source_component',{}).get('collection_complete',True)for r in rows)
+            and all(r.get('ruby_component',{}).get('collection_complete',True)for r in rows)
             and all(r.get('dispatch_component',{}).get('collection_complete',True)for r in rows)
             and not any(m.get('collection_status')=='REPAIR_REQUIRED'for r in rows for m in r['normalized_metrics']),
         'fixture_scores_included':fixture_control,'official_outcomes_sha256':file_digest(official_outcomes)if official_outcomes else None,
@@ -461,6 +490,22 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
         with(output/'slop-score-channels.csv').open('w',newline='')as stream:
             columns=['case_id','arm','channel','score','status','source_field','raw_formula','score_formula','reason']
             writer=csv.DictWriter(stream,fieldnames=columns);writer.writeheader();writer.writerows(slop_rows)
+    ruby_rows=[]
+    for row in rows:
+        component=row.get('ruby_component')
+        if component:
+            original=component['original_metrics'];expanded=component['expanded_source_counts']
+            ruby_rows.append({'case_id':row['case_id'],'arm':row['variant_id'],
+                'original_ctrf_passed':original.get('tests_passed'),'original_ctrf_total':original.get('tests_total'),
+                'original_partial_score':original.get('partial_score'),'original_reward':component['original_reward'],
+                **{'observed_expanded_'+k:expanded[k]for k in ['passed','failed','skipped','error','total']},
+                'expected_expanded':component['expected_source_cases'],'unexecuted_expanded':component['unexecuted_source_cases'],
+                'collection_complete':component['collection_complete'],'fixture_only':component['fixture_only'],
+                'formula':'Original partial = original collapsed CTRF passed/total; expanded counters count unique full source parameter IDs, not model requests',
+                'interpretation':'Documented Markdown skips are observed skips, never passed assertions; proved Rust health failure leaves all later cases unexecuted; partial capture counters are observed subsets only'})
+    if ruby_rows:
+        with(output/'ruby-source-counts.csv').open('w',newline='')as stream:
+            writer=csv.DictWriter(stream,fieldnames=list(ruby_rows[0]));writer.writeheader();writer.writerows(ruby_rows)
     text=['# 固定案例配对报告',f"\n案例：{admission['case_id']}；评分版本：{VERSION}。原始结果、派生行为与采集验收分别保留。\n",
           '|变体|指标|含义／原公式／百分制公式|原始值|百分制|状态/原因|','|---|---|---|---|---|---|']
     for row in rows:
@@ -476,6 +521,15 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
         for item in slop_rows:
             values=[item['arm'],item['channel'],str(item['score']),item['status'],item['source_field']+' / '+item['raw_formula']]
             text.append('| '+' | '.join(v.replace('|','\\|').replace('\n',' ')for v in values)+' |')
+    if ruby_rows:
+        text.extend(['','## LONG-05原始折叠计数与展开参数样本','',
+            '原partial和reward原样保留；展开计数不替代原分。skip不是通过，测试参数不是模型API调用。缺采集时所列仅已观察子集，不表示完整总量。','',
+            '|变体|原CTRF passed/total|原partial|展开 passed/failed/skipped/error/total|未执行展开样本|完整采集|','|---|---|---|---|---|---|'])
+        for item in ruby_rows:
+            values=[item['arm'],str(item['original_ctrf_passed'])+'/'+str(item['original_ctrf_total']),str(item['original_partial_score']),
+                '/'.join(str(item['observed_expanded_'+k])for k in ['passed','failed','skipped','error','total']),
+                str(item['unexecuted_expanded']),str(item['collection_complete'])]
+            text.append('| '+' | '.join(values)+' |')
     if derived:
         text.extend(['','## 派生案例的共同程序检查点','',
             '共同检查点在两臂按同一程序判定；State条目仅插件适用，原生为设计NA。权重0，不替代原170行的State/记忆指标，不并入既有加权总分。fixture控制不作为模型成绩。','',

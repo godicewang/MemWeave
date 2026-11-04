@@ -15,6 +15,15 @@ def register(sub):
     sources.add_argument('design',type=Path)
     sources.add_argument('--sources',type=Path,required=True)
     sources.add_argument('--output',type=Path,required=True)
+    ruby=commands.add_parser('ruby-contract',help='Freeze LONG-05 exact source gates and expanded parameter IDs; no actor execution')
+    ruby.add_argument('--design',type=Path,required=True)
+    ruby.add_argument('--source',type=Path,required=True)
+    ruby.add_argument('--output',type=Path,required=True)
+    ruby_replay=commands.add_parser('ruby',help='Audit LONG-05 source business gates and collapsed versus expanded counts')
+    ruby_replay.add_argument('trial',type=Path)
+    ruby_replay.add_argument('--contract',type=Path,required=True)
+    ruby_replay.add_argument('--fixture-control',action='store_true')
+    ruby_replay.add_argument('--output',type=Path,required=True)
     dispatch=commands.add_parser('dispatch-contract',help='Freeze TB-09 exact event-cutoff source checks and CLI transcript; no actor execution')
     dispatch.add_argument('--design',type=Path,required=True)
     dispatch.add_argument('--source',type=Path,required=True)
@@ -177,6 +186,22 @@ def execute(args):
         value=freeze_contract(case,args.source,args.output,metric_matrix=matrix)
         return {'case_id':'TB-09','output':str(args.output),'weighted_source_checks':len(value['weighted_checks']),
             'source_commands':len(value['commands']),'not_formal_admission':True,'paid_requests':0}
+    if args.fixed35_command=='ruby-contract':
+        from .ruby_source import freeze_contract
+        design=read_design(args.design);case=next(c for c in design['selection']['cases']if c['pack_case_id']=='LONG-05')
+        matrix=[r for r in applicability_matrix(design)if r['case_id']=='LONG-05']
+        for row in matrix:
+            if row['metric_id']in {'S.common.protected_constraints','S.common.process_validation'}:
+                row.update(design_status='PLANNED',opportunity_ids=['ruby-original-strict-source-business'],
+                    reason='Finite source business assertions; no State/adoption inference; original partial CTRF counts preserved')
+        value=freeze_contract(case,args.source,args.output,metric_matrix=matrix)
+        return {'case_id':'LONG-05','output':str(args.output),'source_cases':sum(len(g['ids'])for g in value['gates'].values()),'paid_requests':0}
+    if args.fixed35_command=='ruby':
+        from .ruby_source import grade_trial
+        value=grade_trial(args.trial,json.loads(args.contract.read_text()),fixture_control=args.fixture_control)
+        atomic_json(args.output,value,immutable=True)
+        return {'case_id':'LONG-05','output':str(args.output),'collection_complete':value['collection_complete'],
+            'fixture_only':value['fixture_only'],'paid_requests':0}
     if args.fixed35_command=='dispatch':
         from .dispatch_gold import grade_trial
         value=grade_trial(args.trial,json.loads(args.contract.read_text()),fixture_control=args.fixture_control)
