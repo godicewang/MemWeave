@@ -13,6 +13,27 @@ NODE = os.environ.get("MEMWEAVE_EVAL_TEST_NODE") or shutil.which("node") or "nod
 GUARD = Path(__file__).parents[1] / "src/memweave_eval/fetch_guard.mjs"
 
 
+@pytest.mark.parametrize('failure',[False,True])
+def test_metadata_observation_preserves_real_fetch_and_never_bills_chat(tmp_path,failure):
+    script="""
+import fs from 'node:fs';import{installGuard}from GUARD;
+let calls=0;const upstream=async()=>{calls++;if(FAILURE)throw Object.assign(new TypeError('private diagnostic'),{cause:{code:'ENOTFOUND'}});return new Response('{"data":[]}',{status:200});};
+const fetch=installGuard({ledger:LEDGER,trace:TRACE,deadline:Date.now()/1000+60,variant:'fixture',fetchImpl:upstream});
+try{const r=await fetch('https://api.deepseek.com/models');if(await r.text()!=='{"data":[]}')throw Error('changed bytes');}catch(e){if(!FAILURE)throw e;}
+if(calls!==1||fs.existsSync(LEDGER))throw Error('unexpected dispatch/accounting');
+"""
+    for key,value in {'GUARD':str(GUARD),'LEDGER':str(tmp_path/'no-ledger.json'),'TRACE':str(tmp_path/'trace.jsonl')}.items():
+        script=script.replace(key,json.dumps(value))
+    script=script.replace('FAILURE',str(failure).lower())
+    run=subprocess.run([NODE,'--input-type=module','-e',script],capture_output=True,text=True,timeout=10,check=False)
+    assert run.returncode==0,run.stderr
+    rows=[json.loads(s)for s in (tmp_path/'trace.jsonl').read_text().splitlines()]
+    assert [r['event']for r in rows]==['metadata_request_start','metadata_request_error'if failure else'metadata_request_end']
+    assert 'private diagnostic'not in (tmp_path/'trace.jsonl').read_text()
+    if failure:assert rows[-1]['error_class']=='TypeError'and rows[-1]['cause_code']=='ENOTFOUND'
+    else:assert rows[-1]['http_status']==200
+
+
 def test_settlement_rejection_preserves_reservation_and_safe_reason(tmp_path):
     ledger=tmp_path/'quota.json';initialize(ledger,1.,time.time()+60)
     trace=tmp_path/'trace.jsonl'

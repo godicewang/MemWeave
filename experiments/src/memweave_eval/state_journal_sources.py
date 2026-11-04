@@ -10,8 +10,8 @@ from .evidence_replay import read_object
 def registry_journals(events,locations,*,complete):
     unavailable={'complete':False,'journals':None,'baseline':None}
     if not complete:return dict(unavailable,reason='independent execution or stage coverage incomplete')
-    frames=[e for e in events if e['event']=='task_registry_checkpoint']
-    if not frames or frames[0].get('phase')!='agent_start'or frames[-1].get('phase')!='agent_end':
+    frames=[e for e in events if e['event']in {'task_registry_checkpoint','execution_terminated'}]
+    if not frames or frames[0].get('phase')!='agent_start'or frames[-1].get('phase')not in {'agent_end','execution_terminated'}:
         return dict(unavailable,reason='initial or terminal global Task inventory missing')
     histories={};baseline=None;proof=[]
     try:

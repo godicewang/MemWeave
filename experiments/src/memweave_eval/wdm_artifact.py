@@ -111,7 +111,7 @@ def wdm_contract(case,source:Path,output:Path):
 def grade_wdm_trial(trial,contract):
     if contract.get('version')!=VERSION or contract.get('case_id')!='LONG-02':raise ValueError('matching frozen WDM contract required')
     events,locations=case_events(trial);coverage=execution_boundaries(trial,events)
-    ends=[e for e in events if e['event']=='workspace_checkpoint'and e.get('phase')=='agent_end']
+    ends=[e for e in events if e['event']in {'workspace_checkpoint','execution_terminated'}and e.get('phase')in {'agent_end','execution_terminated'}]
     terminal=ends[-1]if ends else None;artifacts=terminal.get('workspace',{}).get('artifacts',{})if terminal else{}
     complete=bool(terminal)and coverage['complete'];bodies={};proof={}
     for name in ('meta.json','design.npy'):

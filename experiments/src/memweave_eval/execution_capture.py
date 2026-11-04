@@ -1,11 +1,14 @@
 """Independent native stdout identities for each actual Pi CLI invocation."""
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 from pathlib import Path
 
 from .evidence_replay import read_object
 from .storage import file_digest
+from .termination_evidence import deadline_termination
 
 
 def _hookless_preparation_rejection(trial,invocation,call_id,native,events,manifest):
@@ -53,7 +56,7 @@ def _hookless_preparation_rejection(trial,invocation,call_id,native,events,manif
 def scoped_execution_boundaries(trial:Path,events,*,stage_id=None):
     sources=list(trial.rglob('execution-invocations/*.json'))
     if not sources and not any(e.get('execution_invocation_id')for e in events):return None
-    manifests={};stdout={};errors=[]
+    manifests={};stdout={};errors=[];diagnostics=[]
     for source in sources:
         if source.is_symlink()or not source.resolve().is_relative_to(trial.resolve()):
             raise ValueError('redirected invocation evidence')
@@ -74,15 +77,31 @@ def scoped_execution_boundaries(trial:Path,events,*,stage_id=None):
         if not target.exists():errors.append('invocation_stdout_file_missing');continue
         if file_digest(target)!=value.get('stdout_sha256')or target.stat().st_size!=value.get('stdout_bytes'):
             raise ValueError('native invocation stdout hash differs')
-        try:stdout[identity]=[json.loads(line)for line in target.read_text().splitlines()]
+        try:
+            rows=[]
+            for line in target.read_text().splitlines():
+                # Pi's public print command merges stderr into stdout. Preserve
+                # this exact product fail-closed notice as diagnostic evidence;
+                # arbitrary text and truncated JSON still reject the capture.
+                match=re.fullmatch(r'\[MemWeave\] (MODEL_CAPACITY_UNVERIFIED): .+',line)
+                if match:
+                    diagnostics.append({'invocation_id':identity,'code':match[1],
+                        'line_sha256':hashlib.sha256(line.encode()).hexdigest()})
+                else:rows.append(json.loads(line))
+            stdout[identity]=rows
         except (ValueError,UnicodeError):errors.append('incomplete_native_invocation_stdout')
-    expected=set();completed=set();observed=set();post=set();terminal=True
+    expected=set();completed=set();observed=set();post=set();terminal=True;native_terminal=True
+    terminations=[]
     if not manifests:errors.append('native_invocation_manifest_missing')
     for identity,manifest in manifests.items():
         native=stdout.get(identity,[])
         begins=[i for i,r in enumerate(native)if r.get('type')=='agent_start']
         ends=[i for i,r in enumerate(native)if r.get('type')=='agent_end']
-        if not begins or not ends or ends[-1]<begins[-1]:terminal=False
+        native_ended=bool(begins and ends and ends[-1]>=begins[-1])
+        proof=deadline_termination(trial,manifest,events)if not native_ended and identity in stdout else None
+        if proof is not None:terminations.append(proof)
+        native_terminal &= native_ended
+        terminal &= native_ended or bool(begins and proof)
         for row in native:
             if row.get('type')=='tool_execution_start':expected.add((identity,row.get('toolCallId')))
             if row.get('type')=='tool_execution_end':completed.add((identity,row.get('toolCallId')))
@@ -98,7 +117,8 @@ def scoped_execution_boundaries(trial:Path,events,*,stage_id=None):
         if any(str(e.get('stage_id'))!=manifest['stage_id']for e in related):
             errors.append('invocation_stage_differs_from_observer')
         starts=[e for e in related if e['event']=='workspace_checkpoint'and e.get('phase')=='agent_start']
-        finishes=[e for e in related if e['event']=='workspace_checkpoint'and e.get('phase')=='agent_end']
+        finishes=[e for e in related if e['event']=='workspace_checkpoint'and e.get('phase')=='agent_end'or
+            proof is not None and e['event']=='execution_terminated'and e.get('sequence')==proof['boundary_sequence']]
         if not starts or not finishes:errors.append('initial_or_terminal_boundary_missing')
         elif starts[0]['timestamp']>finishes[-1]['timestamp']:errors.append('boundary_order_invalid')
     identities=set(manifests)
@@ -117,12 +137,21 @@ def scoped_execution_boundaries(trial:Path,events,*,stage_id=None):
         if proof is not None:rejected.append(proof)
     explained={(p['invocation_id'],p['call_id'])for p in rejected}
     if expected!=observed|explained:errors.append('call_boundary_set_differs_from_Pi_log')
-    if not expected<=completed:errors.append('tool_completion_missing_or_pending')
+    terminated_ids={p['invocation_id']for p in terminations}
+    cancelled=expected-completed
+    proven_cancelled={key for key in cancelled if key[0]in terminated_ids and key in observed}
+    if cancelled-proven_cancelled:errors.append('tool_completion_missing_or_pending')
     if not completed<=post:errors.append('completed_tool_workspace_snapshot_missing')
     if not terminal:errors.append('native_terminal_execution_missing')
     if any(key[1]is None for key in expected|completed|observed):errors.append('call_identity_missing')
     return {'complete':not errors,'reasons':sorted(set(errors)),'expected_tool_calls':len(expected),
         'completed_tool_calls':len(completed),'post_tool_snapshots':len(post),
         'terminal_execution_observed':terminal,'scope':'independent-native-Pi-invocation-v1',
+        'native_terminal_execution_observed':native_terminal,
+        'deadline_terminations':terminations,
+        'deadline_cancelled_tool_calls':[{'invocation_id':i,'call_id':c,
+            'producer_id':next(e['producer_id']for e in events if e['event']=='tool_call'and
+                e.get('execution_invocation_id')==i and e.get('call_id')==c)}for i,c in sorted(proven_cancelled)],
         'invocations':len(manifests),'pre_execution_rejections':rejected,
+        'native_diagnostics':diagnostics,
         'observed_tool_call_hooks':len(observed)}

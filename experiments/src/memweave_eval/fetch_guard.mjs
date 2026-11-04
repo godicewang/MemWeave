@@ -128,7 +128,17 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,credenti
     const method=(init?.method ?? input?.method ?? 'GET').toUpperCase();
     if(url.hostname==='api.deepseek.com' && method==='GET' && /\/(?:v1\/)?models\/?$/.test(url.pathname)) {
       if(url.protocol!=='https:')throw Error('Guard credential endpoint rejected');
-      return fetchImpl(input,authorized(input,init));
+      const started=performance.now();record({event:'metadata_request_start'});
+      try{
+        const response=await fetchImpl(input,authorized(input,init));
+        record({event:'metadata_request_end',http_status:response.status,elapsed_ms:performance.now()-started});
+        return response;
+      }catch(error){
+        record({event:'metadata_request_error',error_class:error?.name??'Error',
+          cause_code:typeof error?.cause?.code==='string'&&/^[A-Z0-9_]{1,64}$/.test(error.cause.code)?error.cause.code:null,
+          elapsed_ms:performance.now()-started});
+        throw error;
+      }
     }
     if (url.hostname !== 'api.deepseek.com' || method !== 'POST') return fetchImpl(input,init);
     if(url.protocol!=='https:')throw Error('Guard credential endpoint rejected');

@@ -108,7 +108,7 @@ def protection_checkpoint(gold,expected_files,frames,snapshots,*,boundaries_comp
         raise ValueError('nonempty unique source-bound constraint gold required')
     if not isinstance(expected_files,dict)or not expected_files:
         raise ValueError('nonempty frozen source file hashes required')
-    starts=[r for r in frames if r.get('phase')=='agent_start'];ends=[r for r in frames if r.get('phase')=='agent_end']
+    starts=[r for r in frames if r.get('phase')=='agent_start'];ends=[r for r in frames if r.get('phase')in {'agent_end','execution_terminated'}]
     first=starts[0]if starts else{};baseline=first.get('protected',{});mutable=first.get('mutable',{})
     entries=baseline.get('entries');known_initial=baseline.get('status')=='complete'and isinstance(entries,list)
     actual={e.get('path'):e.get('content_sha256')for e in entries if e.get('kind')=='file'}if known_initial else{}
@@ -151,7 +151,7 @@ def protection_checkpoint(gold,expected_files,frames,snapshots,*,boundaries_comp
 def protection_observations(trial):
     events,locations=case_events(trial);coverage=execution_boundaries(trial,events);frames=[];snapshots=[]
     for order,event in enumerate(events):
-        if event['event']=='workspace_checkpoint':
+        if event['event']in {'workspace_checkpoint','execution_terminated'}:
             trees=event.get('workspace',{}).get('tree_projections',{})
             row=dict(trees,phase=event.get('phase'),order=order)
             if event.get('call_id'):

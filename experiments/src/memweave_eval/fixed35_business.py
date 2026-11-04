@@ -84,7 +84,7 @@ def memory_rate(values):
 
 
 def grade_readonly(trial:Path,contract,*,arm):
-    events,locations=case_events(trial);frames=[e for e in events if e['event']in {'workspace_checkpoint','request_ready'}and 'workspace'in e]
+    events,locations=case_events(trial);frames=[e for e in events if e['event']in {'workspace_checkpoint','request_ready','execution_terminated'}and 'workspace'in e]
     def files(event):
         out={}
         for name,value in event['workspace']['files'].items():

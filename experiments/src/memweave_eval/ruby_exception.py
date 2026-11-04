@@ -94,9 +94,9 @@ def grade_trial(trial,contract,*,arm):
     if file_digest(Path(contract['instruction_path']))!=contract['instruction_sha256']:
         raise ValueError('public exception protocol changed')
     events,locations,coverage=exception_observations(trial)
-    frames=[(i,e)for i,e in enumerate(events)if e.get('event')=='workspace_checkpoint']
+    frames=[(i,e)for i,e in enumerate(events)if e.get('event')in {'workspace_checkpoint','execution_terminated'}]
     starts=[(i,e)for i,e in frames if e.get('phase')=='agent_start']
-    ends=[(i,e)for i,e in frames if e.get('phase')=='agent_end']
+    ends=[(i,e)for i,e in frames if e.get('phase')in {'agent_end','execution_terminated'}]
     def tree(event):return event.get('workspace',{}).get('tree_projections',{}).get('ruby-dependency',{})
     def valid(value):return value.get('complete')is True and isinstance(value.get('projection_sha256'),str)and \
         re.fullmatch('[a-f0-9]{64}',value['projection_sha256'])is not None

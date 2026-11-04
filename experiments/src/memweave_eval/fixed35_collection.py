@@ -59,10 +59,10 @@ def qualified_actor_calls(requests,responses,*,fixture_control=False):
     return result
 
 
-def tool_metrics(events,locations):
+def tool_metrics(events,locations,*,deadline_cancelled=()):
     tools=defaultdict(lambda:{'attempts':0,'successes':0,'errors':0,'unknown_results':0,
         'durations':[],'executions':0,'invalid_duration_records':0,'error_classes':defaultdict(int)})
-    calls={};ends={}
+    calls={};ends={};cancelled={(r['producer_id'],r['call_id'])for r in deadline_cancelled}
     for event in events:
         if event['event']not in {'tool_call','tool_execution_start','tool_execution_end','tool_result'}:continue
         key=event['producer_id'],event.get('call_id')
@@ -76,6 +76,9 @@ def tool_metrics(events,locations):
     for key,name in calls.items():
         end=ends.get(key,{});value=end.get('isError');metric=tools[name];metric['attempts']+=1
         metric['unknown_results'if type(value)is not bool else'errors'if value else'successes']+=1
+        if key in cancelled:
+            if end:raise ValueError('deadline cancellation conflicts with observed native tool end')
+            metric['deadline_cancellations']=metric.get('deadline_cancellations',0)+1
         if value is True:metric['error_classes'][error_class(end.get('result'))]+=1
         if 'durationMs'in end:
             duration=end['durationMs']
@@ -133,13 +136,13 @@ def collect_episode(trial: Path, *, arm, ledger: Path,auxiliary_roots=(),expecte
         expected={i for i,r in account.items()if r.get('episode')in {expected_episode,expected_episode+':judge'} and r.get('arm')==arm}
         if set(requests)!=expected:
             raise ValueError('case ledger contains a request absent from the complete actor/auxiliary evidence set')
-    tools=tool_metrics(events,locations)
     sessions=unique_sessions(trial)
     archives=sorted(trial.rglob('memory.tar.gz'),key=lambda p:p.stat().st_mtime_ns)
     from .fixed35_business import execution_boundaries
     from .stage_execution import stage_execution
     from .state_journal_sources import registry_journals
     boundary=execution_boundaries(trial,events)
+    tools=tool_metrics(events,locations,deadline_cancelled=boundary.get('deadline_cancelled_tool_calls',())if boundary['complete']else())
     stages=stage_execution(trial,events)
     source=registry_journals(events,locations,complete=boundary['complete']and stages['evidence_complete']is True)if arm=='pi-memweave'else {'complete':False}
     state=task_state_metrics(sessions,archives or None,enabled=arm=='pi-memweave',
@@ -154,7 +157,7 @@ def collect_episode(trial: Path, *, arm, ledger: Path,auxiliary_roots=(),expecte
         values={'input_tokens':sum(r['input']for r in known)if full else None,
             'output_tokens':sum(r['output']for r in known)if full else None}
         raw=[responses.get(i,{}).get('usage')for i in ids]
-        values['cache_tokens']=sum(u['prompt_cache_hit_tokens']for u in raw)if raw and all(
+        values['cache_tokens']=0 if not ids else sum(u['prompt_cache_hit_tokens']for u in raw)if all(
             isinstance(u,dict)and type(u.get('prompt_cache_hit_tokens'))is int for u in raw)else None
         return values
     usage=totals(actor_http);all_usage=totals(requests)

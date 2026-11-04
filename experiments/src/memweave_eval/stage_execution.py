@@ -18,6 +18,9 @@ def stage_execution(trial,events):
         expected=names
     starts={e.get('stage_id')for e in events if e['event']=='workspace_checkpoint'and e.get('phase')=='agent_start'}
     ends={e.get('stage_id')for e in events if e['event']=='workspace_checkpoint'and e.get('phase')=='agent_end'}
+    from .execution_capture import scoped_execution_boundaries
+    boundary=scoped_execution_boundaries(trial,events)
+    terminated={p['stage_id']for p in (boundary or{}).get('deadline_terminations',[])}if (boundary or{}).get('complete')else set()
     source=trial/'result.json'
     raw=json.loads(source.read_text())if source.exists()else{}
     steps=raw.get('step_results')or[]
@@ -31,13 +34,13 @@ def stage_execution(trial,events):
     by_name={s.get('step_name',s.get('name')):s for s in steps};rows=[];aborted=bool(raw.get('exception_info'))
     for index,name in enumerate(expected,1):
         identity=str(index);step=by_name.get(name,{})
-        if identity in starts:status='EXECUTED'if identity in ends else'INTERRUPTED_WITH_KNOWN_ERROR'if step.get('exception_info')else'MISSING_TERMINAL_EVIDENCE'
+        if identity in starts:status='EXECUTED'if identity in ends else'INTERRUPTED_WITH_KNOWN_ERROR'if step.get('exception_info')or identity in terminated else'MISSING_TERMINAL_EVIDENCE'
         elif step.get('exception_info'):status='FAILED_BEFORE_PI'
         elif aborted:status='NOT_STARTED_AFTER_ABORT'
         else:status='MISSING_REQUIRED_INVOCATION'
         rows.append({'stage_id':identity,'source_step_name':name,'status':status,
             'exception_type':(step.get('exception_info')or{}).get('exception_type')})
-        if step.get('exception_info'):aborted=True
+        if step.get('exception_info')or identity in terminated:aborted=True
     extra=starts-{str(i)for i in range(1,len(expected)+1)}
     complete=all(r['status']=='EXECUTED'for r in rows)and not extra
     return {'status':'COMPLETE'if complete else'INCOMPLETE_PROTOCOL','expected_names':expected,'stages':rows,

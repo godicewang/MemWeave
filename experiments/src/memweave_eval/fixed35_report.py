@@ -11,7 +11,24 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261104-v46'
+VERSION='fixed35-score-20261104-v51'
+
+
+def deadline_tool_scores(collection):
+    """Keep native receipts intact; explain only independently proved cancellation."""
+    evidence={}
+    for name,metric in collection.get('tools',{}).items():
+        cancelled=metric.get('deadline_cancellations',0)
+        if not cancelled:continue
+        attempts,errors,unknown=(metric[k]for k in ('attempts','errors','unknown_results'))
+        if type(cancelled)is not int or not 0<cancelled<=unknown<=attempts:
+            raise ValueError('invalid deadline cancellation counts')
+        effective_errors=errors+cancelled;remaining_unknown=unknown-cancelled
+        evidence['Q1.tool.'+name+'.error_rate']={'numerator':effective_errors,
+            'denominator':attempts-remaining_unknown,'unknown':remaining_unknown,
+            'value':effective_errors/attempts if not remaining_unknown and attempts else None,
+            'reason':'Actual error receipts plus independently proved frozen-deadline cancellations; native errors and unknown receipts remain separate in raw tools'}
+    return evidence
 
 
 def attach_ruby_exception(row,trial,contract,arm,*,fixture_control):
@@ -486,6 +503,7 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
         write_receipts=receipt_evidence(collection)if arm=='pi-memweave'else{}
         row['state_write_receipt_evidence']=write_receipts
         row['normalization_evidence'].update({identity:write_receipts[tool]for identity,tool in METRICS.items()if tool in write_receipts})
+        row['normalization_evidence'].update(deadline_tool_scores(collection))
         normalized=normalize_trial_scores(row)
         metrics=[]
         assigned={m['metric_id']:m for m in contract['metric_matrix']}
@@ -493,6 +511,10 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             original_id=item['id'];spec=assigned[original_id]
             item['id']=metric_alias(original_id);item['legacy_registry_id']=original_id
             predicate=(row['normalization_evidence'].get(original_id)or{}).get('reason')
+            if original_id.startswith('Q1.tool.')and collection['tools'].get(original_id.split('.')[2],{}).get('deadline_cancellations'):
+                item.update(raw_formula='(actual error receipts + proven frozen-deadline cancellations) / attempted calls; unresolved receipts remain unknown',
+                    meaning='工具执行失败率：错误回执与已证明的截止取消合计；原始回执未知数和取消数分别保留',
+                    definition_scope='v51 operational-failure view, not a fabricated native error receipt')
             if admission['family']=='slop'and original_id=='S3.partial_pass_rate':
                 item.update(legacy_registry_meaning=item['meaning'],case_predicate=predicate,
                     meaning='Slop原始报告部分通过率的检查点宏平均；缺必交文件的阶段按交付失败贡献0，实际执行数单列',

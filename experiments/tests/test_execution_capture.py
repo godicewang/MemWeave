@@ -64,6 +64,62 @@ def test_missing_assistant_callback_is_not_mistaken_for_an_observed_empty_answer
     assert scoped_execution_boundaries(tmp_path,events)['complete']
 
 
+def terminated_capture(root):
+    events=capture(root,'one','1');folder=root/'execution-invocations'
+    output=folder/'one.stdout.jsonl';rows=[json.loads(s)for s in output.read_text().splitlines()]
+    output.write_text('\n'.join(json.dumps(r)for r in rows if r['type']not in {'agent_end','tool_execution_end'})+'\n')
+    path=folder/'one.json';manifest=json.loads(path.read_text());manifest.update(status='EXECUTION_RAISED',
+        error_class='NonZeroAgentExitCodeError',started_at=1793750390,finished_at=1793750401,
+        stdout_sha256=file_digest(output),stdout_bytes=output.stat().st_size);path.write_text(json.dumps(manifest))
+    events=[e for e in events if e.get('phase')not in {'agent_end','tool_end'}]
+    events.append(dict(events[0],event='execution_terminated',phase='execution_terminated',sequence=4,
+        timestamp='2026-11-04T00:00:00Z',owner_pid=25,signal='SIGTERM',scheduled_deadline=1793750400,
+        observation_source='evaluation_signal_microtask_not_native_agent_end',capture_status='CAPTURED',
+        workspace={'files':{},'file_status':{}},registry={'complete':True,'tasks':[]}))
+    (root/'request-trace.jsonl').write_text(json.dumps({'event':'local_deadline_stop','pid':25,'timestamp':1793750400})+'\n')
+    return events
+
+
+def test_verified_deadline_retains_cancellation_instead_of_fabricating_result(tmp_path):
+    events=terminated_capture(tmp_path);result=scoped_execution_boundaries(tmp_path,events)
+    assert result['complete']and result['terminal_execution_observed']
+    assert result['native_terminal_execution_observed']is False
+    assert result['completed_tool_calls']==0 and len(result['deadline_cancelled_tool_calls'])==1
+    assert result['deadline_cancelled_tool_calls'][0]['call_id']=='reused'
+
+
+@pytest.mark.parametrize('mode',['no_guard','wrong_pid','early','failed_capture','wrong_stage',
+    'missing_registry','incomplete_tree','missing_tool_hook','missing_assistant','missing_completed_post'])
+def test_signal_does_not_waive_missing_or_unrelated_evidence(tmp_path,mode):
+    events=terminated_capture(tmp_path);end=events[-1]
+    if mode=='no_guard':(tmp_path/'request-trace.jsonl').unlink()
+    elif mode=='wrong_pid':end['owner_pid']=26
+    elif mode=='early':end['scheduled_deadline']+=60
+    elif mode=='failed_capture':end['capture_status']='FAILED'
+    elif mode=='wrong_stage':end['stage_id']='2'
+    elif mode=='missing_registry':end.pop('registry')
+    elif mode=='incomplete_tree':end['workspace']['tree_projections']={'tree':{'complete':False}}
+    elif mode=='missing_tool_hook':events=[e for e in events if e['event']!='tool_call']
+    elif mode in {'missing_assistant','missing_completed_post'}:
+        path=tmp_path/'execution-invocations/one.json';m=json.loads(path.read_text());out=path.parent/m['stdout_file']
+        row={'type':'message_end','message':{'role':'assistant'}}if mode=='missing_assistant'else{'type':'tool_execution_end','toolCallId':'reused'}
+        out.write_text(out.read_text()+json.dumps(row)+'\n');m.update(stdout_sha256=file_digest(out),stdout_bytes=out.stat().st_size);path.write_text(json.dumps(m))
+    assert not scoped_execution_boundaries(tmp_path,events)['complete']
+
+
+@pytest.mark.parametrize('line,accepted',[
+    ('[MemWeave] MODEL_CAPACITY_UNVERIFIED: provider metadata could not be verified',True),
+    ('[MemWeave] arbitrary output',False),('{"type":"message_end"',False),
+    ('ordinary program text',False)])
+def test_exact_native_fail_closed_diagnostic_is_retained_not_mistaken_for_truncated_json(tmp_path,line,accepted):
+    events=capture(tmp_path,'one','1');folder=tmp_path/'execution-invocations';output=folder/'one.stdout.jsonl'
+    output.write_text(line+'\n'+output.read_text());path=folder/'one.json';manifest=json.loads(path.read_text())
+    manifest.update(stdout_sha256=file_digest(output),stdout_bytes=output.stat().st_size);path.write_text(json.dumps(manifest))
+    result=scoped_execution_boundaries(tmp_path,events)
+    assert result['complete']is accepted
+    if accepted:assert result['native_diagnostics'][0]['code']=='MODEL_CAPACITY_UNVERIFIED'
+
+
 def rejected_capture(root,*,duration=False,wrong_error=False,missing_result=False,error_text=None):
     import gzip
     import hashlib

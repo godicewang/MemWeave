@@ -1,5 +1,7 @@
 # 技术知识库索引
 
+[截止终止证据 v51](experiments/TERMINATION_CAPTURE_2026-11-04.md)说明真实Pi截止取消与缺失回执的区别、独立信号／PID／原始输出校验，以及保留原始工具统计的运行失败口径。
+
 [完成实验空网络回收](experiments/OWNED_NETWORK_CLEANUP_2026-11-04.md)严格按终态trial原件与项目标签回收空网络，修复地址池耗尽；不修改网络配置、不全局prune，活动及未知对象保留。
 
 [Slop原始阶段评分接线](experiments/SLOP_SCORE_WIRING_2026-11-04.md)在正式派发前区分原始报告阶段宏平均、原始严格checkpoint验收与派生适用分；未执行交付失败和缺证据分开，不为reference控制刷满分。

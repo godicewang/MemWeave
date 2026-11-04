@@ -26,6 +26,18 @@ def test_zero_tool_opportunities_require_complete_independent_execution_coverage
     assert point['status']=='not_applicable'and point['score']is None
 
 
+def test_no_actual_requests_have_zero_token_sums_not_missing_provider_cache_fields(tmp_path,monkeypatch):
+    import json
+
+    from memweave_eval.fixed35_collection import collect_episode
+    ledger=tmp_path/'quota.json';ledger.write_text(json.dumps({'requests':{}}))
+    monkeypatch.setattr('memweave_eval.fixed35_business.execution_boundaries',lambda *_:{'complete':True})
+    monkeypatch.setattr('memweave_eval.stage_execution.stage_execution',lambda *_:{'evidence_complete':True,'protocol_execution_complete':None})
+    result=collect_episode(tmp_path,arm='pi-native',ledger=ledger)
+    assert result['usage']=={'input_tokens':0,'output_tokens':0,'cache_tokens':0}
+    assert result['cache']['input_cache_utilization']['status']=='not_applicable'
+
+
 def test_preparation_rejection_is_an_attempt_and_error_but_never_a_zero_ms_execute(tmp_path):
     import gzip
     import hashlib
@@ -50,6 +62,19 @@ def test_preparation_rejection_is_an_attempt_and_error_but_never_a_zero_ms_execu
     assert result['executions']==2 and result['duration_ms']['samples']==2
     assert result['duration_ms']['p50']==7.5
     assert result['error_classes']['schema']==1
+
+
+def test_proved_deadline_is_failure_in_operational_view_but_no_fabricated_native_receipt():
+    from memweave_eval.fixed35_report import deadline_tool_scores
+    from memweave_eval.normalized_scores import normalize_trial_scores
+    raw={'attempts':4,'successes':2,'errors':1,'unknown_results':1,'deadline_cancellations':1}
+    row={'engineering_metrics':{'tools':{'bash':raw}},
+        'normalization_evidence':deadline_tool_scores({'tools':{'bash':raw}})}
+    point=next(m for m in normalize_trial_scores(row)['metrics']if m['id']=='Q1.tool.bash.error_rate')
+    assert point['score']==50 and point['support_u']==0 and point['support_n']==4
+    assert raw['errors']==1 and raw['unknown_results']==1
+    with pytest.raises(ValueError,match='invalid deadline'):
+        deadline_tool_scores({'tools':{'bash':dict(raw,deadline_cancellations=2)}})
 
 
 def test_no_admission_without_frozen_real_preflight_and_contract():

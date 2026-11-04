@@ -7,10 +7,12 @@ import {attachGuard,guardReady} from './guard_bootstrap.mjs';
 import {contentEvidence} from './content_evidence.mjs';
 import {captureTaskRegistry} from './task_registry.mjs';
 import {captureReferenceSources} from './reference_source.ts';
+import {installTerminalCapture} from './terminal_capture.mjs';
 
 export default function observe(pi: any) {
   const trace=process.env.MEMWEAVE_EVAL_TRACE;
   if (!trace) throw Error('Missing evaluation trace');
+  installTerminalCapture();
   attachBoundaries(pi);
   const evidence=contentEvidence();
   pi.on('input',(event:any)=>{
