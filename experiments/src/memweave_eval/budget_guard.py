@@ -41,6 +41,7 @@ def _write(path, value):
 
 
 def initialize(path: Path, maximum: float, deadline: float, *, arm_limits=None):
+    if (path.parent/'STOP_REQUESTED').exists():raise ValueError('quota stop is durable')
     if path.exists() or not (0 < maximum <= 29) or not math.isfinite(deadline):
         raise ValueError("invalid or existing quota")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -58,6 +59,9 @@ def initialize(path: Path, maximum: float, deadline: float, *, arm_limits=None):
 
 
 def change(path: Path, operation: dict, *, now=None) -> dict:
+    owner=path.parent/'WRITER_PLATFORM'
+    if owner.exists()and owner.read_text().strip()!=sys.platform:
+        raise ValueError('quota writer platform mismatch')
     with path.with_suffix(".lock").open("a") as lock:
         lock_deadline = time.monotonic() + 2
         while True:
@@ -75,6 +79,7 @@ def change(path: Path, operation: dict, *, now=None) -> dict:
             raise ValueError("invalid request ID")
         requests = ledger["requests"]
         if operation["action"] == "reserve":
+            if (path.parent/'STOP_REQUESTED').exists():raise ValueError('quota stop is durable')
             output = operation["max_output"]
             if type(output) is not int or not 0 < output <= OUTPUT_LIMIT:
                 raise ValueError("unbounded output")

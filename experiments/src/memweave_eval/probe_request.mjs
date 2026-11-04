@@ -4,7 +4,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import {installGuard} from './fetch_guard.mjs';
 const [sdkPath,agentDir,entry,variant,capText,barrier]=process.argv.slice(2);
-const cap=Number(capText),enabled=variant==='pi-memweave';
+const primary=capText==='default',cap=primary?null:Number(capText),enabled=variant==='pi-memweave';
 const sdk=await import(sdkPath);
 const trace='/logs/agent/mock-request-trace.jsonl';
 const ledger='/logs/agent/mock-quota.json';
@@ -40,12 +40,16 @@ const loader=new sdk.DefaultResourceLoader({cwd:process.cwd(),agentDir,settingsM
 await loader.reload();
 const runtime=await sdk.ModelRuntime.create({authPath:agentDir+'/auth.json',modelsPath:agentDir+'/models.json',
   allowModelNetwork:false,refreshOnCreate:false});
-runtime.registerProvider('deepseek',{baseUrl:'https://api.deepseek.com',apiKey:'fixture-only',api:'openai-completions',
+const nativeModel=runtime.getModel('deepseek','deepseek-flash');
+if(primary) {
+  if(!nativeModel)throw Error('primary_default native model catalog entry missing');
+  runtime.registerProvider('deepseek',{apiKey:'fixture-only'});
+} else runtime.registerProvider('deepseek',{baseUrl:'https://api.deepseek.com',apiKey:'fixture-only',api:'openai-completions',
   models:[{id:'deepseek-flash',name:'DeepSeek V4.1 Flash',reasoning:true,input:['text'],
   contextWindow:1000000,maxTokens:384000,samplingParams:{max_tokens:cap},
   cost:{input:.3,output:1.2,cacheRead:.006,cacheWrite:0}}]});
 const {session,extensionsResult}=await sdk.createAgentSession({agentDir,settingsManager:settings,
-  resourceLoader:loader,modelRuntime:runtime,model:runtime.getModel('deepseek','deepseek-flash'),thinkingLevel:'off'});
+  resourceLoader:loader,modelRuntime:runtime,model:runtime.getModel('deepseek','deepseek-flash'),...(primary?{}:{thinkingLevel:'off'})});
 const errors=[];
 try {
   await session.bindExtensions({onError:e=>errors.push(e.error)});
@@ -68,12 +72,16 @@ try {
   assert.ok(ready.every(e=>e.tool_names.includes('read')&&e.tool_names.includes('bash')));
   assert.equal(ready.at(-1).tool_names.includes('task_create'),enabled);
   assert.equal(Boolean(ready.at(-1).state_blocks.length),enabled);
-  assert.ok(ready.every(e=>e.max_output===cap));
+  if(primary)assert.ok(ready.every(e=>Number.isSafeInteger(e.max_output)&&e.max_output>0&&e.max_output<=nativeModel.maxTokens));
+  else assert.ok(ready.every(e=>e.max_output===cap));
   assert.ok(ready.every(e=>e.prepared_messages_sha256&&Array.isArray(e.prepared_messages)));
   if(enabled){assert.equal(ready.at(-1).expected_version_at_prepare,ready.at(-1).state_blocks[0].version);
     assert.equal(ready.at(-1).expected_task_id,ready.at(-1).state_blocks[0].task_id);}
+  if(primary&&enabled)assert.ok(ready.at(-1).rendered_budget_snapshots.some(b=>b?.recent_turns===200&&b.evict_turns===40&&b.state_event_max_chars===100));
   await fs.writeFile('/logs/agent/mock-request-result.json',JSON.stringify({
     mock:true,real_model_requests:0,transport_attempts:bodies.length,
     rule_block_count:ready.at(-1).rule_block_count,state_blocks:ready.at(-1).state_blocks,
-    max_output:cap,tools:ready.at(-1).tool_names}));
+    max_output:cap,actual_output_limits:ready.map(e=>e.max_output),primary_default:primary,model_catalog_max_output:nativeModel?.maxTokens,
+    thinking_level:session.thinkingLevel,thinking_payloads:ready.map(e=>e.thinking),
+    actual_rendered_budgets:ready.map(e=>e.rendered_budget_snapshots),tools:ready.at(-1).tool_names}));
 } finally {session.dispose();}

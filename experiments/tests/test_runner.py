@@ -215,3 +215,32 @@ def test_runtime_failure_blocks_before_auth_and_cannot_trigger_reserve(tmp_path)
         prepare_runtimes(spec, tmp_path, [tmp_path / "one"], {}, {"jobs": {}}, failed, 1e30)
     assert len(calls) == 1
     assert calls[0]["agents"][0]["kwargs"]["prepare_only"]
+
+
+def test_user_stop_marker_prevents_a_new_job(tmp_path):
+    import time
+    from unittest.mock import patch
+
+    from memweave_eval.runner import execute_harbor
+    spec=Experiment.model_validate(configuration(tmp_path));cfg=build_job_config(spec,tmp_path,'nop',[],control='nop')
+    (tmp_path/'STOP_REQUESTED').touch()
+    with patch('subprocess.Popen',side_effect=AssertionError('must not start')),pytest.raises(TimeoutError):
+        execute_harbor(cfg,tmp_path,{},time.monotonic()+10,20)
+
+
+def test_owned_child_identity_and_terminal_receipt_are_persisted(tmp_path):
+    import os
+    import subprocess
+    import sys
+    import time
+    from unittest.mock import patch
+
+    from memweave_eval.runner import execute_harbor
+    spec=Experiment.model_validate(configuration(tmp_path));cfg=build_job_config(spec,tmp_path,'identity',[],control='nop')
+    original=subprocess.Popen
+    def harmless(command,**kwargs):return original([sys.executable,'-c','import time;time.sleep(.1)'],**kwargs)
+    with patch('subprocess.Popen',side_effect=harmless):
+        assert execute_harbor(cfg,tmp_path,os.environ.copy(),time.monotonic()+10,20)==0
+    start=json.loads((tmp_path/'lifecycle/identity.start.json').read_text());end=json.loads((tmp_path/'lifecycle/identity.end.json').read_text())
+    assert start['controller_pid']==os.getpid()and start['child_pid']>0 and start['child_process_group']==start['child_pid']
+    assert end['identity']==start['identity']and end['status']=='terminal'and end['return_code']==0

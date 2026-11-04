@@ -1,0 +1,73 @@
+{
+  "schema_version": "primary-case-draft.v1",
+  "case_id": "TB-01",
+  "case_version": "1.3.0-draft",
+  "status": "design_review_pending",
+  "task_name": "batched-eval-parity",
+  "source_repository": "https://github.com/harbor-framework/terminal-bench.git",
+  "source_commit": "452bf305c6daa62fc59061d22133a7cbc7c1572e",
+  "source_files": {
+    "instruction.md": "5da93cdf030a3d4a10bcb463fe313c8b317d99568dae74c52ebb493ab63308dc",
+    "task.toml": "f9b7572461c0263731973adc9c03caaa8541144bbd32bd0f3f5f1fa24fa64b81",
+    "tests/test_eval_parity.py": "be20c405ee0c0d8dd88d07a952db25c886300f09a327936e7f95d63c127f0cad",
+    "tests/test.sh": "b6a9b6a83e86e234dac10d6762bed1532b36a54e830b6a4a474e919f2e21cf14",
+    "tests/oracle_eval.py": "22280202dcdd5c21ef03c02bed1afde36e4e46f99c14d3e1bc451600a1e1d82b"
+  },
+  "guidance": {
+    "library_file_id": "libfile_d1da22c8d5d08191a8eb2e2169ec5a44",
+    "library_version": 2,
+    "version": "1.3",
+    "sha256": "a2abf0ad5c7234dc08068f8040479771424e50b5cdf91509fedf150e8ae62ea1",
+    "read_complete_at": "2026-11-04T16:40:43.270759+00:00"
+  },
+  "protocol": "primary_default.v1",
+  "actor_seconds": 28800,
+  "verifier_seconds": 900,
+  "actor_resources": {
+    "cpus": 2,
+    "memory_mb": 4096,
+    "storage_mb": 10240
+  },
+  "verifier_resources": {
+    "cpus": 1,
+    "memory_mb": 4096,
+    "storage_mb": 10240
+  },
+  "same_task_concurrent_arms": [
+    "pi-native",
+    "pi-memweave"
+  ],
+  "budget_authorization": null,
+  "scoring_review": "pending; see TB01_PRIMARY_DEFAULT_DESIGN.md",
+  "not_a_model_result": true,
+  "initial_checkout": {
+    "commit": "b7c2f941393d1981238ec066f062ae5cce000ea4",
+    "preexisting_patch_sha256": "510edd7987475530cc264dccefa611d1ae0cb89442a15868882e547be6d447ec",
+    "preexisting_changes_preserved": true
+  },
+  "blocking": [
+    "budget_and_window_not_confirmed",
+    "relative_mappings_weights_and_business_behavior_scope_not_signed_off",
+    "primary_global_quota_and_stop_gate_not_yet_accepted"
+  ],
+  "scoring_proposal": "scoring-proposal.json",
+  "pricing_precheck": {
+    "checked_at": "2026-11-04T17:34:59.741459+00:00",
+    "source": "https://api-docs.deepseek.com/quick_start/pricing/",
+    "model": "deepseek-flash",
+    "published_model_version": "DeepSeek-V4.1-Flash-1017",
+    "currency": "USD",
+    "per_million_tokens_peak": {
+      "input_miss": 0.3,
+      "input_cache_hit": 0.006,
+      "all_completion": 1.2
+    },
+    "pre_admission_cache_assumption": "all input cache miss",
+    "provider_max_context": 1000000,
+    "provider_max_output": 384000,
+    "conservative_max_request_usd": 0.7608,
+    "server_search_fetch_enabled": false,
+    "account_bill_verified": false,
+    "new_budget_still_required": true
+  }
+}

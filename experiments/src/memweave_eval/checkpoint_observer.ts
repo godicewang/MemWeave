@@ -43,7 +43,7 @@ export default function observe(pi: any) {
   pi.on('message_end',(event: any)=>{
     if(event.message?.role!=='assistant' || typeof event.message.usage!=='object')return;
     returns++;
-    if(!sent && returns>=after) {
+    if(after>0 && !sent && returns>=after) {
       sent=true;
       fs.appendFileSync(trace!,JSON.stringify({event:'case_input',case_id:'marathon-progress-detour',
         after_assistant_returns:returns,timestamp:new Date().toISOString(),

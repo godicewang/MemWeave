@@ -37,7 +37,7 @@ class Model(StrictModel):
     id: Annotated[str, Field(pattern=r"^[A-Za-z0-9._-]+$")]
     api: Literal["openai-completions"] = "openai-completions"
     auth_profile: Literal["memweave-dev"] = "memweave-dev"
-    thinking: Literal["off", "minimal", "low", "medium", "high", "xhigh", "max"]
+    thinking: Literal["off", "minimal", "low", "medium", "high", "xhigh", "max"] | None = None
 
 
 class Variant(StrictModel):
@@ -72,13 +72,15 @@ class Limits(StrictModel):
 
 
 class Evaluation(StrictModel):
+    primary_default: StrictBool = False
+    primary_contract: Path | None = None
     gold: Path
     deadline_utc: str
     admission_budget_usd: Annotated[float, Field(strict=True, gt=0, le=29)]
     output_tokens: Annotated[int, Field(strict=True, gt=0, le=384000)] = 16384
     budget_id: Identifier
     arm_budget_usd: Annotated[float, Field(strict=True, gt=0)] = 12.0
-    progress_after_returns: Annotated[int, Field(strict=True, gt=0)] = 80
+    progress_after_returns: Annotated[int, Field(strict=True, ge=0)] = 80
     episode_budget_usd: Annotated[float,Field(strict=True,gt=0)] | None = None
     frozen_preparation: Path | None = None
     quota_backend: Literal['python','node'] = 'python'
@@ -103,6 +105,8 @@ class Evaluation(StrictModel):
             raise ValueError('registered budget arms exceed shared admission budget')
         if self.resources and (set(self.resources)-{'cpus','memory_mb','storage_mb'}):
             raise ValueError('unknown resource adaptation')
+        if self.primary_default and (self.progress_after_returns!=0 or self.output_tokens!=384000 or self.resources or self.agent_timeouts or self.sealed_tasks):
+            raise ValueError('primary_default forbids evaluation steering, sampling/time/resource overrides or sealed adapters; output_tokens384000 is admission ceiling only')
         return self
 
 
@@ -139,6 +143,8 @@ class Experiment(StrictModel):
         self.root = outside_repository(self.root)
         if self.evaluation and self.evaluation.admission_budget_usd >= self.limits.max_cost_usd:
             raise ValueError('admission limit must leave a safety reserve')
+        if self.evaluation and self.evaluation.primary_default and self.model.thinking is not None:
+            raise ValueError('primary_default requires Pi thinking default without evaluator override')
         return self
 
 
@@ -228,10 +234,13 @@ def load_experiment(path: Path) -> tuple[Experiment, Suite, Subset]:
     spec.subject.package = (path.parent / spec.subject.package.expanduser()).resolve()
     if spec.evaluation:
         spec.evaluation.gold = (path.parent / spec.evaluation.gold).resolve()
+        if spec.evaluation.primary_contract:
+            spec.evaluation.primary_contract=(path.parent/spec.evaluation.primary_contract).resolve()
         if spec.evaluation.frozen_preparation:
             spec.evaluation.frozen_preparation=(path.parent/spec.evaluation.frozen_preparation).resolve()
     suite = Suite.model_validate(load_yaml(spec.suite))
     subset = Subset.model_validate(load_yaml(spec.subset))
+    validate_primary_inputs(spec,suite,subset)
     if suite.protocol == "swe-pro-v2" and spec.execution.platform != "linux/amd64":
         raise ValueError("Pro V2 requires its official linux/amd64 images")
     if suite.protocol == 'swe-marathon' and (
@@ -242,3 +251,49 @@ def load_experiment(path: Path) -> tuple[Experiment, Suite, Subset]:
             and subset.count*len(spec.variants)*spec.evaluation.arm_budget_usd>spec.evaluation.admission_budget_usd):
         raise ValueError('all task-arm allocations must fit the new shared budget')
     return spec, suite, subset
+
+
+def validate_primary_inputs(spec,suite,subset):
+    if not spec.evaluation or not spec.evaluation.primary_default:return
+    import json
+
+    from .primary_report import validate_contract
+
+    if not spec.evaluation.primary_contract:
+        raise ValueError('primary_default requires an approved frozen primary_contract before running')
+    contract=validate_contract(json.loads(spec.evaluation.primary_contract.read_text()))
+    if spec.model.id!='deepseek-flash':raise ValueError('primary authority pricing and endpoint are frozen for deepseek-flash')
+    price=contract.get('pricing',{})
+    if (price.get('currency')!='USD' or price.get('requested_model_id')!='deepseek-flash'
+            or price.get('per_million_tokens')!={'input':.3,'cache_read':.006,'output':1.2}):
+        raise ValueError('primary contract price must match trusted authority peak USD tariff')
+    if contract.get('source_commit')!=suite.revision:
+        raise ValueError('primary source revision and scoring contract disagree')
+    if subset.task_ids!=[contract.get('task_name')]or subset.count!=1 or spec.execution.repetitions!=1:
+        raise ValueError('primary_default admits exactly the reviewed first-case pair')
+    if not spec.execution.paired_concurrent or spec.execution.concurrency!=2:
+        raise ValueError('primary_default requires concurrent native/plugin arms')
+
+
+def require_primary_authorization(spec,*,now=None):
+    """A reviewed score design does not itself authorize new model expenditure."""
+    if not spec.evaluation or not spec.evaluation.primary_default:return
+    import json
+    import time
+    from datetime import datetime
+
+    c=json.loads(spec.evaluation.primary_contract.read_text());a=c.get('budget_authorization')
+    if c.get('formal_run_allowed')is not True or not isinstance(a,dict):
+        raise ValueError('primary paid run blocked: new explicit budget and time authorization required')
+    try:
+        dates=[datetime.fromisoformat(a[k])for k in ('start_utc','deadline_utc')]
+        if any(d.tzinfo is None for d in dates):raise ValueError('timezone')
+        start,end=(d.timestamp()for d in dates)
+        deadline=datetime.fromisoformat(spec.evaluation.deadline_utc).timestamp()
+    except (ValueError,KeyError,TypeError):raise ValueError('explicit authorized UTC window required')from None
+    maximum=a.get('maximum_usd')
+    if (type(maximum)not in(int,float)or not 0<maximum< float('inf')or not a.get('evidence_reference')
+            or end<=start or not start<=(time.time()if now is None else now)<end
+            or deadline>end or spec.evaluation.admission_budget_usd>maximum
+            or spec.limits.max_cost_usd>maximum):
+        raise ValueError('primary config exceeds or lacks the recorded budget/window authorization')

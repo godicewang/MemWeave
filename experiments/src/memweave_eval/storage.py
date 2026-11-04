@@ -55,9 +55,11 @@ def evidence_index(root: Path) -> list[dict]:
                   for p in (root / name).rglob("*")]
     if (root / "admission.json").exists():
         candidates.append(root / "admission.json")
-    for name in ("runtime-assets.json", "runtime-assets.lock.json", "case-gold.json", "control/quota.json"):
+    for name in ("runtime-assets.json", "runtime-assets.lock.json", "case-gold.json", "primary-case.json", "control/quota.json"):
         if (root / name).exists():
             candidates.append(root / name)
+    for name in ('quota.final.json','transport-terminal.json','transport-audit.jsonl'):
+        if (root/'trusted'/name).is_file():candidates.append(root/'trusted'/name)
     for p in sorted(candidates):
         if p.is_symlink():
             raise ValueError("evidence contains a symlink")

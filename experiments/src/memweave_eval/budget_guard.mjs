@@ -36,8 +36,11 @@ export function change(input,operation,now=Date.now()/1000) {
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href) {
   try {
     if(process.argv[3]!=='--lock-held')throw Error('flock required');
-    const target=process.argv[2], temporary=path.join(path.dirname(target),'.quota-'+randomUUID());
-    const result=change(JSON.parse(fs.readFileSync(target,'utf8')),JSON.parse(fs.readFileSync(0,'utf8')));
+    const target=process.argv[2], directory=path.dirname(target),temporary=path.join(directory,'.quota-'+randomUUID());
+    const operation=JSON.parse(fs.readFileSync(0,'utf8')),owner=path.join(directory,'WRITER_PLATFORM');
+    if(fs.existsSync(owner)&&fs.readFileSync(owner,'utf8').trim()!==process.platform)throw Error('Writer platform mismatch');
+    if(operation.action==='reserve'&&fs.existsSync(path.join(directory,'STOP_REQUESTED')))throw Error('Durable stop');
+    const result=change(JSON.parse(fs.readFileSync(target,'utf8')),operation);
     const fd=fs.openSync(temporary,'wx',0o600);
     try{fs.writeFileSync(fd,JSON.stringify(result.ledger));fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
     fs.renameSync(temporary,target);

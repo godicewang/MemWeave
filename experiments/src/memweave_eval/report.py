@@ -343,10 +343,22 @@ def generate_report(root: Path) -> dict:
     for row in rows:
         row['_normalization_source'] = {'file': str(root/'evidence-index.json'),
             'sha256': file_digest(root/'evidence-index.json'), 'score_source': row.get('score_source')}
-    summary['normalized_scores'] = attach_normalized_scores(rows)
+    primary=bool((lock.get('config',{}).get('evaluation')or{}).get('primary_default'))
+    if primary:
+        from .primary_report import score_run
+        summary['primary_scores']=score_run(root,lock,rows)
+        summary['is_model_performance_result']=lock.get('experiment_kind')=='primary_default_paired'
+    else:
+        summary['normalized_scores'] = attach_normalized_scores(rows)
     summary["complete"] = (
         not invalid and not state.get("stop_reason") and all(r["success"] is not None for r in rows)
     )
+    if primary:
+        scores=summary['primary_scores']
+        summary['primary_collection_accepted']=scores['engineering']['total']['status']=='observed'and all(
+            scores['behavior'][a]['total']['status']=='observed'and not scores['raw_arms'][a].get('parse_issues')
+            and scores['raw_arms'][a].get('transport_integrity',{}).get('status')=='observed'for a in ('pi-native','pi-memweave'))
+        summary['complete']=summary['complete']and summary['primary_collection_accepted']
     summary["suite"] = lock["suite"]["id"]
     summary["timing"] = timing_summary(root, state)
     output = root / "reports"
@@ -369,7 +381,7 @@ def generate_report(root: Path) -> dict:
             )
         (output / filename).write_text(stream.getvalue())
     lines = [
-        f"# {lock['suite']['id']} 实际重跑对照",
+        f"# {lock['suite']['id']} "+('免费端到端验收（非模型成绩）'if lock.get('experiment_kind','').startswith('free_')else'实际重跑对照'),
         "",
         f"运行：{lock['run_id']}",
         "",
@@ -410,7 +422,11 @@ def generate_report(root: Path) -> dict:
                 lines.append(f"| {case['case_id']} | {case['value']} | {case['status']} | {case.get('reason') or ''} |")
             lines+=['','记忆项仅在实际证据驱逐后判定；State 交付、引用保全和后续业务成功均不单独证明因果采用。']
     lines += finance_markdown(rows,summary['finance'])
-    write_score_artifacts(output, rows, summary['normalized_scores'])
-    lines += normalization_markdown(rows, summary['normalized_scores'])
+    if primary:
+        from .primary_report import write_primary_artifacts
+        lines+=write_primary_artifacts(output,summary['primary_scores'])
+    else:
+        write_score_artifacts(output, rows, summary['normalized_scores'])
+        lines += normalization_markdown(rows, summary['normalized_scores'])
     (output / "report.md").write_text("\n".join(lines))
     return summary

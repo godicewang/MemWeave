@@ -21,7 +21,7 @@ import yaml
 from .images import TaskPreparationError, prepare_task, verify_prepared_task
 from .report import generate_report
 from .runtime_cache import create_plan, snapshot
-from .spec import REPOSITORY, Experiment, Subset, Suite
+from .spec import REPOSITORY, Experiment, Subset, Suite, validate_primary_inputs
 from .storage import atomic_json, check_private_evidence, evidence_index, file_digest
 from .suites import resolve_suite, select_tasks, task_digest
 
@@ -127,6 +127,7 @@ def build_job_config(
     source_job: Path | None = None,
     runtime_plan: Path | None = None,
     prepare_only: bool = False,
+    broker_client: Path | None = None,
 ) -> dict:
     if control:
         agent = {"name": control}
@@ -149,10 +150,12 @@ def build_job_config(
                 "package_sha256": spec.subject.sha256,
                 "auth_path": "" if prepare_only else str(auth_path),
                 "protocol": protocol,
-                "thinking": spec.model.thinking,
+                **({"thinking": spec.model.thinking}if spec.model.thinking is not None else{}),
                 "runtime_plan": str(runtime_plan) if runtime_plan else None,
                 "runtime_plan_sha256": file_digest(runtime_plan) if runtime_plan else None,
                 "prepare_only": prepare_only,
+                **({'evaluation_broker_client':str(broker_client),'evaluation_broker_client_sha256':file_digest(broker_client)}if broker_client else{}),
+                **({'evaluation_primary_default':spec.evaluation.primary_default}if getattr(spec,'evaluation',None)else{}),
                 **({'evaluation_deadline': datetime.fromisoformat(
                     spec.evaluation.deadline_utc).timestamp()-spec.evaluation.finalization_reserve_seconds,
                     'evaluation_output_tokens':spec.evaluation.output_tokens,
@@ -248,11 +251,16 @@ def observed_cost(root: Path) -> float:
     return total
 
 
-def execute_harbor(config: dict, root: Path, env: dict, deadline: float, budget: float) -> int:
+def execute_harbor(config: dict, root: Path, env: dict, deadline: float, budget: float, *, budget_stop_file: Path | None = None) -> int:
+    def close_admission():
+        if budget_stop_file is not None:
+            budget_stop_file.parent.mkdir(parents=True,exist_ok=True)
+            budget_stop_file.touch()
+    if (root/'STOP_REQUESTED').exists():close_admission()
     from harbor.models.job.config import JobConfig
 
     JobConfig.model_validate(config)  # Verify against the installed fixed Harbor API.
-    if time.monotonic() >= deadline or observed_cost(root) >= budget:
+    if (root/"STOP_REQUESTED").exists()or time.monotonic() >= deadline or observed_cost(root) >= budget:
         raise TimeoutError("experiment stop before starting the next Job")
     config_path = root / "configs" / f"{config['job_name']}.json"
     atomic_json(config_path, config, immutable=True)
@@ -267,8 +275,18 @@ def execute_harbor(config: dict, root: Path, env: dict, deadline: float, budget:
             env=env,
             start_new_session=True,
         )
+        identity=uuid.uuid4().hex
+        lifecycle=root/"lifecycle"
+        record={"identity":identity,"job_name":config['job_name'],"config_sha256":file_digest(config_path),
+            "controller_pid":os.getpid(),"child_pid":process.pid,"child_process_group":process.pid,
+            "started_at":datetime.now(UTC).isoformat(),"stop_file":str(root/"STOP_REQUESTED")}
         try:
+            atomic_json(lifecycle/(config['job_name']+".start.json"),record,immutable=True)
             while process.poll() is None:
+                atomic_json(lifecycle/(config['job_name']+".lease.json"),dict(record,heartbeat_at=datetime.now(UTC).isoformat()))
+                if (root/"STOP_REQUESTED").exists():
+                    close_admission()
+                    raise TimeoutError("explicit user stop requested")
                 if time.monotonic() >= deadline:
                     raise TimeoutError("experiment elapsed-time stop")
                 if observed_cost(root) >= budget:
@@ -276,6 +294,7 @@ def execute_harbor(config: dict, root: Path, env: dict, deadline: float, budget:
                 time.sleep(0.5)
             return process.returncode
         except BaseException:
+            close_admission()
             os.killpg(process.pid, signal.SIGINT)
             try:
                 process.wait(timeout=60)
@@ -287,6 +306,11 @@ def execute_harbor(config: dict, root: Path, env: dict, deadline: float, budget:
                     os.killpg(process.pid, signal.SIGKILL)
                     process.wait()
             raise
+        finally:
+            atomic_json(lifecycle/(config['job_name']+".end.json"),{
+                "identity":identity,"status":"terminal"if process.returncode is not None else"stop_unconfirmed","return_code":process.returncode,
+                "finished_at":datetime.now(UTC).isoformat(),
+                "explicit_stop":(root/"STOP_REQUESTED").exists()},immutable=True)
 
 
 def docker_preflight(spec: Experiment, selected: list[dict], preparations=None) -> dict:
@@ -415,6 +439,9 @@ def admit_tb_tasks(spec, subset, candidates, task_root, root, state, env, deadli
                                       resources=spec.evaluation.resources if spec.evaluation else None,
                                       sealed=bool(spec.evaluation and task_id in spec.evaluation.sealed_tasks),
                                       agent_timeout=spec.evaluation.agent_timeouts.get(task_id) if spec.evaluation else None)
+                if spec.evaluation and spec.evaluation.primary_default:
+                    from .tb01_case import secure_prepared_task
+                    record=secure_prepared_task(root,record,env,deadline)
             except TaskPreparationError as exc:
                 attempt.update(status="preparation_failed", reason=str(exc))
                 atomic_json(root / "admission.json", admission)
@@ -464,6 +491,12 @@ def admit_tb_tasks(spec, subset, candidates, task_root, root, state, env, deadli
             attempt["control_exit_codes"] = control_codes
             failed = [control for control, expected in ((c,expectation(task_id,c)) for c in ("oracle","nop"))
                       if not control_ok(root / "harbor" / controls[control], task_id, expected)]
+            if spec.evaluation and spec.evaluation.primary_default:
+                from .tb01_case import control_evidence_ok
+                for control in ('oracle','nop'):
+                    item=trial_results(root/'harbor'/controls[control]).get(task_id)
+                    if (not item or not control_evidence_ok(item[0].parent,control=='oracle'))and control not in failed:
+                        failed.append(control)
             if failed:
                 attempt.update(status="control_failed", reason="official " + ", ".join(failed))
             else:
@@ -476,7 +509,7 @@ def admit_tb_tasks(spec, subset, candidates, task_root, root, state, env, deadli
     return admitted, paths, preparations
 
 
-def prepare_runtimes(spec, root, paths, images, state, execute, deadline) -> dict:
+def prepare_runtimes(spec, root, paths, images, state, execute, deadline, *, broker_clients=None) -> dict:
     """All task/variant software checks precede any credential access or inference."""
     plan = create_plan(spec, images)
     plan_path = root / "runtime-assets.json"
@@ -486,7 +519,7 @@ def prepare_runtimes(spec, root, paths, images, state, execute, deadline) -> dic
         state["jobs"][name] = {"path": "harbor/" + name, "purpose": "software_preflight"}
         atomic_json(root / "run.json", state)
         cfg = build_job_config(spec, root, name, paths, variant=variant.id,
-                               runtime_plan=plan_path, prepare_only=True)
+                               runtime_plan=plan_path, prepare_only=True,broker_client=(broker_clients or{}).get(variant.id))
         cfg["agents"][0]["override_setup_timeout_sec"] = min(
             3600, max(1, deadline - time.monotonic()))
         execute(cfg)
@@ -503,7 +536,7 @@ def prepare_runtimes(spec, root, paths, images, state, execute, deadline) -> dic
         for variant in spec.variants:
             name='runtime-concurrent-'+variant.id
             state['jobs'][name]={'path':'harbor/'+name,'purpose':'software_preflight'}
-            cfg=build_job_config(spec,root,name,paths,variant=variant.id,runtime_plan=plan_path,prepare_only=True)
+            cfg=build_job_config(spec,root,name,paths,variant=variant.id,runtime_plan=plan_path,prepare_only=True,broker_client=(broker_clients or{}).get(variant.id))
             cfg['n_concurrent_trials']=min(len(paths),spec.execution.concurrency//2)
             configs.append(cfg)
         atomic_json(root/'run.json',state)
@@ -519,7 +552,23 @@ def prepare_runtimes(spec, root, paths, images, state, execute, deadline) -> dic
     return record
 
 
+def require_primary_time(paths,model_deadline,global_deadline,*,now=None):
+    """Refuse a paid launch that would silently shorten the original task budget."""
+    import tomllib
+
+    now=time.time()if now is None else now
+    configs=[tomllib.loads((p/'task.toml').read_text())for p in paths]
+    actor=max(c['agent']['timeout_sec']for c in configs)
+    verifier=max(c['verifier']['timeout_sec']for c in configs)
+    # Setup/canary precede the full actor timeout; these are admission margins.
+    if now+600+actor>model_deadline or model_deadline+verifier+180>global_deadline:
+        raise ValueError('insufficient authorized time for original primary actor, verifier and finalization budgets')
+
+
 def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
+    validate_primary_inputs(spec,suite,subset)
+    from .spec import require_primary_authorization
+    require_primary_authorization(spec)
     if importlib.metadata.version("harbor") != spec.runtime.harbor_version:
         raise ValueError("installed Harbor version does not match experiment")
     package = verify_package(spec.subject.package, spec.subject.sha256, spec.subject.commit)
@@ -562,6 +611,8 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
         atomic_json(root / "run.json", state)
         lock_written = False
         credential = None
+        paid_broker = None
+        active_quota_stop = None
         try:
             upstream = resolve_suite(suite, spec.root / "cache")
             selection = select_tasks(upstream / suite.tasks_dir, suite.id, subset.model_dump())
@@ -583,12 +634,14 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
             platform_overlay = root / "platform.yaml"
             platform_overlay.write_text(
                 yaml.safe_dump({"services": {"main": {"platform": spec.execution.platform,
-                    'labels':{'org.memweave.eval.run':run_id}}}})
+                    'labels':{'org.memweave.eval.run':run_id},
+                    **({'extra_hosts':{'memweave-broker.internal':'host-gateway'}}if spec.evaluation and spec.evaluation.primary_default else{})}}})
             )
 
             def execute(cfg, *, required=True):
                 cfg["environment"]["extra_docker_compose"] = [str(platform_overlay)]
-                code = execute_harbor(cfg, root, env, deadline, spec.limits.max_cost_usd)
+                code = execute_harbor(cfg, root, env, deadline, spec.limits.max_cost_usd,
+                    budget_stop_file=active_quota_stop)
                 if code and required:
                     raise RuntimeError(
                         f"Harbor Job {cfg['job_name']} exited {code}; see private console log"
@@ -621,7 +674,14 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                         raise ValueError(
                             f"official empty control failed: {task_id}; review before admitting")
             images = image_snapshot(paths)
-            runtimes = prepare_runtimes(spec, root, paths, images, state, execute, deadline)
+            if spec.evaluation and spec.evaluation.primary_default:
+                from .primary_runtime import free_authority
+                with free_authority(spec,root,images,env)as clients:
+                    active_quota_stop=root/'private/free-control/STOP_REQUESTED'
+                    runtimes=prepare_runtimes(spec,root,paths,images,state,execute,deadline,broker_clients=clients)
+                active_quota_stop=None
+            else:
+                runtimes = prepare_runtimes(spec, root, paths, images, state, execute, deadline)
             if image_snapshot(paths) != images:
                 raise ValueError("task image changed during runtime preflight")
             if any(file_digest(REPOSITORY / path) != digest for path, digest in code_files.items()):
@@ -639,6 +699,8 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                 control = spec.root/'budgets'/spec.evaluation.budget_id
                 control.mkdir(parents=True,exist_ok=True,mode=0o700)
                 quota_deadline=datetime.fromisoformat(spec.evaluation.deadline_utc).timestamp()-spec.evaluation.finalization_reserve_seconds
+                if spec.evaluation.primary_default:
+                    require_primary_time(paths,quota_deadline,datetime.fromisoformat(spec.evaluation.deadline_utc).timestamp())
                 arms=[f"{t['task_id']}:{v.id}"for t in selected for v in spec.variants] if spec.evaluation.per_task_arm_caps else [v.id for v in spec.variants]
                 arm_limits=spec.evaluation.budget_arm_limits or {arm:spec.evaluation.arm_budget_usd for arm in arms}
                 if any(arm_limits.get(arm)!=spec.evaluation.arm_budget_usd for arm in arms):
@@ -653,20 +715,33 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                     if (previous['maximum_usd']!=spec.evaluation.admission_budget_usd
                             or previous['deadline']!=quota_deadline or previous.get('arm_limits')!=arm_limits):
                         raise ValueError('shared task budget settings cannot change or reset')
+                if spec.evaluation.primary_default:
+                    owner=control/'WRITER_PLATFORM'
+                    if not owner.exists():
+                        with owner.open('x')as stream:stream.write('linux\n')
+                    if owner.read_text().strip()!='linux' or (control/'STOP_REQUESTED').exists():
+                        raise ValueError('primary quota must retain Linux VM writer ownership and durable stop')
+                    from .primary_runtime import start_paid_authority
+                    credential=json.loads(auth_file().read_text())['deepseek']['key'].encode()
+                    paid_broker=start_paid_authority(spec,root,control,images,env,credential.decode())
+                    active_quota_stop=control/'STOP_REQUESTED'
                 platform_overlay.write_text(yaml.safe_dump({'services':{'main':{
                     'platform':spec.execution.platform,'labels':{'org.memweave.eval.run':run_id},
-                    'volumes':[str(control.resolve())+':/opt/memweave-eval-control:rw']}}}))
+                    **({'extra_hosts':{'memweave-broker.internal':'host-gateway'}}if spec.evaluation.primary_default else
+                       {'volumes':[str(control.resolve())+':/opt/memweave-eval-control:rw']})}}}))
                 if spec.evaluation.canary_preflight:
                     configs=[]
                     for variant in spec.variants:
                         name='canary-'+variant.id
                         state['jobs'][name]={'path':'harbor/'+name,'purpose':'paid_canary'}
                         cfg=build_job_config(spec,root,name,paths,variant=variant.id,auth_path=auth_file(),
-                            protocol=suite.protocol,runtime_plan=root/'runtime-assets.json')
+                            protocol=suite.protocol,runtime_plan=root/'runtime-assets.json',
+                            broker_client=paid_broker.clients[(run_id+':canary',(paths[0].name+':'+variant.id)if spec.evaluation.per_task_arm_caps else variant.id)]if paid_broker else None)
                         cfg['n_concurrent_trials']=min(len(paths),spec.execution.concurrency//2)
                         cfg['agents'][0]['override_timeout_sec']=120
                         cfg['agents'][0]['kwargs'].update(evaluation_canary=True,evaluation_request_limit=1,
-                            evaluation_output_tokens=128,evaluation_run_id=run_id+':canary')
+                            evaluation_output_tokens=spec.evaluation.output_tokens if spec.evaluation.primary_default else 128,
+                            evaluation_run_id=run_id+':canary')
                         configs.append(cfg)
                     atomic_json(root/'run.json',state)
                     with ThreadPoolExecutor(max_workers=2)as pool:list(pool.map(execute,configs))
@@ -684,25 +759,37 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                             ids={e['request_id']for e in attempts}
                             if len(ids)!=1 or ids!={e['request_id']for e in ready} or ids!={e['request_id']for e in settled} or any(ledger['requests'].get(i,{}).get('status')!='settled'for i in ids):
                                 raise ValueError('paid canary guard/ledger mismatch')
-                    atomic_json(root/'canary-gate.json',{'passed':True,'requests':len(paths)*len(spec.variants),'output_tokens':128,
+                    atomic_json(root/'canary-gate.json',{'passed':True,'requests':len(paths)*len(spec.variants),
+                        'output_admission_ceiling':spec.evaluation.output_tokens if spec.evaluation.primary_default else 128,
+                        'primary_default':spec.evaluation.primary_default,
                         'ledger_sha256_after_canaries':file_digest(control/'quota.json')},immutable=True)
                 if spec.evaluation.agent_timeouts and time.time()+max(spec.evaluation.agent_timeouts.values())+180>quota_deadline:
                     raise ValueError('too late to provide frozen identical task timeouts before model cutoff')
+                if spec.evaluation.primary_default:
+                    require_primary_time(paths,quota_deadline,datetime.fromisoformat(spec.evaluation.deadline_utc).timestamp())
                 ledger=json.loads((control/'quota.json').read_text())
                 remaining=min(spec.evaluation.arm_budget_usd-sum(r['charge_usd'] for r in ledger['requests'].values()
                     if r.get('arm')==arm) for arm in arms)
-                if remaining<=.32:
+                if remaining<=(.7608 if spec.evaluation.primary_default else .32):
                     raise ValueError('insufficient equal remaining arm budget')
                 spec=spec.model_copy(update={'evaluation':spec.evaluation.model_copy(update={
                     'episode_budget_usd':min(remaining,spec.evaluation.episode_budget_usd or remaining)})})
+                if paid_broker:atomic_json(control/'phase.json',{'episode':run_id,'episode_budget':spec.evaluation.episode_budget_usd})
                 atomic_json(root/'case-gold.json',json.loads(spec.evaluation.gold.read_text()),immutable=True)
+                if spec.evaluation.primary_default:
+                    from .primary_report import validate_contract
+                    if not spec.evaluation.primary_contract:
+                        raise ValueError('primary_default requires its approved case contract')
+                    atomic_json(root/'primary-case.json',validate_contract(json.loads(spec.evaluation.primary_contract.read_text())),immutable=True)
                 platform_overlay.write_text(yaml.safe_dump({'services':{'main':{
                     'platform':spec.execution.platform,
                     'labels':{'org.memweave.eval.run':run_id},
-                    'volumes':[str(control.resolve())+':/opt/memweave-eval-control:rw'],
+                    **({'extra_hosts':{'memweave-broker.internal':'host-gateway'}}if spec.evaluation.primary_default else
+                       {'volumes':[str(control.resolve())+':/opt/memweave-eval-control:rw']}),
                 }}}))
             lock = {
                 "schema_version": 1,
+                "experiment_kind":"primary_default_paired"if spec.evaluation and spec.evaluation.primary_default else"legacy_paired",
                 "experiment_id": spec.experiment_id,
                 "run_id": run_id,
                 "config": spec.model_dump(mode="json"),
@@ -737,7 +824,10 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                 else {},
                 "plan": plan,
                 "evaluation_gold_sha256": file_digest(root/'case-gold.json') if spec.evaluation else None,
+                "primary_case_sha256":file_digest(root/'primary-case.json')if spec.evaluation and spec.evaluation.primary_default else None,
             }
+            if spec.evaluation and spec.evaluation.primary_default:
+                lock['pricing']=json.loads((root/'primary-case.json').read_text())['pricing']
             atomic_json(root / "experiment.lock.json", lock, immutable=True)
             lock_written = True
             env = tool_environment(spec, upstream, inference=True)
@@ -770,7 +860,7 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                 order = spec.variants if rep % 2 else list(reversed(spec.variants))
                 if spec.execution.paired_concurrent:
                     parallel_tasks=min(len(paths),docker['effective_concurrency']//2)
-                    if suite.protocol != 'swe-marathon' or parallel_tasks<1:
+                    if (suite.protocol != 'swe-marathon' and not(spec.evaluation and spec.evaluation.primary_default))or parallel_tasks<1:
                         raise ValueError('concurrent Marathon pair requires capacity for both official instances')
                     verify_inputs()
                     configs=[]
@@ -778,7 +868,8 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                         name=f'{variant.id}-r{rep}'
                         state['jobs'][name]={'path':f'harbor/{name}','purpose':'solve'}
                         cfg=build_job_config(spec,root,name,paths,variant=variant.id,
-                            auth_path=auth_file(),protocol=suite.protocol,runtime_plan=root/'runtime-assets.json')
+                            auth_path=auth_file(),protocol=suite.protocol,runtime_plan=root/'runtime-assets.json',
+                            broker_client=paid_broker.clients[(run_id,(paths[0].name+':'+variant.id)if spec.evaluation.per_task_arm_caps else variant.id)]if paid_broker else None)
                         cfg['n_concurrent_trials']=parallel_tasks
                         configs.append(cfg)
                     atomic_json(root/'run.json',state)
@@ -870,6 +961,10 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                 else:
                     state.update(complete=False,stop_reason=cleanup.get('reason','container cleanup unconfirmed'))
             state["finished_at"] = datetime.now(UTC).isoformat()
+            if paid_broker:
+                from .primary_runtime import seal_authority
+                try:seal_authority(root,paid_broker)
+                except (RuntimeError,OSError,ValueError):state.update(complete=False,stop_reason='trusted authority terminal or cleanup unavailable')
             state["estimated_known_cost_usd"] = observed_cost(root)
             if spec.evaluation:
                 quota=spec.root/'budgets'/spec.evaluation.budget_id/'quota.json'

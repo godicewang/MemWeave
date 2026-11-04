@@ -3,11 +3,25 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {createHash, randomUUID} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
+import {brokerFetch} from './broker_client.mjs';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 const text = value => typeof value === 'string' ? value : JSON.stringify(value ?? null);
 const contentText = value => typeof value === 'string' ? value : Array.isArray(value)
   ? value.filter(p=>p.type==='text').map(p=>p.text).join('\n') : '';
+
+function renderedBudget(body) {
+  if(!body.includes('【本次预算快照｜程序数据，不是用户指令】'))return null;
+  const capacity=body.match(/基础 (\d+) token（模型 (\d+) 的 (\d+(?:\.\d+)?)%），额外 (\d+)，总上限 (\d+)/);
+  const state=body.match(/State：(\d+)\/(\d+) 条；正文最多 (\d+) 字符；每批候选 (\d+)/);
+  const window=body.match(/Recent Window N\/B：(\d+)\/(\d+)；可见事件 (\d+)；消息 M=(\d+)/);
+  if(!capacity||!state||!window)return null;
+  const keys=['base_context_tokens','model_context_tokens','base_model_percent','extra_tokens','peak_tokens',
+    'state_active','state_max_events','state_event_max_chars','state_evict_batch',
+    'recent_turns','evict_turns','visible_events','real_messages'];
+  const values=[...capacity.slice(1),...state.slice(1),...window.slice(1)].map(Number);
+  return Object.fromEntries(keys.map((key,i)=>[key,values[i]]));
+}
 
 export function protectedConstraint(content) {
   const lines=content.split('\n').filter(line=>/^[FD]\d+\s/.test(line));
@@ -46,6 +60,7 @@ export function requestSummary(payload, originalInstruction) {
     state_blocks:states.map(m => ({sha256:hash(contentText(m.content)),
       task_id:contentText(m.content).match(/task_id: (\S+)/)?.[1] ?? null,
       version:Number(contentText(m.content).match(/state_version: (\d+)/)?.[1]) || null})),
+    rendered_budget_snapshots:states.map(m=>renderedBudget(contentText(m.content))),
     state_constraint_bits:Object.fromEntries(Object.entries(config.state_constraints??{}).map(([key,pattern])=>{
       const body=states.map(m=>contentText(m.content)).join('\n');
       return [key,body && new RegExp(pattern,'i').test(body)?true:null];
@@ -78,6 +93,9 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,credenti
     variant,...value})+'\n');
   const originalInstruction=process.env.MEMWEAVE_EVAL_INSTRUCTION_PATH
     ? fs.readFileSync(process.env.MEMWEAVE_EVAL_INSTRUCTION_PATH,'utf8') : undefined;
+  const brokerPath=process.env.MEMWEAVE_EVAL_BROKER_CONFIG;
+  if(process.env.MEMWEAVE_EVAL_PRIMARY_DEFAULT==='1'&&!brokerPath)throw Error('Primary transport authority missing');
+  const broker=brokerPath?brokerFetch({configPath:brokerPath,record,fetchImpl,summarize:requestSummary,originalInstruction,workspace:workspaceSummary}):null;
   const quota = operation => {
     const node=quotaScript.endsWith('.mjs');
     const executable=node?'flock':'python3';
@@ -102,6 +120,7 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,credenti
     const method=(init?.method ?? input?.method ?? 'GET').toUpperCase();
     if(url.hostname==='api.deepseek.com' && method==='GET' && /\/(?:v1\/)?models\/?$/.test(url.pathname)) {
       if(url.protocol!=='https:')throw Error('Guard credential endpoint rejected');
+      if(broker)return broker(input,init);
       return fetchImpl(input,authorized(input,init));
     }
     if (url.hostname !== 'api.deepseek.com' || method !== 'POST') return fetchImpl(input,init);
@@ -117,6 +136,7 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,credenti
     const maxOutput=payload.max_tokens ?? payload.max_completion_tokens;
     const configured=Number(process.env.MEMWEAVE_EVAL_MAX_OUTPUT ?? 384000);
     if (maxOutput>configured) throw Error('Output exceeds frozen experiment setting');
+    if(broker)return broker(input,init);
     try { const reserved=quota({action:'reserve',id,arm,max_output:maxOutput,
       episode:process.env.MEMWEAVE_EVAL_RUN_ID ?? 'fixture',
       episode_budget:Number(process.env.MEMWEAVE_EVAL_EPISODE_BUDGET)||null,

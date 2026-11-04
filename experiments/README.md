@@ -1,5 +1,7 @@
 # MemWeave 公开基线实验
 
+第一题逐题重建采用新的[TB-01默认配置设计与验收](../docs/experiments/TB01_PRIMARY_DEFAULT_DESIGN.md)及 `cases/TB-01/1.3.1/` 冻结评分契约。工程相对分与高价值行为分分别满分100，不合成；保留原始reward。真实凭据在Actor外的可信服务，最终采集与外部账本/终态对账。当前只有免费验收；没有新预算与时间授权时，`run`拒绝付费。历史协议及旧结果保留。
+
 SWE-Marathon新增P0计算与独立程序案例的v2离线入口、原运行额外输入和上下文差异见[版本化补充报告](../docs/experiments/METRICS_V2_REPORT_2026-11-01.md)。使用`report --metrics-version 2 --output NEW_DIRECTORY`，不会覆盖原v1成绩；新案例可由现有`score-cases`命令验证。
 
 在官方任务环境中实际重跑原生 Pi 和 Pi + MemWeave，保存原件，离线生成 JSON、CSV 和 Markdown 对照。只接入 Terminal-Bench 4.0 与 SWE-bench Pro V2，不包含自进化。行为边界见 [实现设计](../docs/experiments/IMPLEMENTATION_DESIGN.md)，实际通过范围见 [验收记录](../docs/experiments/VALIDATION.md)。

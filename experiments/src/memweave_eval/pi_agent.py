@@ -12,6 +12,7 @@ from typing import Annotated, Literal
 
 from harbor.agents.installed.pi import Pi, PiOptions
 from harbor.agents.options import Cli
+from pydantic import model_validator
 
 from .network_probe import check_network
 from .private_runtime import activate as activate_private_runtime
@@ -30,6 +31,9 @@ class PiExperimentOptions(PiOptions):
     auth_path: str
     protocol: Literal["tb4", "swe-pro-v2", "swe-marathon"]
     evaluation_deadline: float | None = None
+    evaluation_primary_default: bool = False
+    evaluation_broker_client: str | None = None
+    evaluation_broker_client_sha256: str | None = None
     evaluation_output_tokens: int = 16384
     evaluation_quota_backend: Literal["python", "node"] = "python"
     evaluation_per_task_arms: bool = False
@@ -49,6 +53,57 @@ class PiExperimentOptions(PiOptions):
     prepare_only: bool = False
     runtime_objects: dict[str, dict] | None = None
     extension: Annotated[str | None, Cli("--extension")] = None
+
+    @model_validator(mode="after")
+    def primary_defaults(self):
+        if self.evaluation_primary_default and (self.thinking is not None or self.evaluation_progress_after_returns!=0 or self.evaluation_output_tokens!=384000
+                or self.evaluation_task_timeouts or any(not isinstance(c,dict)or set(c)-{'workspace'} for c in self.evaluation_task_configs.values())):
+            raise ValueError('primary_default forbids steering, sampling overrides, task time rewrites and product configuration overrides')
+        return self
+
+
+def profile_configurations(options):
+    """Sampling and compaction are owned by Pi/product in primary-default runs."""
+    if options.evaluation_primary_default:return {}
+    files={'settings.json':{'compaction':{'enabled':options.variant=='pi-native'}}}
+    if options.evaluation_deadline:
+        files['models.json']={'providers':{'deepseek':{'modelOverrides':{'deepseek-flash':{
+            'samplingParams':{'max_tokens':options.evaluation_output_tokens}}}}}}
+    return files
+
+
+def product_initialization_script(package,profile,cwd):
+    """Use the installed product's setup transaction, not evaluator-owned defaults.
+
+    Only called in a fresh isolated experiment home. It never touches the host Pi
+    profile. This represents the initialized enabled product in headless runs.
+    """
+    # The installed package has peer dependencies supplied by the host. Load it
+    # through Pi's public resource loader, which resolves those peers; direct
+    # Node imports do not reproduce the supported package-loading path.
+    initializer=(
+        f"import {{completeSetup}}from {json.dumps(package+'/src/storage/setup.ts')};"
+        f"import {{memoryPaths}}from {json.dumps(package+'/src/storage/paths.ts')};"
+        f"import {{loadDefaultRule,loadPackageVersion,disableGlobalCompaction}}from {json.dumps(package+'/src/pi/setup-settings.ts')};"
+        "export default function(pi){pi.on('session_start',async()=>{const paths=memoryPaths();"
+        f"await completeSetup(paths,{json.dumps(profile)},loadDefaultRule,"
+        f"()=>disableGlobalCompaction({json.dumps(cwd)},{json.dumps(profile)}),await loadPackageVersion());"
+        "});}"
+    )
+    sdk=package.rsplit('/',1)[0]+'/node/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js'
+    entry=package.rsplit('/',1)[0]+'/product-initializer.ts'
+    return (
+        f"await fs.writeFile({json.dumps(entry)},{json.dumps(initializer)});"
+        f"const sdk=await import({json.dumps(sdk)});"
+        f"const settings=sdk.SettingsManager.create({json.dumps(cwd)},{json.dumps(profile)});"
+        f"const loader=new sdk.DefaultResourceLoader({{cwd:{json.dumps(cwd)},agentDir:{json.dumps(profile)},settingsManager:settings,additionalExtensionPaths:[{json.dumps(entry)}]}});"
+        "await loader.reload();"
+        f"const runtime=await sdk.ModelRuntime.create({{authPath:{json.dumps(profile+'/auth.json')},modelsPath:{json.dumps(profile+'/models.json')},allowModelNetwork:false,refreshOnCreate:false}});"
+        f"const {{session,extensionsResult}}=await sdk.createAgentSession({{cwd:{json.dumps(cwd)},agentDir:{json.dumps(profile)},settingsManager:settings,resourceLoader:loader,modelRuntime:runtime,model:runtime.getModel('deepseek','deepseek-flash')}});"
+        "try{const errors=[];await session.bindExtensions({onError:e=>errors.push(e.error)});"
+        "if(errors.length||extensionsResult.errors.length)throw Error('Product initialization failed');}finally{session.dispose();}"
+        f"await fs.rm({json.dumps(entry)});"
+    )
 
 
 class ExperimentPi(Pi):
@@ -247,7 +302,8 @@ class ExperimentPi(Pi):
                 "node --input-type=module -e "
                 + shlex.quote(
                     self.model_script()
-                    + f"await fs.copyFile({json.dumps(self._asset_root + '/package/resources/rule.md')},paths.rule);"
+                    + (product_initialization_script(self._asset_root+'/package',profile,cwd)if self.options.evaluation_primary_default else
+                       f"await fs.copyFile({json.dumps(self._asset_root + '/package/resources/rule.md')},paths.rule);")
                 ),
                 timeout_sec=120,
             )
@@ -257,31 +313,33 @@ class ExperimentPi(Pi):
         if self.options.evaluation_deadline:
             evaluator = self._asset_root + '/evaluation'
             await self.exec_as_agent(environment, f'mkdir -p {shlex.quote(evaluator)}')
-            for filename in ('fetch_guard.mjs', 'guard_bootstrap.mjs', 'preload.mjs', 'budget_guard.py', 'container_deadline.py', 'budget_guard.mjs', 'container_deadline.mjs', 'sealed_runtime.mjs', 'sealed_bash_env.sh', 'request_boundary.ts', 'checkpoint_observer.ts'):
+            for filename in ('fetch_guard.mjs', 'broker_client.mjs', 'guard_bootstrap.mjs', 'preload.mjs', 'budget_guard.py', 'container_deadline.py', 'budget_guard.mjs', 'container_deadline.mjs', 'sealed_runtime.mjs', 'sealed_bash_env.sh', 'request_boundary.ts', 'checkpoint_observer.ts'):
                 await environment.upload_file(Path(__file__).with_name(filename), evaluator+'/'+filename)
             if self.options.prepare_only:
                 await environment.upload_file(Path(__file__).with_name('probe_request.mjs'),evaluator+'/probe_request.mjs')
                 await environment.upload_file(Path(__file__).with_name('fixture_transport.ts'),evaluator+'/fixture_transport.ts')
-            await self.upload_private(environment,json.dumps({'providers':{'deepseek':{
-                'modelOverrides':{'deepseek-flash':{'samplingParams':{
-                    'max_tokens':self.options.evaluation_output_tokens}}}}}}),profile+'/models.json')
-        # No credential file is read or uploaded by preparation Jobs.
-        if not self.options.prepare_only:
-            auth = json.loads(Path(self.options.auth_path).read_text())
-            if "deepseek" not in auth or auth["deepseek"].get("type") != "api_key":
-                raise ValueError("an API-key DeepSeek private profile is required")
-            if self.options.evaluation_deadline:
-                await self.upload_private(environment,json.dumps({'deepseek':auth['deepseek']}),
-                                          self._asset_root+'/evaluation/private-auth.json')
-                auth={'deepseek':{'type':'api_key','key':'memweave-evaluation-guard-placeholder'}}
+                await environment.upload_file(Path(__file__).with_name('broker_guardloss.ts'),evaluator+'/broker_guardloss.ts')
+            for name,value in profile_configurations(self.options).items():
+                if name=='models.json':await self.upload_private(environment,json.dumps(value),profile+'/'+name)
+        # The Actor receives only a scoped broker capability and a provider placeholder.
+        # Provider credentials are never read here, even by a non-primary paid Job.
+        if self.options.evaluation_broker_client:
+            source=Path(self.options.evaluation_broker_client)
+            if not self.options.evaluation_deadline or file_digest(source)!=self.options.evaluation_broker_client_sha256:
+                raise ValueError('trusted broker client identity missing or changed')
+            client=json.loads(source.read_text())
+            if set(client)!={'url','capability','arm','episode'}or any(not isinstance(v,str)or not v for v in client.values()):
+                raise ValueError('only scoped transport capability fields may enter Actor')
+            await self.upload_private(environment,json.dumps(client),self._asset_root+'/evaluation/broker-client.json')
+        if not self.options.prepare_only or self.options.evaluation_broker_client:
+            if not self.options.evaluation_broker_client:
+                raise ValueError('paid Actor requires credential-isolated bounded transport authority')
+            auth={'deepseek':{'type':'api_key','key':'memweave-evaluation-guard-placeholder'}}
             await self.upload_private(
                 environment, json.dumps({"deepseek": auth["deepseek"]}), profile + "/auth.json"
             )
-        await self.upload_private(
-            environment,
-            json.dumps({"compaction": {"enabled": self.options.variant == "pi-native"}}),
-            profile + "/settings.json",
-        )
+        for name,value in profile_configurations(self.options).items():
+            if name=='settings.json':await self.upload_private(environment,json.dumps(value),profile+'/'+name)
         container_identity=await self.exec_as_agent(environment,'cat /etc/hostname')
         setup = {
             'container_hostname':container_identity.stdout.strip(),
@@ -291,6 +349,11 @@ class ExperimentPi(Pi):
             "cwd": cwd,
             "prepare_only": self.options.prepare_only,
             "canary": self.options.evaluation_canary,
+            "primary_default":self.options.evaluation_primary_default,
+            "provider_credentials_in_actor":False,
+            "external_transport_authority":bool(self.options.evaluation_broker_client),
+            "profile_files_written_by_evaluator":list(profile_configurations(self.options)),
+            "product_initialization":'installed completeSetup / loadDefaultRule / disableGlobalCompaction'if self.options.evaluation_primary_default and self.options.variant=='pi-memweave'else None,
             "fresh_profile_and_memory": True,
             "resources": resources,
             "deployment_seconds": time.monotonic() - started,
@@ -316,10 +379,17 @@ class ExperimentPi(Pi):
             "allowModelNetwork:false,refreshOnCreate:false});"
             f"const selectedModel={('runtime.getModel(\"deepseek\",\"deepseek-flash\")' if self.options.evaluation_deadline else 'null')};"
             f"if({json.dumps(bool(self.options.evaluation_deadline))} && !selectedModel)throw Error('Frozen model missing');"
-            f"if(selectedModel && selectedModel.samplingParams?.max_tokens!=={self.options.evaluation_output_tokens})throw Error('Wrong frozen output override');"
+            f"if(selectedModel && !{json.dumps(self.options.evaluation_primary_default)} && selectedModel.samplingParams?.max_tokens!=={self.options.evaluation_output_tokens})throw Error('Wrong frozen output override');"
+            + ("if(await fs.stat(agentDir+'/models.json').then(()=>true,()=>false))throw Error('primary_default model override found');"if self.options.evaluation_primary_default else"")
+            +
             "const {session,extensionsResult}=await sdk.createAgentSession({agentDir,resourceLoader:loader,"
-            "settingsManager:settings,modelRuntime:runtime});"
+            "settingsManager:settings,modelRuntime:runtime,...(selectedModel?{model:selectedModel}:{})});"
             "try{const errors=[];await session.bindExtensions({onError:e=>errors.push(String(e.message||e))});"
+            + ("const auth=JSON.parse(await fs.readFile(agentDir+'/auth.json','utf8'));"
+               "if(auth.deepseek?.key!=='memweave-evaluation-guard-placeholder')throw Error('Actor provider credential is not placeholder');"
+               f"if(await fs.stat({json.dumps(self._asset_root+'/evaluation/private-auth.json')}).then(()=>true,()=>false))throw Error('Provider auth file found in Actor');"
+               if self.options.evaluation_broker_client else"")
+            +
             "if(extensionsResult.errors.length||errors.length)throw Error('Extension startup failed: '+JSON.stringify({errors,load:extensionsResult.errors}));"
             "const tools=session.getActiveToolNames();"
             "for(const t of ['read','bash','edit','write'])if(!tools.includes(t))throw Error('Missing native tool '+t);"
@@ -339,7 +409,10 @@ class ExperimentPi(Pi):
         script += (
             "await fs.writeFile('/logs/agent/runtime-preflight.json',JSON.stringify({"
             "model_requests:0,tools,embedding_dimensions:embedding,selected_model:selectedModel,"
-            "session_id:session.sessionId,"
+            "session_id:session.sessionId,thinking_level:session.thinkingLevel,"
+            "settings_thinking_default:settings.getDefaultThinkingLevel()??null,"
+            "model_overrides_present:await fs.stat(agentDir+'/models.json').then(()=>true,()=>false),"
+            f"credential_isolation_checked:{json.dumps(bool(self.options.evaluation_broker_client))},"
             "compaction:session.autoCompactionEnabled,system_prompt_sha256:"
             "createHash('sha256').update(session.systemPrompt).digest('hex')}));"
             "}finally{session.dispose();}"
@@ -350,10 +423,11 @@ class ExperimentPi(Pi):
                  'MEMWEAVE_EVAL_PROGRESS_AFTER':str(self.options.evaluation_progress_after_returns)}
         )
         if self.options.evaluation_deadline:
-            await check_network(environment,self._asset_root+'/node/bin/node',self.logs_dir)
+            await check_network(environment,self._asset_root+'/node/bin/node',self.logs_dir,
+                general_internet_allowed=environment.network_policy.network_mode.value=='public' if self.options.evaluation_primary_default else False)
             args=[self._asset_root+'/evaluation/probe_request.mjs',sdk,
                   self._experiment_home+'/.pi/agent',self.options.extension or '-',self.options.variant,
-                  str(self.options.evaluation_output_tokens),self.options.smoke_barrier or '-']
+                  'default'if self.options.evaluation_primary_default else str(self.options.evaluation_output_tokens),self.options.smoke_barrier or '-']
             await self.exec_as_agent(environment,'node '+' '.join(shlex.quote(arg) for arg in args),
                 timeout_sec=180,env={'MEMWEAVE_EVAL_TRACE':'/logs/agent/mock-request-trace.jsonl',
                                     'MEMWEAVE_EVAL_PROGRESS_AFTER':str(self.options.evaluation_progress_after_returns),
@@ -362,6 +436,8 @@ class ExperimentPi(Pi):
 
     async def cli_transport_preflight(self,environment):
         """Use the exact print CLI/dispatcher path; SDK-only probes cannot certify preloads."""
+        if self.options.evaluation_broker_client:return await self.broker_cli_preflight(environment)
+        if self.options.evaluation_primary_default:raise ValueError('primary CLI preflight requires external credential authority')
         evaluator=self._asset_root+'/evaluation'
         await self.upload_private(environment,json.dumps({'deepseek':{'type':'api_key','key':'fixture-only'}}),
                                   evaluator+'/private-auth.json')
@@ -376,8 +452,8 @@ class ExperimentPi(Pi):
                 local=Path(directory)/name;local.write_text(value)
                 await environment.upload_file(local,evaluator+'/instruction.md' if name=='instruction.md' else '/logs/agent/cli-probe-quota.json')
         extension=(' --extension '+shlex.quote(self.options.extension)) if self.options.extension else ''
-        command=('pi --print --mode json --provider deepseek --model deepseek-flash --thinking off '
-                 '--session-dir /logs/agent/cli-probe/sessions'+extension+' '+shlex.quote('Verify offline CLI request conversion.'))
+        command=('pi --print --mode json --provider deepseek --model deepseek-flash '+(''if self.options.evaluation_primary_default else'--thinking off ')
+                 +'--session-dir /logs/agent/cli-probe/sessions'+extension+' '+shlex.quote('Verify offline CLI request conversion.'))
         await self.exec_as_agent(environment,command,timeout_sec=120)
         validate="""import fs from 'node:fs';
 const e=fs.readFileSync('/logs/agent/cli-request-trace.jsonl','utf8').trim().split('\\n').map(JSON.parse);
@@ -416,6 +492,30 @@ positive:true,lost_guard_upstream_requests:0,actual_cli_pid_deadline:true}));
 """
         await self.exec_as_agent(environment,'node --input-type=module -e '+shlex.quote(terminated),timeout_sec=20)
 
+    async def broker_cli_preflight(self,environment):
+        evaluator=self._asset_root+'/evaluation'
+        await self.upload_private(environment,'Verify offline external-authority conversion.',evaluator+'/instruction.md')
+        extension=(' --extension '+shlex.quote(self.options.extension))if self.options.extension else''
+        prefix='pi --print --mode json --provider deepseek --model deepseek-flash --session-dir /logs/agent/broker-cli/sessions'+extension+' '
+        await self.exec_as_agent(environment,prefix+shlex.quote('Verify offline external-authority conversion.'),timeout_sec=120)
+        positive="""import fs from 'node:fs';const events=fs.readFileSync('/logs/agent/cli-request-trace.jsonl','utf8').trim().split('\\n').map(JSON.parse);
+const attempts=events.filter(e=>e.event==='http_attempt'),ends=events.filter(e=>e.event==='request_end');
+if(attempts.length!==EXPECTED||ends.length!==EXPECTED||ends.some(e=>!e.settled))throw Error('External-authority CLI positive failed');
+fs.renameSync('/logs/agent/cli-request-trace.jsonl','/logs/agent/cli-positive-trace.jsonl');
+if(fs.existsSync('PRIVATE'))throw Error('Provider credential file present in Actor');
+""".replace('EXPECTED',str(3 if self.options.variant=='pi-memweave'else 2)).replace('PRIVATE',evaluator+'/private-auth.json')
+        await self.exec_as_agent(environment,'node --input-type=module -e '+shlex.quote(positive),timeout_sec=20)
+        await self.exec_as_agent(environment,prefix+shlex.quote('Guard-loss connectivity fixture.')+' || true',timeout_sec=20,env={'MEMWEAVE_EVAL_GUARDLOSS_FIXTURE':'1'})
+        negative="""import fs from 'node:fs';const events=fs.readFileSync('/logs/agent/cli-request-trace.jsonl','utf8').trim().split('\\n').map(JSON.parse);
+if(!events.some(e=>e.event==='guard_lost')||events.some(e=>e.event==='http_attempt')||fs.existsSync('/logs/agent/unguarded-dispatch.jsonl'))throw Error('External guard loss dispatched');
+fs.renameSync('/logs/agent/cli-request-trace.jsonl','/logs/agent/cli-negative-trace.jsonl');"""
+        await self.exec_as_agent(environment,'node --input-type=module -e '+shlex.quote(negative),timeout_sec=20)
+        await self.exec_as_agent(environment,prefix+shlex.quote('HANG-TRANSPORT-FIXTURE')+' || true',timeout_sec=15,env={'MEMWEAVE_EVAL_LOCAL_STOP_AFTER':'2'})
+        terminated="""import fs from 'node:fs';const events=fs.readFileSync('/logs/agent/cli-request-trace.jsonl','utf8').trim().split('\\n').map(JSON.parse);
+if(!events.some(e=>e.event==='local_deadline_stop'))throw Error('External transport PID deadline missing');
+fs.writeFileSync('/logs/agent/cli-transport-result.json',JSON.stringify({real_model_requests:0,positive:true,lost_guard_upstream_requests:0,actual_cli_pid_deadline:true,provider_credentials_in_actor:false,external_authority:true}));"""
+        await self.exec_as_agent(environment,'node --input-type=module -e '+shlex.quote(terminated),timeout_sec=20)
+
     async def exec_as_agent(self, environment, command: str, **kwargs):
         is_pi = "pi --print --mode json" in command
         if hasattr(self, "_asset_root"):
@@ -437,7 +537,9 @@ positive:true,lost_guard_upstream_requests:0,actual_cli_pid_deadline:true}));
                 )
             if self.options.evaluation_deadline:
                 evaluator = self._asset_root + '/evaluation'
-                extensions=('--extension '+shlex.quote(evaluator+'/fixture_transport.ts')+' ' if self.options.prepare_only else '')
+                extensions=('--extension '+shlex.quote(evaluator+'/fixture_transport.ts')+' ' if self.options.prepare_only and not self.options.evaluation_broker_client else '')
+                if self.options.prepare_only and kwargs.get('env',{}).get('MEMWEAVE_EVAL_GUARDLOSS_FIXTURE'):
+                    extensions+='--extension '+shlex.quote(evaluator+'/broker_guardloss.ts')+' '
                 command = command.replace('pi --print --mode json', 'pi --print --mode json '+extensions+'--extension '
                                           +shlex.quote(evaluator+'/checkpoint_observer.ts'))
                 kwargs['env'].update(
@@ -447,6 +549,8 @@ positive:true,lost_guard_upstream_requests:0,actual_cli_pid_deadline:true}));
                     MEMWEAVE_EVAL_DEADLINE=str(getattr(self,'_evaluation_effective_deadline',self.options.evaluation_deadline)),
                     MEMWEAVE_EVAL_VARIANT=self.options.variant,
                     MEMWEAVE_EVAL_QUOTA_BACKEND=self.options.evaluation_quota_backend,
+                    MEMWEAVE_EVAL_BROKER_CONFIG=evaluator+'/broker-client.json'if self.options.evaluation_broker_client else '',
+                    MEMWEAVE_EVAL_PRIMARY_DEFAULT='1'if self.options.evaluation_primary_default else '0',
                     MEMWEAVE_EVAL_BUDGET_ARM=(self._evaluation_task_id+':'+self.options.variant) if self.options.evaluation_per_task_arms else self.options.variant,
                     MEMWEAVE_EVAL_SEALED='1' if self._evaluation_sealed else '0',
                     MEMWEAVE_EVAL_POLICY_FILE=evaluator+'/sealed_bash_env.sh',
@@ -456,7 +560,7 @@ positive:true,lost_guard_upstream_requests:0,actual_cli_pid_deadline:true}));
                     MEMWEAVE_EVAL_RUN_ID=self.options.evaluation_run_id or 'unknown',
                     MEMWEAVE_EVAL_PROGRESS_AFTER=str(self.options.evaluation_progress_after_returns),
                     MEMWEAVE_EVAL_INSTRUCTION_PATH=evaluator+'/instruction.md',
-                    MEMWEAVE_EVAL_CREDENTIAL_FILE=evaluator+'/private-auth.json',
+                    MEMWEAVE_EVAL_CREDENTIAL_FILE=''if self.options.evaluation_broker_client else evaluator+'/private-auth.json',
                     MEMWEAVE_EVAL_REQUEST_LIMIT=str(self.options.evaluation_request_limit or 0),
                     MEMWEAVE_EVAL_EPISODE_BUDGET=str(self.options.evaluation_episode_budget or 0),
                 )
