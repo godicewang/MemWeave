@@ -106,6 +106,25 @@ def test_error_is_only_controlled_when_an_explicit_output_absence_was_observed(s
     assert not r['collection_complete']and not r['controlled_setup_errors']
 
 
+def test_all_setup_errors_require_the_exact_frozen_implementation_receipt(source_bundle):
+    t,c=source_bundle;c['global_setup_error_message']='Expected implementation at /app/anon.py'
+    ids=c['test_ids'];v=t/'verifier'
+    console='=== short test summary info ===\n'+'\n'.join('ERROR tests/'+i+' - fixture failed'for i in ids)+'\n=== 3 errors in 1.0s ===\n'
+    (v/'test-stdout.txt').write_text(console)
+    p=v/'ctrf.json';x=json.loads(p.read_text())
+    for r in x['results']['tests']:r['status']='failed'
+    x['results']['summary'].update(passed=0,failed=3);p.write_text(json.dumps(x))
+    (v/'reward.txt').write_text('0');p=t/'result.json';x=json.loads(p.read_text());x['verifier_result']['rewards']['reward']=0;p.write_text(json.dumps(x))
+    assert not grade(source_bundle)['collection_complete']
+    (v/'test-stdout.txt').write_text('E       AssertionError: Expected implementation at /app/anon.py\n'+console)
+    r=grade(source_bundle)
+    assert r['collection_complete']and all(p['score']==0 for p in r['checkpoints'].values())
+    assert len(r['controlled_setup_errors'])==3 and all(v is None for v in r['observations'].values())
+    assert r['whole_protocol']['score']==0
+    (v/'test-stdout.txt').write_text('E       AssertionError: Expected canonical policy at /tests/policy.yaml\n'+console)
+    assert not grade(source_bundle)['collection_complete']
+
+
 def test_existing_report_scores_selected_source_and_keeps_capture_failure(source_bundle,tmp_path):
     import csv
 
