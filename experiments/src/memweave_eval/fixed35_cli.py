@@ -179,6 +179,10 @@ def register(sub):
     package=commands.add_parser('pack-report',help='Report the complete frozen 35-case matrix')
     package.add_argument('manifest',type=Path)
     package.add_argument('--output',type=Path,required=True)
+    networks=commands.add_parser('cleanup-empty-networks',help='Audit completed campaign trials and remove only their empty Compose networks; no global prune or settings changes')
+    networks.add_argument('root',type=Path)
+    networks.add_argument('--execute',action='store_true')
+    networks.add_argument('--output',type=Path,required=True)
     long=commands.add_parser('long-qualification',help='Audit five fixed long cases from successful original verifiers and deduplicated real actor requests; no model calls')
     long.add_argument('--design',type=Path,required=True)
     long.add_argument('--manifest',type=Path,required=True)
@@ -186,6 +190,24 @@ def register(sub):
 
 
 def execute(args):
+    if args.fixed35_command=='cleanup-empty-networks':
+        import subprocess
+
+        from .fixed35_campaign import trusted_environment
+        from .owned_networks import cleanup_networks
+        args.output.mkdir(parents=True,exist_ok=False)
+        env=trusted_environment(Path.cwd())
+        def observe(row):
+            with(args.output/'actions.jsonl').open('a')as stream:
+                stream.write(json.dumps(row,ensure_ascii=False)+'\n');stream.flush()
+        def command(argv):return subprocess.check_output(argv,env=env,text=True,timeout=30)
+        try:value=cleanup_networks(args.root,execute=args.execute,command=command,observe=observe)
+        except Exception as error:
+            atomic_json(args.output/'error.json',{'status':'INCOMPLETE','error_class':type(error).__name__,
+                'reason':str(error),'requires_action_log_and_actual_id_reconciliation':True},immutable=True)
+            raise
+        atomic_json(args.output/'result.json',value,immutable=True)
+        return {'removed':value['removed'],'empty_candidates':value['empty_candidates'],'execute':args.execute}
     if args.fixed35_command=='long-qualification':
         from .long_qualification import qualification_table
         return qualification_table(args.design,args.manifest,args.output)
