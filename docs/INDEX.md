@@ -1,5 +1,7 @@
 # 技术知识库索引
 
+[额度暂停与原身份恢复](experiments/QUOTA_HOLD_RECOVERY_2026-11-04.md)记录不合适的在线通道替换、旧服务失活证据及私有暂停标记／同身份单写入者恢复；不释放未知费用，不修改Actor原时限。
+
 [Switch可信基础树合并](experiments/SWITCH_VERIFIER_MERGE_2026-11-04.md)修复Django参考控制在测试前重复创建相同符号链接的问题；保持原F2P/P2P，保留原失败并仅用于新的派生协议。
 
 [截止终止证据 v51](experiments/TERMINATION_CAPTURE_2026-11-04.md)说明真实Pi截止取消与缺失回执的区别、独立信号／PID／原始输出校验，以及保留原始工具统计的运行失败口径。

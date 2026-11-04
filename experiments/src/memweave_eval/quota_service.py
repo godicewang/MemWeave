@@ -23,7 +23,7 @@ def write_json(path,value):
     temporary.chmod(0o644);temporary.replace(path)
 
 
-def apply_scoped(ledger,config,request,*,now=None):
+def apply_scoped(ledger,config,request,*,now=None,admission_paused=False):
     if not hmac.compare_digest(str(request.get('token','')),config['token']):
         raise ValueError('channel_authentication_failed')
     operation=request.get('operation')
@@ -33,6 +33,7 @@ def apply_scoped(ledger,config,request,*,now=None):
     if not isinstance(identity,str)or not identity.startswith(config['id_prefix']):
         raise ValueError('channel_request_identity_mismatch')
     if operation['action']=='reserve':
+        if admission_paused:raise ValueError('authority_admission_paused')
         if operation.get('arm')!=config['arm']or operation.get('episode')!=config['episode']:
             raise ValueError('reservation_scope_mismatch')
         if (time.time()if now is None else now)>=config['deadline']:
@@ -62,7 +63,12 @@ def serve(root:Path,service_id):
     while not (root/'stop').exists() and time.time()<hard_stop:
         for source in sorted(configs.glob('*.json')):
             if source.is_symlink():raise ValueError('redirected private quota config')
-            config=json.loads(source.read_text());identity=source.stem
+            try:config=json.loads(source.read_text())
+            except FileNotFoundError:
+                write_json(root/'configuration-read-fault.json',{'reason':'private_config_temporarily_missing',
+                    'channel_id':source.stem,'timestamp':time.time()})
+                continue  # No authorization/default config; this channel stays closed.
+            identity=source.stem
             if not re.fullmatch(r'[a-f0-9]{32}',identity)or config['service_id']!=service_id:
                 raise ValueError('invalid private quota scope')
             if config.get('protocol')!=2:raise ValueError('unsupported private quota protocol')
@@ -84,7 +90,9 @@ def serve(root:Path,service_id):
                     if not isinstance(parsed,dict):raise TypeError('invalid_quota_IPC_object')
                     request=parsed
                     if request.get('nonce')!=nonce:raise ValueError('request_nonce_mismatch')
-                    result=apply_scoped(ledger,config,request)
+                    marker=root/'admission-paused.json'
+                    result=apply_scoped(ledger,config,request,
+                        admission_paused=marker.exists()or marker.is_symlink())
                     out={'ok':True,'record':result}
                 except (ValueError,KeyError,TypeError,TimeoutError,OSError)as error:
                     # All errors originate in the small, evaluator-only quota protocol.
