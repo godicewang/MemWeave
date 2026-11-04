@@ -743,8 +743,31 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
     if ruby_rows:
         with(output/'ruby-source-counts.csv').open('w',newline='')as stream:
             writer=csv.DictWriter(stream,fieldnames=list(ruby_rows[0]));writer.writeheader();writer.writerows(ruby_rows)
+    profile_rows=[]
+    for row in rows:
+        for name,profile in row['profiles'].items():
+            if profile.get('status')=='DESIGN_NA':continue
+            classes=profile.get('classes')or{}
+            profile_rows.append({'arm':row['variant_id'],'profile':name,'score':profile.get('score'),
+                'conditional_score':profile.get('conditional_score'),'evidence_coverage':profile.get('coverage'),
+                'full_profile_design_coverage':profile.get('full_profile_design_coverage'),
+                'engineering_score':classes.get('engineering',{}).get('score'),
+                'behavior_score':classes.get('behavior',{}).get('score'),
+                'class_balance_status':profile.get('class_balance_status'),
+                'lower':profile.get('lower'),'upper':profile.get('upper'),
+                'aggregation_version':profile.get('aggregation_version')})
+    if profile_rows:
+        with(output/'profile-scores.csv').open('w',newline='')as stream:
+            writer=csv.DictWriter(stream,fieldnames=list(profile_rows[0]));writer.writeheader();writer.writerows(profile_rows)
     text=['# 固定案例配对报告',f"\n案例：{admission['case_id']}；评分版本：{VERSION}。原始结果、派生行为与采集验收分别保留。\n",
-          '|变体|指标|含义／原公式／百分制公式|原始值|百分制|基础／当前有效权重|状态/原因|','|---|---|---|---|---|---|---|']
+        '## 分层加权分','',
+        '两类均有适用指标时，工程与行为各占50%；族内与类别内只重分配真正不适用项。缺证据保留权重；整类无设计时不输出完整两类总分。条件均分不表示完整总分。','',
+        '|变体|profile|工程分|行为分|完整总分|已观察条件分|证据覆盖|全profile设计覆盖|类别状态|',
+        '|---|---|---:|---:|---:|---:|---:|---:|---|']
+    for value in profile_rows:
+        text.append('| '+' | '.join(str(value.get(k))for k in ['arm','profile','engineering_score','behavior_score','score','conditional_score','evidence_coverage','full_profile_design_coverage','class_balance_status'])+' |')
+    text.extend(['','## 原始值与百分制指标','',
+          '|变体|指标|含义／原公式／百分制公式|原始值|百分制|基础／当前有效权重|状态/原因|','|---|---|---|---|---|---|---|'])
     for row in rows:
         for m in row['normalized_metrics']:
             if m['status']=='diagnostic' or m['status']=='DESIGN_NA':continue
