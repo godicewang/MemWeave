@@ -4,7 +4,50 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from .evidence_replay import read_object
 from .storage import file_digest
+
+
+def _hookless_preparation_rejection(trial,invocation,call_id,native,events,manifest):
+    calls=[p for row in native if row.get('type')=='message_end'and
+        (row.get('message')or{}).get('role')=='assistant'
+        for p in row['message'].get('content',[])if p.get('type')=='toolCall'and p.get('id')==call_id]
+    starts=[r for r in native if r.get('type')=='tool_execution_start'and r.get('toolCallId')==call_id]
+    ends=[r for r in native if r.get('type')=='tool_execution_end'and r.get('toolCallId')==call_id]
+    results=[r['message']for r in native if r.get('type')=='message_end'and
+        (r.get('message')or{}).get('role')=='toolResult'and r['message'].get('toolCallId')==call_id]
+    if any(len(rows)!=1 for rows in [calls,starts,ends,results]):return None
+    call,start,end,result=calls[0],starts[0],ends[0],results[0];name=call.get('name')
+    if not isinstance(name,str)or not name or any(r.get('toolName')!=name for r in [start,end,result]) \
+            or start.get('args')!=call.get('arguments')or end.get('isError')is not True \
+            or result.get('isError')is not True or 'durationMs'in end:return None
+    content=(end.get('result')or{}).get('content')
+    if content!=result.get('content')or not isinstance(content,list)or len(content)!=1 \
+            or content[0].get('type')!='text'or not isinstance(content[0].get('text'),str):return None
+    text=content[0]['text'];prefixes=[
+        ('invalid_arguments','Invalid arguments for tool "'+name+'":'),
+        ('schema_validation','Validation failed for tool "'+name+'":'),
+        ('unknown_tool','Tool '+name+' not found'),
+        ('truncated_output','Tool call "'+name+'" was not executed: the response hit the output token limit, so its arguments may be truncated. Re-issue the tool call with complete arguments.')]
+    reason=next((kind for kind,prefix in prefixes if
+        (text==prefix if kind in {'unknown_tool','truncated_output'}else text.startswith(prefix))),None)
+    if reason is None:return None
+    related=[e for e in events if e.get('execution_invocation_id')==invocation and e.get('call_id')==call_id]
+    proofs=[]
+    for kind,record in [('tool_execution_start',start),('tool_execution_end',end)]:
+        matches=[e for e in related if e['event']==kind and e.get('tool')==name]
+        if len(matches)!=1:return None
+        event=matches[0];ref=event.get('record_ref');verified=False
+        if not isinstance(ref,dict):return None
+        for store in trial.rglob('request-content'):
+            try:actual=json.loads(read_object(store,ref))
+            except (OSError,ValueError,EOFError,KeyError):continue
+            if actual==record:verified=True;break
+        if not verified:return None
+        proofs.append({'event':kind,'record_sha256':ref['sha256']})
+    return {'invocation_id':invocation,'call_id':call_id,'tool':name,'reason':reason,
+        'native_stdout_sha256':manifest['stdout_sha256'],'cas_records':proofs,
+        'scope':'Pi1.4 original preparation rejection, no execute duration and matching independent native result; no fabricated tool_call hook'}
 
 
 def scoped_execution_boundaries(trial:Path,events,*,stage_id=None):
@@ -68,7 +111,12 @@ def scoped_execution_boundaries(trial:Path,events,*,stage_id=None):
             observed.add((identity,e.get('call_id')));scoped.append((e['producer_id'],e.get('call_id')))
         elif e.get('phase')in {'tool_end','tool_result'}:post.add((identity,e.get('call_id')))
     if len(scoped)!=len(set(scoped)):errors.append('reused_call_identity_within_execution')
-    if expected!=observed:errors.append('call_boundary_set_differs_from_Pi_log')
+    rejected=[]
+    for identity,call_id in expected-observed:
+        proof=_hookless_preparation_rejection(trial,identity,call_id,stdout.get(identity,[]),events,manifests[identity])
+        if proof is not None:rejected.append(proof)
+    explained={(p['invocation_id'],p['call_id'])for p in rejected}
+    if expected!=observed|explained:errors.append('call_boundary_set_differs_from_Pi_log')
     if not expected<=completed:errors.append('tool_completion_missing_or_pending')
     if not completed<=post:errors.append('completed_tool_workspace_snapshot_missing')
     if not terminal:errors.append('native_terminal_execution_missing')
@@ -76,4 +124,5 @@ def scoped_execution_boundaries(trial:Path,events,*,stage_id=None):
     return {'complete':not errors,'reasons':sorted(set(errors)),'expected_tool_calls':len(expected),
         'completed_tool_calls':len(completed),'post_tool_snapshots':len(post),
         'terminal_execution_observed':terminal,'scope':'independent-native-Pi-invocation-v1',
-        'invocations':len(manifests)}
+        'invocations':len(manifests),'pre_execution_rejections':rejected,
+        'observed_tool_call_hooks':len(observed)}

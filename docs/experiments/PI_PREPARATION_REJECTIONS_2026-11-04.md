@@ -1,0 +1,7 @@
+# Pi参数拒绝的完整采集与离线修复
+
+MAB-04正式原件出现五次state_append参数JSON解析拒绝。Pi1.4.0的agent-loop先发tool_execution_start，再查找工具、prepare/validate参数，最后才调用beforeToolCall。因此校验拒绝不会触发扩展tool_call，但仍有原生assistant调用、start/end/toolResult、CAS执行记录和结束快照。旧采集器只认tool_call，将真实拒绝误当日志缺失，连带阻断初始State库存与节奏口径。原题QA原生1／插件0不因此改变，原报告保留。
+
+修复只在评估侧：缺tool_call时，必须同时核验哈希绑定的原生调用、start、明确准备阶段拒绝end、同内容toolResult、CAS start/end原件及结束快照。只接受锁定Pi源码定义的无durationMs准备拒绝：Invalid arguments／Validation failed、未知工具、输出截断未执行。任意业务错误、成功回执、已有execute耗时或缺原件都不能豁免缺hook。绝不以“报错了”推断未执行。
+
+尝试数包含这些真实拒绝，错误数保留；execute计数及耗时以实际带durationMs的原生execute结束事件为据，不把参数拒绝补成零毫秒。使用原生执行start恢复调用身份，不根据重复内容猜重试。原始记录不改、不伪造tool_call事件；新增修复证明列出原调用／原件哈希。只修解析、模型可见输入／资源／时间不变时，两臂统一新目录重算，无需浪费模型重跑；原件确实缺失仍阻断采集。

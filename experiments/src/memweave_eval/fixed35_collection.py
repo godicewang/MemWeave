@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 from collections import defaultdict
 from pathlib import Path
 
@@ -58,6 +59,38 @@ def qualified_actor_calls(requests,responses,*,fixture_control=False):
     return result
 
 
+def tool_metrics(events,locations):
+    tools=defaultdict(lambda:{'attempts':0,'successes':0,'errors':0,'unknown_results':0,
+        'durations':[],'executions':0,'invalid_duration_records':0,'error_classes':defaultdict(int)})
+    calls={};ends={}
+    for event in events:
+        if event['event']not in {'tool_call','tool_execution_start','tool_execution_end','tool_result'}:continue
+        key=event['producer_id'],event.get('call_id')
+        record=json.loads(read_object(locations[event['producer_id'],event['sequence']],event['record_ref']))
+        if event['event']in {'tool_call','tool_execution_start'}:
+            name=event.get('tool')
+            if not isinstance(name,str)or not name or key in calls and calls[key]!=name:
+                raise ValueError('conflicting or missing observed tool identity')
+            calls[key]=name
+        elif event['event']=='tool_execution_end'or key not in ends:ends[key]=record
+    for key,name in calls.items():
+        end=ends.get(key,{});value=end.get('isError');metric=tools[name];metric['attempts']+=1
+        metric['unknown_results'if type(value)is not bool else'errors'if value else'successes']+=1
+        if value is True:metric['error_classes'][error_class(end.get('result'))]+=1
+        if 'durationMs'in end:
+            duration=end['durationMs']
+            if type(duration)in (int,float)and math.isfinite(duration)and duration>=0:
+                metric['durations'].append(duration);metric['executions']+=1
+            else:metric['invalid_duration_records']+=1
+    for metric in tools.values():
+        values=metric.pop('durations');metric['error_classes']=dict(metric['error_classes'])
+        if metric['invalid_duration_records']:metric['executions']=None
+        metric['duration_ms']={'samples':len(values),'p50':quantile(values,.5),'p95':quantile(values,.95),
+            'max':max(values)if values else None}
+        metric['execution_scope']='Pi1.4 timed execute-end only; native start includes argument/preparation rejection'
+    return dict(tools)
+
+
 def collect_episode(trial: Path, *, arm, ledger: Path,auxiliary_roots=(),expected_episode=None,fixture_control=False):
     records={};requests={};responses={};locations={}
     stores=list(trial.rglob('request-content'))
@@ -100,31 +133,7 @@ def collect_episode(trial: Path, *, arm, ledger: Path,auxiliary_roots=(),expecte
         expected={i for i,r in account.items()if r.get('episode')in {expected_episode,expected_episode+':judge'} and r.get('arm')==arm}
         if set(requests)!=expected:
             raise ValueError('case ledger contains a request absent from the complete actor/auxiliary evidence set')
-    tools=defaultdict(lambda:{'attempts':0,'successes':0,'errors':0,'unknown_results':0,
-        'durations':[],'executions':0,'error_classes':defaultdict(int)})
-    calls={};ends={}
-    for event in events:
-        if event['event'] not in {'tool_call','tool_execution_start','tool_execution_end','tool_result'}:
-            continue
-        key=(event['producer_id'],event.get('call_id'))
-        record=json.loads(read_object(locations[(event['producer_id'],event['sequence'])],event['record_ref']))
-        if event['event']=='tool_call':
-            calls[key]=event['tool']
-        elif event['event']=='tool_execution_start':
-            tools[event['tool']]['executions']+=1
-        elif event['event']=='tool_execution_end' or key not in ends:
-            ends[key]=record
-    for key,name in calls.items():
-        value=ends.get(key,{}).get('isError')
-        metric=tools[name];metric['attempts']+=1
-        metric['unknown_results' if type(value)is not bool else 'errors' if value else 'successes']+=1
-        if value is True:metric['error_classes'][error_class(ends[key].get('result'))]+=1
-        duration=ends.get(key,{}).get('durationMs')
-        if type(duration)in (int,float)and duration>=0:metric['durations'].append(duration)
-    for metric in tools.values():
-        durations=metric.pop('durations');metric['error_classes']=dict(metric['error_classes'])
-        metric['duration_ms']={'samples':len(durations),'p50':quantile(durations,.5),'p95':quantile(durations,.95),
-            'max':max(durations)if durations else None}
+    tools=tool_metrics(events,locations)
     sessions=unique_sessions(trial)
     archives=sorted(trial.rglob('memory.tar.gz'),key=lambda p:p.stat().st_mtime_ns)
     from .fixed35_business import execution_boundaries

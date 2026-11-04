@@ -73,7 +73,7 @@ def quantile(values, probability):
 def error_class(result):
     content = json.dumps(result, ensure_ascii=False)
     for name, pattern in (
-        ("schema", r"INVALID_|schema|missing required|validation"),
+        ("schema", r"INVALID_|schema|missing required|validation|Invalid arguments for tool|Tool [\w.-]+ not found"),
         ("permission_path", r"EACCES|EPERM|ENOENT|permission denied|No such file"),
         ("content_match", r"not found|could not find|did not match|not unique"),
         ("conflict", r"CONFLICT|version mismatch|already archived|already committed"),

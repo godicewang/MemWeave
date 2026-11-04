@@ -6,6 +6,8 @@
 
 [Kubernetes原题业务结果](experiments/KUBERNETES_SOURCE_OUTCOME_2026-11-04.md)将受保护cargo区段多重集合、原始parser计数、阈值与奖励交叉核验后接入现有报表，单元测试／mock及过程保全不代替原题业务分。
 
+[Pi准备阶段拒绝采集](experiments/PI_PREPARATION_REJECTIONS_2026-11-04.md)按实际Pi1.4源码和独立原件修复参数拒绝没有tool_call回调的路径；错误仍计入尝试，不伪造执行或改动模型轨迹。
+
 2026-11-04新增[TB-04会话窗口原题业务判定](experiments/SESSION_WINDOW_SOURCE_GOLD_2026-11-04.md)，复用原七项测试及独立pass／fail／missing控制；这是应用业务组件，不能冒充MemWeave窗口、过程只读保护或正式模型分数。
 
 同轮[LONG-05源题参数身份审计](experiments/RUBY_SOURCE_EVIDENCE_2026-11-04.md)分列265个折叠CTRF函数行与2298个原参数样本，并接入六组原业务判定；[v32最终进展与缺口](experiments/FIXED35_STATUS_V32_2026-11-04.md)保留正式0/35及两张真实成绩表尚未交付的事实。

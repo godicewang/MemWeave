@@ -26,6 +26,32 @@ def test_zero_tool_opportunities_require_complete_independent_execution_coverage
     assert point['status']=='not_applicable'and point['score']is None
 
 
+def test_preparation_rejection_is_an_attempt_and_error_but_never_a_zero_ms_execute(tmp_path):
+    import gzip
+    import hashlib
+    import json
+
+    from memweave_eval.fixed35_collection import tool_metrics
+    events=[];locations={}
+    for index,duration,error in [(1,None,True),(2,10,False),(3,5,True)]:
+        for kind in ['tool_execution_start','tool_execution_end']:
+            record={'type':kind,'toolCallId':str(index),'toolName':'state_append','args':{}}
+            if kind=='tool_execution_end':
+                record.update(isError=error,result={'content':[{'type':'text','text':
+                    'Invalid arguments for tool "state_append": invalid JSON'if index==1 else'executed'}]})
+                if duration is not None:record['durationMs']=duration
+            raw=json.dumps(record).encode();digest=hashlib.sha256(raw).hexdigest()
+            p=tmp_path/(digest+'.gz');p.write_bytes(gzip.compress(raw));sequence=len(events)+1
+            events.append({'event':kind,'producer_id':'one','sequence':sequence,'tool':'state_append',
+                'call_id':str(index),'record_ref':{'object':p.name,'sha256':digest,'bytes':len(raw)}})
+            locations['one',sequence]=tmp_path
+    result=tool_metrics(events,locations)['state_append']
+    assert result['attempts']==3 and result['successes']==1 and result['errors']==2
+    assert result['executions']==2 and result['duration_ms']['samples']==2
+    assert result['duration_ms']['p50']==7.5
+    assert result['error_classes']['schema']==1
+
+
 def test_no_admission_without_frozen_real_preflight_and_contract():
     with pytest.raises(ValueError,match='missing admission'):
         validate_admission({'case_id':'MAB-01'})
