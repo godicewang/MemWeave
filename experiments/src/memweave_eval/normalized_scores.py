@@ -199,7 +199,7 @@ def normalize_trial_scores(row):
         support = _support(view, spec)
         source_status = parent.get('status') if isinstance(parent, dict) else None
         reason = parent.get('reason') if isinstance(parent, dict) else None
-        if identity == 'S3.partial_pass_rate':
+        if identity == 'S3.partial_pass_rate'and not isinstance(explicit,dict):
             source_status, reason = _get(view, 'quality.partial_status'), _get(view, 'quality.partial_reason')
         if identity.startswith(('Q2.write.', 'Q1.tool.'))and not (
                 identity.startswith('Q2.write.')and isinstance(explicit,dict)and

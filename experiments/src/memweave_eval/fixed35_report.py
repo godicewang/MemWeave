@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261104-v44'
+VERSION='fixed35-score-20261104-v45'
 
 
 def raw_display(metric):
@@ -216,6 +216,27 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             finance_context=finance_context,
             cache_input_utilization=collection['cache'].get('input_cache_utilization',{}).get('value'),
             cache_all_tokens_share=collection['cache'].get('all_tokens_cache_share',{}).get('value'))
+        if admission['family']=='slop':
+            from .fixed35_slop import normalized_source_metrics
+            source_problem={'SCB-01':'circuit_eval','SCB-02':'database_migration','SCB-03':'trajectory_api'}[admission['case_id']]
+            source_arm=official['arms'][arm]
+            if 'problem'in source_arm and source_arm['problem']!=source_problem:
+                raise ValueError('original Slop outcome problem differs from frozen case')
+            source_scores=normalized_source_metrics(dict(source_arm,problem=source_problem))
+            row['slop_normalization_evidence']=source_scores
+            row['normalization_evidence']['S3.partial_pass_rate']=source_scores['partial']
+            timing=source_arm.get('host_verifier_timing')
+            row['host_verifier_timing']=timing
+            if isinstance(timing,dict):
+                import math
+                seconds=timing.get('wall_seconds')
+                valid=timing.get('status')=='CAPTURED'and timing.get('clock')=='monotonic'and \
+                    type(seconds)in (int,float)and math.isfinite(seconds)and seconds>=0
+                if valid:row['phase_seconds']['verifier']=seconds
+                else:row['normalization_evidence']['Q6.phase.verifier']={'value':None,'status':'invalid',
+                    'reason':'Invalid host original Slop verifier clock/elapsed evidence'}
+            if contract.get('adapter_kind')=='slop-fk-source-v1':
+                row['normalization_evidence']['S.common.process_validation']=source_scores['checkpoint_protocol']
         if contract.get('adapter_kind')=='wal-source-v1':
             from .wal_gold import checkpoint_rows
             row['wal_component']=behavior;row['derived_behavior_checkpoints']=checkpoint_rows(behavior)
@@ -450,6 +471,11 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             original_id=item['id'];spec=assigned[original_id]
             item['id']=metric_alias(original_id);item['legacy_registry_id']=original_id
             predicate=(row['normalization_evidence'].get(original_id)or{}).get('reason')
+            if admission['family']=='slop'and original_id=='S3.partial_pass_rate':
+                item.update(legacy_registry_meaning=item['meaning'],case_predicate=predicate,
+                    meaning='Slop原始报告部分通过率的检查点宏平均；缺必交文件的阶段按交付失败贡献0，实际执行数单列',
+                    raw_formula='sum(each original checkpoint passed/total, or0 for proved mandatory-delivery failure) / fixed checkpoint count',
+                    definition_scope='case-bound stage macro; raw per-stage source counts and unexecuted delivery gates are retained')
             if original_id.startswith(('S.common.','S.case_v2.'))and predicate:
                 item.update(legacy_registry_meaning=item['meaning'],case_predicate=predicate,
                     meaning='本题源约束／业务检查点：'+predicate,

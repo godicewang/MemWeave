@@ -17,6 +17,43 @@ from .storage import atomic_json, file_digest
 PROBLEMS={'circuit_eval':8,'database_migration':5,'trajectory_api':5}
 
 
+def normalized_source_metrics(outcome):
+    """Case-level macros, preserving original/derived and unexecuted distinctions."""
+    problem=outcome.get('problem')if isinstance(outcome,dict)else None
+    count=PROBLEMS.get(problem)
+    if count is None:raise ValueError('frozen Slop problem required')
+    expected=[f'checkpoint_{i}'for i in range(1,count+1)]
+    points=outcome.get('checkpoints');points=points if isinstance(points,dict)else{}
+    shape_ok=not(set(points)-set(expected))
+    partial={};protocol={};source={}
+    entry={'circuit_eval':'circopt.py','database_migration':'migration_tool.py','trajectory_api':'trajectory_api.py'}[problem]
+    for stage in expected:
+        p=points.get(stage);s=t=None;known=isinstance(p,dict)and p.get('status')=='SCORED'and shape_ok
+        strict=p.get('original_all_reported_tests_score')if known else None
+        known=known and type(strict)is int and strict in (0,100)
+        if known:
+            s,t=p.get('original_reported_passed'),p.get('original_reported_total')
+            if type(s)is int and type(t)is int and 0<=s<=t and t>0 and(strict==0 or s==t):
+                partial[stage]=s/t;protocol[stage]=strict/100
+                source[stage]={'passed':s,'total':t,'kind':'original_reported_tests'}
+                continue
+            missing=p.get('missing_required_files')
+            if p.get('reason')=='required submitted file absent'and type(p.get('score'))is int and p['score']==strict==0 \
+                    and isinstance(missing,list)and missing and \
+                    all(isinstance(f,str)and f in {entry,'requirements.txt'}for f in missing)and len(set(missing))==len(missing):
+                partial[stage]=protocol[stage]=0.
+                source[stage]={'kind':'known_delivery_gate_failure','missing_required_files':missing,'executed_tests':0}
+                continue
+        partial[stage]=protocol[stage]=None;source[stage]={'kind':'missing_or_invalid_source_evidence'}
+    def metric(values,reason):
+        valid=[v for v in values.values()if v is not None];u=count-len(valid)
+        return {'value':sum(valid)/count if u==0 else None,'numerator':sum(valid),
+            'denominator':len(valid),'unknown':u,'status':'scored'if u==0 else'unknown',
+            'reason':reason,'stage_evidence':source,'per_stage_values':values,'fixed_stages':expected}
+    return {'partial':metric(partial,'Equal-stage mean of original reported passed/total; known mandatory-submission failure contributes0 with0 executed tests; not a flat test-count rate or the derived applicable-test denominator'),
+        'checkpoint_protocol':metric(protocol,'Passed original-strict checkpoint verdicts / fixed source checkpoints; every original reported test within each checkpoint is required, conditional skips remain in original result')}
+
+
 def slop_task(case,prompts:Path,output:Path,*,base_image,snapshot_excludes):
     name=case['upstream_case_id'];count=PROBLEMS[name]
     if not re.fullmatch(r'[a-z0-9._:/@-]+',base_image):raise ValueError('invalid frozen Slop image reference')
@@ -126,6 +163,7 @@ def evaluate_trial(trial:Path,*,problem,stages,runner,environment,sources,output
         raise ValueError('Slop fixed checkpoint sequence mismatch')
     if problem=='database_migration'and file_digest(Path(sources)/problem/'tests/test_checkpoint_1.py')!='59568d555215b985f90da89e3a9d072565c6fd1fc73c826a214b8207cc148f9c':
         raise ValueError('fixed conditional skip source changed; do not infer applicability from a new verifier')
+    phase_started=time.monotonic()
     output.mkdir(parents=True,exist_ok=False);reports={};evidence={}
     for index,stage in enumerate(stages,1):
         artifacts=trial/'steps'/stage/'artifacts'
@@ -187,6 +225,9 @@ def evaluate_trial(trial:Path,*,problem,stages,runner,environment,sources,output
         reports[stage]=json.loads(report.read_text())if report.exists()else None
         evidence[stage]={'exit_code':exit_code,'report':str(report),'sha256':file_digest(report)if report.exists()else None}
     result=dict(sequential_outcome(reports,stages),problem=problem,source_evidence=evidence,
+        host_verifier_timing={'status':'CAPTURED','clock':'monotonic',
+            'wall_seconds':time.monotonic()-phase_started,
+            'scope':'host source verifier phase including checkpoint handoff checks and original eval-snapshot calls; not Actor solve time'},
         verifier='original pinned Slop eval-snapshot, no LLM judge; applicable strict score and original reported counts separate',fixture_scores_included=fixture_only)
     atomic_json(output/'official-outcome.json',result,immutable=True)
     return result
