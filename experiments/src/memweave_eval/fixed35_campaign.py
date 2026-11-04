@@ -74,8 +74,12 @@ def validate_case_design(contract):
     from .normalized_scores import catalogue
     if {m.get('metric_id')for m in matrix}!={m['id']for m in catalogue()['metrics']}:
         raise ValueError('case design must cover the complete current metric registry')
+    from .fixed35_scope import VERSION as SCOPE_VERSION
+    from .fixed35_scope import validate_scope_contract
+    if any(m.get('applicability_version')==SCOPE_VERSION for m in matrix):
+        validate_scope_contract(contract)
     for metric in matrix:
-        if metric.get('applicability_version')!='fixed35-research-assignments-20261102-v2':
+        if metric.get('applicability_version')not in {'fixed35-research-assignments-20261102-v2',SCOPE_VERSION}:
             raise ValueError('legacy research-as-NA matrix must be migrated before admission')
         if metric.get('design_status')not in {'PLANNED','DESIGN_NA'}:
             raise ValueError('unresolved case opportunities cannot be admitted')
