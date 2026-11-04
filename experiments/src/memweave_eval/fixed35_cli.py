@@ -45,7 +45,7 @@ def register(sub):
     dispatch_replay.add_argument('--fixture-control',action='store_true')
     dispatch_replay.add_argument('--output',type=Path,required=True)
     selected=commands.add_parser('selected-source-contract',help='Freeze explicit selected parity/archive/session/entity/checkpoint/anonymization source gold; no models or admission')
-    selected.add_argument('case_id',choices=['TB-01','TB-03','TB-04','TB-06','TB-07','TB-10'])
+    selected.add_argument('case_id',choices=['TB-01','TB-03','TB-04','TB-06','TB-07','TB-10','LONG-02','LONG-03'])
     selected.add_argument('--design',type=Path,required=True)
     selected.add_argument('--source',type=Path,required=True)
     selected.add_argument('--output',type=Path,required=True)

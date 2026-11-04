@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261104-v39'
+VERSION='fixed35-score-20261104-v40'
 
 
 def raw_display(metric):
@@ -184,6 +184,8 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             behavior=grade_switch_probe_trial(trial,contract,arm=arm)
             if behavior['fixture_only']and not fixture_control:
                 raise ValueError('fake-provider Switch probes require explicit fixture-control report; never an actual score')
+        from .pytest_source_gold import attached_source_outcome
+        source_outcome=attached_source_outcome(trial,contract,fixture_control=fixture_control)
         reward=behavior['native']['native_outcome']/100 if admission['family']=='mab'else (outcome.get('verifier')or{}).get('rewards',{}).get('reward')
         if admission['family']=='slop':
             from .fixed35_slop import score_channels
@@ -237,6 +239,16 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             from .dispatch_gold import checkpoint_rows
             row['dispatch_component']=behavior;row['derived_behavior_checkpoints']=checkpoint_rows(behavior)
             row['native_reward']=behavior['original_reward']
+        if source_outcome is not None:
+            from .pytest_source_gold import checkpoint_rows
+            row['attached_original_source_outcome']=source_outcome
+            row.setdefault('derived_behavior_checkpoints',[]).extend(checkpoint_rows(source_outcome))
+            previous=(row.get('behavior_metrics')or{}).get('native_metrics')
+            native=source_outcome['native_metrics']or{}
+            if previous and previous!=native:raise ValueError('two source test count definitions conflict')
+            row.setdefault('behavior_metrics',{})['native_metrics']=native
+            if source_outcome['original_reward']is not None and source_outcome['original_reward']!=row['native_reward']:
+                raise ValueError('source stdout/CTRF reward differs from original trial outcome')
         if admission['family']=='state':row['official_llm_judged_result']=row_official
         if admission['family']=='slop':row['slop_score_channels']=slop_channels
         if contract.get('adapter_kind')=='warranty-source-v1':
@@ -412,6 +424,9 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             explicit('S.common.protected_constraints',row['slop_fk_component']['checkpoints']['source-business-3']['score'],
                 'AND of five pinned independent FK/rollback source tests at checkpoint 3; original strict source outcome remains separate')
         from .state_write_receipts import METRICS, qualify_receipt, receipt_evidence
+        if source_outcome is not None:
+            explicit('S.common.process_validation',source_outcome['whole_protocol']['score'],
+                'Attached fixed original source verifier: every source test AND consistent stdout/CTRF/reward; primary State/protection oracle remains separate')
         write_receipts=receipt_evidence(collection)if arm=='pi-memweave'else{}
         row['state_write_receipt_evidence']=write_receipts
         row['normalization_evidence'].update({identity:write_receipts[tool]for identity,tool in METRICS.items()if tool in write_receipts})
@@ -449,6 +464,12 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                 item['collection_status']='REPAIR_REQUIRED'
             item['opportunity_ids']=spec['opportunity_ids'];item['mapping_version']=VERSION
             metrics.append(item)
+        if source_outcome is not None:
+            mark_checkpoint_collection(metrics,{'S.common.process_validation':source_outcome['whole_protocol']})
+            if not source_outcome['collection_complete']:
+                for item in metrics:
+                    if item['id']in {'S3.original_reward','S3.partial_pass_rate'}and item['status']!='DESIGN_NA':
+                        item.update(collection_status='REPAIR_REQUIRED',collection_reason='Original source test identities, required results or reward are incomplete/inconsistent')
         if admission['family']=='mab':
             mark_checkpoint_collection(metrics,{'S.common.protected_constraints':behavior['derived_action'],
                 **{metric_alias(identity):point for identity,point in normalization_points(behavior,admission['case_id']).items()}})
