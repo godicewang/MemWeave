@@ -7,29 +7,6 @@ import pytest
 from memweave_eval.network_probe import check_network
 
 
-def test_public_policy_single_outside_timeout_is_diagnostic_not_a_safety_rejection(tmp_path):
-    class Environment:
-        async def exec(self,**kwargs):
-            return SimpleNamespace(return_code=0,stdout=json.dumps({
-                'model':{'ok':True,'status':401,'error':None},
-                'outside':{'ok':False,'status':None,'error':'CONNECT_TIMEOUT'}}))
-    asyncio.run(check_network(Environment(),'/node',tmp_path,expected_offline=False))
-    record=json.loads((tmp_path/'network-probe.json').read_text())
-    assert record['passed']and record['general_internet']=='probe_unreachable'
-    assert record['public_probe_warning']
-
-
-def test_fixed_public_environment_checks_original_policy_without_changing_it(tmp_path):
-    class Environment:
-        async def exec(self, **_):
-            return SimpleNamespace(return_code=0,stdout=json.dumps({
-                'model':{'ok':True,'status':401,'error':None},
-                'outside':{'ok':True,'status':200,'error':None}}))
-    asyncio.run(check_network(Environment(),'/fixed/node/bin/node',tmp_path,expected_offline=False))
-    result=json.loads((tmp_path/'network-probe.json').read_text())
-    assert result['passed'] and result['expected_offline'] is False
-
-
 @pytest.mark.parametrize("status", [200, 401])
 def test_node_probe_uses_no_system_curl_and_preserves_policy(tmp_path, status):
     class Environment:

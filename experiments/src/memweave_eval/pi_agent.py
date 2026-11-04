@@ -2,17 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
-import re
 import shlex
-import subprocess
 import tempfile
 import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Literal
-from uuid import uuid4
 
 from harbor.agents.installed.pi import Pi, PiOptions
 from harbor.agents.options import Cli
@@ -32,21 +28,13 @@ class PiExperimentOptions(PiOptions):
     package_path: str
     package_sha256: str
     auth_path: str
-    protocol: Literal["tb4", "swe-pro-v2", "swe-marathon", "fixed35"]
+    protocol: Literal["tb4", "swe-pro-v2", "swe-marathon"]
     evaluation_deadline: float | None = None
     evaluation_output_tokens: int = 16384
-    evaluation_quota_backend: Literal["python", "node", "ipc"] = "python"
-    evaluation_quota_channel: str | None = None
+    evaluation_quota_backend: Literal["python", "node"] = "python"
     evaluation_per_task_arms: bool = False
-    evaluation_content_evidence: bool = False
-    evaluation_case_id: str | None = None
-    evaluation_budget_arm: str | None = None
-    evaluation_role: str = 'actor'
-    evaluation_resources: dict[str,int] = {}  # noqa: RUF012
     # PiOptions is a Pydantic model; mutable field defaults are copied per instance.
     evaluation_task_timeouts: dict[str,int] = {}  # noqa: RUF012
-    evaluation_stage_timeouts: list[float] = []  # noqa: RUF012 -- Pydantic copies mutable defaults.
-    evaluation_expected_stage_names: list[str] = []  # noqa: RUF012
     evaluation_task_ids: list[str] = []  # noqa: RUF012
     evaluation_task_configs: dict = {}  # noqa: RUF012
     evaluation_sealed_tasks: list[str] = []  # noqa: RUF012
@@ -56,8 +44,6 @@ class PiExperimentOptions(PiOptions):
     evaluation_canary: bool = False
     evaluation_request_limit: int | None = None
     evaluation_episode_budget: float | None = None
-    evaluation_pair_barrier: str | None = None
-    evaluation_fixture_quota_path: str | None = None
     runtime_plan: str | None = None
     runtime_plan_sha256: str | None = None
     prepare_only: bool = False
@@ -89,18 +75,6 @@ class ExperimentPi(Pi):
 
     def get_version_command(self) -> str:
         return "pi --version"
-
-    async def _session_positions(self,environment):
-        if not self.options.evaluation_deadline:return await super()._session_positions(environment)
-        if not getattr(self,'_asset_root',None):raise RuntimeError('trusted evaluation Node runtime unavailable')
-        root=self.environment_logs_dir/self._SESSIONS_DIRECTORY
-        result=await self.exec_as_agent(environment,'node '+shlex.quote(self._asset_root+'/evaluation/session_positions.mjs')+
-            ' '+shlex.quote(str(root)))
-        values=json.loads(result.stdout)
-        if not isinstance(values,dict)or any(not isinstance(name,str)or not name.endswith('.jsonl')
-                or type(count)is not int or count<0 for name,count in values.items()):
-            raise ValueError('invalid native Session line-count result')
-        return values
 
     async def pack_asset(self, environment, directory: str, top: str, target: Path):
         remote = self._experiment_home + "/.memweave-export.tar"
@@ -138,11 +112,6 @@ class ExperimentPi(Pi):
         )
 
     async def install(self, environment) -> None:
-        if self.options.protocol=='fixed35' and not self.options.prepare_only and (
-            self.options.evaluation_quota_backend!='ipc'or not self.options.evaluation_quota_channel):
-            raise ValueError('fixed35 paid episodes require the single-VM quota authority')
-        if self.options.evaluation_fixture_quota_path and not self.options.prepare_only:
-            raise ValueError('fixture quota override is forbidden for paid episodes')
         started = time.monotonic()
         matches=[t for t in self.options.evaluation_task_ids if any(part.startswith(t+'__') for part in self.logs_dir.parts)]
         if self.options.evaluation_per_task_arms and len(matches)!=1:
@@ -158,28 +127,6 @@ class ExperimentPi(Pi):
         plan = json.loads(plan_path.read_text())
         reference = environment.task_env_config.docker_image
         entry = plan["entries"][reference]
-        if self.options.protocol=='fixed35':
-            from harbor.environments.docker.docker import _sanitize_docker_compose_project_name
-            project=_sanitize_docker_compose_project_name(environment.session_id)
-            identities=await asyncio.to_thread(subprocess.check_output,['docker','ps','--filter',
-                'label=com.docker.compose.project='+project,'--filter',
-                'label=com.docker.compose.service=main','--format','{{.ID}}'],text=True,timeout=15)
-            candidates=identities.splitlines()
-            if len(candidates)!=1 or not re.fullmatch(r'[a-f0-9]{12,64}',candidates[0]):
-                raise ValueError('unique actual fixed-case main container identity unavailable')
-            container_id=candidates[0]
-            actual=json.loads(await asyncio.to_thread(subprocess.check_output,
-                ['docker','inspect',container_id],text=True,timeout=15))[0]
-            labels=actual.get('Config',{}).get('Labels',{})
-            if labels.get('com.docker.compose.project')!=project or labels.get('com.docker.compose.service')!='main':
-                raise ValueError('fixed-case main container labels do not match trusted Harbor session')
-            from .actor_resources import verify_actor_limits
-            limits=verify_actor_limits(actual.get('HostConfig'),self.options.evaluation_resources)
-            (self.logs_dir/'container-image-identity.json').write_text(json.dumps({
-                'container_id':actual['Id'],'image_id':actual['Image'],'expected_image_id':entry['image']['id'],
-                'verified_before_credentials':actual.get('Image')==entry['image']['id'],'resource_limits':limits}))
-            if actual.get('Image')!=entry['image']['id']:
-                raise ValueError('actual container image differs from frozen runtime plan; no credential loaded')
         cache = Path(plan["cache"])
         info = await self.exec_as_agent(environment, 'printf \'%s\\n%s\\n\' "$HOME" "$PWD"')
         home, cwd = info.stdout.strip().splitlines()
@@ -306,18 +253,11 @@ class ExperimentPi(Pi):
             )
             self.options.extension = self._asset_root + "/package/src/extension/index.ts"
 
-        # Isolated case profile only: keep the package defaults and native Pi
-        # untouched. This is an explicitly frozen pressure adaptation, not State.
-        from .pressure_config import window_settings
-        pressure=window_settings(self._evaluation_task_config)
-        if pressure is not None and self.options.variant=='pi-memweave':
-            await self.upload_private(environment,json.dumps(pressure),home+'/.pi/memory/config.json')
-
         await self.exec_as_agent(environment, f"mkdir -p {shlex.quote(profile)}")
         if self.options.evaluation_deadline:
             evaluator = self._asset_root + '/evaluation'
             await self.exec_as_agent(environment, f'mkdir -p {shlex.quote(evaluator)}')
-            for filename in ('fetch_guard.mjs', 'workspace_git.mjs', 'tree_projection.mjs', 'artifact_snapshot.mjs', 'session_positions.mjs', 'content_evidence.mjs', 'guard_bootstrap.mjs', 'preload.mjs', 'budget_guard.py', 'quota_ipc.mjs', 'container_deadline.py', 'budget_guard.mjs', 'container_deadline.mjs', 'sealed_runtime.mjs', 'sealed_bash_env.sh', 'request_boundary.ts', 'reference_source.ts', 'task_registry.mjs', 'terminal_capture.mjs', 'checkpoint_observer.ts'):
+            for filename in ('fetch_guard.mjs', 'guard_bootstrap.mjs', 'preload.mjs', 'budget_guard.py', 'container_deadline.py', 'budget_guard.mjs', 'container_deadline.mjs', 'sealed_runtime.mjs', 'sealed_bash_env.sh', 'request_boundary.ts', 'checkpoint_observer.ts'):
                 await environment.upload_file(Path(__file__).with_name(filename), evaluator+'/'+filename)
             if self.options.prepare_only:
                 await environment.upload_file(Path(__file__).with_name('probe_request.mjs'),evaluator+'/probe_request.mjs')
@@ -343,10 +283,8 @@ class ExperimentPi(Pi):
             profile + "/settings.json",
         )
         container_identity=await self.exec_as_agent(environment,'cat /etc/hostname')
-        actor_uid=await self.exec_as_agent(environment,'id -u')
         setup = {
             'container_hostname':container_identity.stdout.strip(),
-            'actor_uid':int(actor_uid.stdout.strip()),
             "pi_version": self.options.version,
             "node_version": self.options.node_version,
             "variant": self.options.variant,
@@ -354,8 +292,6 @@ class ExperimentPi(Pi):
             "prepare_only": self.options.prepare_only,
             "canary": self.options.evaluation_canary,
             "fresh_profile_and_memory": True,
-            "evaluation_window_pressure":pressure if self.options.variant=='pi-memweave'else None,
-            "expected_actor_stage_names":self.options.evaluation_expected_stage_names,
             "resources": resources,
             "deployment_seconds": time.monotonic() - started,
             "package_sha256": self.options.package_sha256 if self.options.extension else None,
@@ -374,7 +310,7 @@ class ExperimentPi(Pi):
             f"const agentDir={json.dumps(self._experiment_home + '/.pi/agent')};"
             "const settings=sdk.SettingsManager.create(process.cwd(),agentDir);"
             "const loader=new sdk.DefaultResourceLoader({cwd:process.cwd(),agentDir,settingsManager:settings,"
-            f"additionalExtensionPaths:{json.dumps(([self._asset_root+'/evaluation/checkpoint_observer.ts'] if self.options.evaluation_deadline else []) + ([self.options.extension] if self.options.extension else []) + getattr(self,'_evaluation_extra_extensions',[]))}}});"
+            f"additionalExtensionPaths:{json.dumps(([self._asset_root+'/evaluation/checkpoint_observer.ts'] if self.options.evaluation_deadline else []) + ([self.options.extension] if self.options.extension else []))}}});"
             "await loader.reload();const runtime=await sdk.ModelRuntime.create({"
             "authPath:agentDir+'/auth.json',modelsPath:agentDir+'/models.json',"
             "allowModelNetwork:false,refreshOnCreate:false});"
@@ -414,9 +350,7 @@ class ExperimentPi(Pi):
                  'MEMWEAVE_EVAL_PROGRESS_AFTER':str(self.options.evaluation_progress_after_returns)}
         )
         if self.options.evaluation_deadline:
-            await check_network(environment,self._asset_root+'/node/bin/node',self.logs_dir,
-                expected_offline=self.options.protocol!='fixed35' or
-                self._evaluation_task_config.get('expected_offline',False))
+            await check_network(environment,self._asset_root+'/node/bin/node',self.logs_dir)
             args=[self._asset_root+'/evaluation/probe_request.mjs',sdk,
                   self._experiment_home+'/.pi/agent',self.options.extension or '-',self.options.variant,
                   str(self.options.evaluation_output_tokens),self.options.smoke_barrier or '-']
@@ -452,7 +386,7 @@ if(a.length!==EXPECTED || s.length!==EXPECTED)throw Error('CLI guard missing or 
 if(e.some(x=>x.event==='sealed_tool_rejected'))throw Error('Harmless query rejected');
 fs.renameSync('/logs/agent/cli-request-trace.jsonl','/logs/agent/cli-positive-trace.jsonl');
 fs.renameSync('/logs/agent/cli-fake-upstream.jsonl','/logs/agent/cli-positive-upstream.jsonl');
-""".replace('EXPECTED',str((2 if self.options.variant=='pi-memweave' else 1)+(1 if self._evaluation_sealed else 0)+(1 if getattr(self,'_evaluation_domain_descriptor',None) else 0)))
+""".replace('EXPECTED',str((2 if self.options.variant=='pi-memweave' else 1)+(1 if self._evaluation_sealed else 0)))
         await self.exec_as_agent(environment,'node --input-type=module -e '+shlex.quote(validate),timeout_sec=20)
         if self._evaluation_sealed:
             await self.exec_as_agent(environment,command,timeout_sec=120,env={'MEMWEAVE_EVAL_EXECUTION_NEGATIVE':'1'})
@@ -484,7 +418,6 @@ positive:true,lost_guard_upstream_requests:0,actual_cli_pid_deadline:true}));
 
     async def exec_as_agent(self, environment, command: str, **kwargs):
         is_pi = "pi --print --mode json" in command
-        invocation=None
         if hasattr(self, "_asset_root"):
             if command.startswith(". ~/.nvm/nvm.sh; "):
                 command = command.removeprefix(". ~/.nvm/nvm.sh; ")
@@ -507,68 +440,29 @@ positive:true,lost_guard_upstream_requests:0,actual_cli_pid_deadline:true}));
                 extensions=('--extension '+shlex.quote(evaluator+'/fixture_transport.ts')+' ' if self.options.prepare_only else '')
                 command = command.replace('pi --print --mode json', 'pi --print --mode json '+extensions+'--extension '
                                           +shlex.quote(evaluator+'/checkpoint_observer.ts'))
-                if getattr(self,'_evaluation_extra_extensions',None):
-                    command=command.replace('pi --print --mode json','pi --print --mode json '+
-                        ' '.join('--extension '+shlex.quote(p)for p in self._evaluation_extra_extensions))
                 kwargs['env'].update(
                     NODE_OPTIONS='--import '+evaluator+'/preload.mjs',
-                    MEMWEAVE_EVAL_LEDGER=self.options.evaluation_quota_channel or ((self.options.evaluation_fixture_quota_path or '/logs/agent/cli-probe-quota.json') if self.options.prepare_only else '/opt/memweave-eval-control/quota.json'),
+                    MEMWEAVE_EVAL_LEDGER='/logs/agent/cli-probe-quota.json' if self.options.prepare_only else '/opt/memweave-eval-control/quota.json',
                     MEMWEAVE_EVAL_TRACE='/logs/agent/cli-request-trace.jsonl' if self.options.prepare_only else '/logs/agent/request-trace.jsonl',
                     MEMWEAVE_EVAL_DEADLINE=str(getattr(self,'_evaluation_effective_deadline',self.options.evaluation_deadline)),
                     MEMWEAVE_EVAL_VARIANT=self.options.variant,
                     MEMWEAVE_EVAL_QUOTA_BACKEND=self.options.evaluation_quota_backend,
-                    MEMWEAVE_EVAL_BUDGET_ARM=self.options.evaluation_budget_arm or ((self._evaluation_task_id+':'+self.options.variant) if self.options.evaluation_per_task_arms else self.options.variant),
+                    MEMWEAVE_EVAL_BUDGET_ARM=(self._evaluation_task_id+':'+self.options.variant) if self.options.evaluation_per_task_arms else self.options.variant,
                     MEMWEAVE_EVAL_SEALED='1' if self._evaluation_sealed else '0',
                     MEMWEAVE_EVAL_POLICY_FILE=evaluator+'/sealed_bash_env.sh',
                     MEMWEAVE_EVAL_ASSET_ROOT=self._asset_root,
                     MEMWEAVE_EVAL_WORKSPACE=json.dumps(self._evaluation_task_config.get('workspace',{})),
                     MEMWEAVE_EVAL_MAX_OUTPUT=str(self.options.evaluation_output_tokens),
                     MEMWEAVE_EVAL_RUN_ID=self.options.evaluation_run_id or 'unknown',
-                    MEMWEAVE_EVAL_CASE_ID=self.options.evaluation_case_id or self._evaluation_task_id or '',
-                    MEMWEAVE_EVAL_STAGE_ID=str(getattr(self,'_evaluation_stage',0)),
-                    MEMWEAVE_EVAL_ROLE=self.options.evaluation_role,
                     MEMWEAVE_EVAL_PROGRESS_AFTER=str(self.options.evaluation_progress_after_returns),
                     MEMWEAVE_EVAL_INSTRUCTION_PATH=evaluator+'/instruction.md',
                     MEMWEAVE_EVAL_CREDENTIAL_FILE=evaluator+'/private-auth.json',
                     MEMWEAVE_EVAL_REQUEST_LIMIT=str(self.options.evaluation_request_limit or 0),
                     MEMWEAVE_EVAL_EPISODE_BUDGET=str(self.options.evaluation_episode_budget or 0),
-                    MEMWEAVE_EVAL_CONTENT_STORE='/logs/agent/request-content' if self.options.evaluation_content_evidence else '',
                 )
-                if getattr(self,'_evaluation_domain_descriptor',None):
-                    kwargs['env']['MEMWEAVE_EVAL_DOMAIN_DESCRIPTOR']=self._evaluation_domain_descriptor
                 if self.options.prepare_only and kwargs['env'].get('MEMWEAVE_EVAL_LOCAL_STOP_AFTER'):
                     kwargs['env']['MEMWEAVE_EVAL_DEADLINE']=str(time.time()+float(kwargs['env']['MEMWEAVE_EVAL_LOCAL_STOP_AFTER']))
-                if self.options.evaluation_content_evidence:
-                    from .storage import atomic_json
-                    identity=uuid4().hex
-                    directory=self.logs_dir/'execution-invocations';directory.mkdir(parents=True,exist_ok=True)
-                    invocation={'schema_version':1,'invocation_id':identity,
-                        'stage_id':str(getattr(self,'_evaluation_stage',0)),
-                        'run_id':self.options.evaluation_run_id,'case_id':self.options.evaluation_case_id,
-                        'status':'STARTED','started_at':time.time(),'started_monotonic_ns':str(time.monotonic_ns())}
-                    kwargs['env']['MEMWEAVE_EVAL_INVOCATION_ID']=identity
-                    atomic_json(directory/(identity+'.json'),invocation)
-        try:
-            result = await super().exec_as_agent(environment, command, **kwargs)
-        except BaseException as error:
-            if invocation is not None:invocation.update(status='EXECUTION_RAISED',error_class=type(error).__name__)
-            raise
-        finally:
-            if invocation is not None:
-                # Upstream tee replaces pi.txt for each CLI invocation. Capture it
-                # immediately, before Harbor starts another stage or copies logs.
-                from .storage import atomic_json
-                target=directory/(identity+'.stdout.jsonl')
-                try:
-                    await environment.download_file(str(self.environment_logs_dir/'pi.txt'),target)
-                    invocation.update(stdout_file=target.name,stdout_sha256=file_digest(target),
-                        stdout_bytes=target.stat().st_size,capture_status='CAPTURED')
-                except Exception as error:  # noqa: BLE001 -- capture errors are explicit evidence, never actor success.
-                    invocation.update(capture_status='MISSING',capture_error_class=type(error).__name__)
-                invocation.update(finished_at=time.time())
-                if invocation['status']=='STARTED':
-                    invocation.update(status='RETURNED',return_code=getattr(result,'return_code',None))
-                atomic_json(directory/(identity+'.json'),invocation)
+        result = await super().exec_as_agent(environment, command, **kwargs)
         if not is_pi:
             setup_log = self.logs_dir / "setup/experiment-install.log"
             setup_log.parent.mkdir(parents=True, exist_ok=True)
@@ -586,33 +480,10 @@ positive:true,lost_guard_upstream_requests:0,actual_cli_pid_deadline:true}));
             await self.runtime_preflight(environment)
             return
         self._agent_started = time.monotonic()
-        self._evaluation_stage=getattr(self,'_evaluation_stage',0)+1
-        if not hasattr(self,'_episode_started_unix'):
-            from .pair_barrier import paired_start
-            self._episode_started_unix=await paired_start(
-                Path(self.options.evaluation_pair_barrier) if self.options.evaluation_pair_barrier else None,
-                self.options.variant)
         try:
             if self.options.evaluation_canary:
                 instruction='Reply only OK. Do not call any tools. This is a connectivity canary.'
             timeout=self.options.evaluation_task_timeouts.get(self._evaluation_task_id)
-            if timeout and not self.options.evaluation_canary and self.options.protocol=='fixed35':
-                from .case_timing import actor_deadline
-                stages=self.options.evaluation_stage_timeouts
-                self._evaluation_effective_deadline=actor_deadline(self.options.evaluation_deadline,
-                    self._episode_started_unix,timeout,time.time(),self._evaluation_stage,stages)
-                resource=self.options.evaluation_resources
-                instruction+=('\n\nEvaluation budget notice (same policy for both variants): '
-                    +(f'the sum of frozen actor allowances is {timeout} seconds; '
-                      f'this stage has its frozen {stages[self._evaluation_stage-1]:g}-second allowance; '
-                      'intermediate verifier/setup time is not deducted from the next stage; 'if stages else
-                      f'the total case budget across all stages is {timeout} seconds; ')+
-                    f'allocated resources: {json.dumps(resource,sort_keys=True)}. '
-                    'The effective model cutoff is '+datetime.fromtimestamp(
-                        self._evaluation_effective_deadline,UTC).isoformat()+'. '
-                    'This explicit cap supersedes a larger time allowance in the original task. '
-                    'No extra solving time is available after this cutoff.')
-                timeout=None  # The legacy Marathon timer-file adaptation does not apply.
             if timeout and not self.options.evaluation_canary:
                 self._evaluation_effective_deadline=min(self.options.evaluation_deadline,time.time()+timeout)
                 instruction+=('\n\nEvaluation budget notice (identical policy for both arms): '
@@ -636,14 +507,6 @@ positive:true,lost_guard_upstream_requests:0,actual_cli_pid_deadline:true}));
                 await check_network(environment, self._asset_root + "/node/bin/node", self.logs_dir)
             await super().run(instruction, environment, context)
         finally:
-            if self.options.protocol=='fixed35' and self._evaluation_task_config.get('answer_file')=='/app/answer.json':
-                # Evidence of absence is distinct from a collection error.
-                capture=('mkdir -p /logs/agent/fixed35-artifacts; '
-                         'if test -f /app/answer.json; then cp /app/answer.json '
-                         '/logs/agent/fixed35-artifacts/answer.json; '
-                         'printf \'{"exists":true}\\n\'; else printf \'{"exists":false}\\n\'; fi '
-                         '> /logs/agent/fixed35-artifacts/answer-presence.json')
-                await self.exec_as_agent(environment,capture,timeout_sec=20)
             if getattr(self,'_evaluation_sealed',False):
                 capture="tar -czf /logs/agent/model-source-original.tar.gz -C /app src"
                 result=await environment.exec(command=capture,user='root',timeout_sec=120)
@@ -667,13 +530,13 @@ positive:true,lost_guard_upstream_requests:0,actual_cli_pid_deadline:true}));
                 result = await environment.exec(command=capture, user="root", timeout_sec=30)
                 if result.return_code != 0:
                     raise RuntimeError("official Pro patch capture failed")
-            await self.capture_memory_evidence(environment)
-
-    async def capture_memory_evidence(self,environment):
-        if self.options.variant == "pi-memweave" and hasattr(self, "_experiment_home"):
-            # Snapshot only original runtime evidence, not credentials or model weights.
-            home = shlex.quote(self._experiment_home)
-            result = await environment.exec(
-                command=f"test ! -d {home}/.pi/memory || tar -czf /logs/agent/memory.tar.gz "
-                f"--exclude=models --exclude=search -C {home}/.pi memory",timeout_sec=120)
-            if result.return_code != 0:raise RuntimeError("memory evidence collection failed")
+            if self.options.variant == "pi-memweave" and hasattr(self, "_experiment_home"):
+                # Snapshot only original runtime evidence, not credentials or model weights.
+                home = shlex.quote(self._experiment_home)
+                result = await environment.exec(
+                    command=f"test ! -d {home}/.pi/memory || tar -czf /logs/agent/memory.tar.gz "
+                    f"--exclude=models --exclude=search -C {home}/.pi memory",
+                    timeout_sec=120,
+                )
+                if result.return_code != 0:
+                    raise RuntimeError("memory evidence collection failed")

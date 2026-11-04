@@ -9,17 +9,12 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-from .owned_verifiers import running_containers
 
-
-def monitor(root: Path, run_id: str, model_deadline: float, hard_stop: float,
-            stop_filename: str = '.watchdog-stop', log_filename: str = 'deadline-watchdog.jsonl'):
-    if any(Path(name).name!=name for name in [stop_filename,log_filename]):
-        raise ValueError('local observer filenames required')
-    output = root / 'harbor' / log_filename
+def monitor(root: Path, run_id: str, model_deadline: float, hard_stop: float):
+    output = root / "harbor/deadline-watchdog.jsonl"
     output.parent.mkdir(parents=True, exist_ok=True)
     warned = False
-    while not (root / stop_filename).exists():
+    while not (root / ".watchdog-stop").exists():
         now = time.time()
 
         def command(args):
@@ -30,24 +25,22 @@ def monitor(root: Path, run_id: str, model_deadline: float, hard_stop: float,
             except (OSError, subprocess.TimeoutExpired):
                 return SimpleNamespace(returncode=124, stdout="")
 
-        selected = running_containers(root,run_id,command)
-        identities = selected['identities']
-        actors = selected['actor_identities']
+        query = ["ps", "--filter", "label=org.memweave.eval.run=" + run_id, "--format", "{{.ID}}"]
+        selected = command(query)
+        identities = selected.stdout.split() if selected.returncode == 0 else None
         record = {
             "timestamp": now,
             "containers": identities,
-            "docker_query_status": 0 if selected['complete'] else 1,
-            "ownership": selected,
+            "docker_query_status": selected.returncode,
         }
         confirmed = False
         if now >= hard_stop:
-            safe = identities if identities is not None else actors
-            if safe is not None:
+            if identities is not None:
                 record["hard_stop"] = {
-                    identity: command(["kill", identity]).returncode for identity in safe
+                    identity: command(["kill", identity]).returncode for identity in identities
                 }
-                check = running_containers(root,run_id,command)
-                confirmed = check['complete'] and check['identities']==[]
+                check = command(query)
+                confirmed = check.returncode == 0 and not check.stdout.split()
                 record["confirmed_stopped"] = confirmed
             if not confirmed:
                 record["stop_status"] = "unconfirmed_retrying"
@@ -62,12 +55,12 @@ def monitor(root: Path, run_id: str, model_deadline: float, hard_stop: float,
                         }
                     )
                 )
-        elif now >= model_deadline and actors is not None:
+        elif now >= model_deadline and identities is not None:
             record["model_stop"] = {
                 identity: command(
                     ["exec", identity, "sh", "-c", "pkill -TERM -x pi || true; pkill -TERM -x node || true"]
                 ).returncode
-                for identity in actors
+                for identity in identities
             }
             # Keep checking: a failed exec or a newly starting instance is never skipped.
         elif identities:

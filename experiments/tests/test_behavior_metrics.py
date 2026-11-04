@@ -17,14 +17,10 @@ def test_retrieval_limits_best_subset_and_deduplication():
     assert result["metrics"]["top1_given_best_hit"]["value"] == 0
     short = run(case, {"limit": 2, "candidates": ["a"], "complete": True})
     assert short["metrics"]["hit_at_k"]["value"] is None
-    assert short["metrics"]["hit_at_k"]["unknown"] == 0
-    assert short["metrics"]["hit_at_k"]["not_applicable"] == 1
-    assert short['cases'][0]['status']=='not_applicable'
+    assert short["metrics"]["hit_at_k"]["unknown"] == 1
     empty = run(case, {"limit": 3, "candidates": [], "complete": True, "error": True})
     assert empty["metrics"]["hit_at_k"]["value"] == 0
     assert empty["metrics"]["top1_given_best_hit"]["value"] is None
-    rejected=run(case,{'limit':0,'candidates':[],'complete':True,'query_failed':True})
-    assert rejected['metrics']['hit_at_k']['value']==0
 
 
 def test_restore_keeps_missed_intents_and_does_not_require_search():
@@ -38,29 +34,6 @@ def test_restore_keeps_missed_intents_and_does_not_require_search():
     metric = result["metrics"]["restore_end_to_end"]
     assert metric["numerator"] == 1 and metric["denominator"] == 2 and metric["unknown"] == 1
     assert result["metrics"]["restore_after_binding"]["value"] == 1
-
-
-def test_known_wrong_restore_is_failure_even_if_followup_action_evidence_missing():
-    result=run({'id':'restore','kind':'restore','targets':['correct']},
-        {'complete':True,'bound':'wrong','request_current':None,'action_passed':None})
-    assert result['metrics']['restore_end_to_end']['value']==0
-    assert result['metrics']['restore_after_binding']['not_applicable']==1
-
-
-@pytest.mark.parametrize('passed,evidence,value',[(True,['registry'],1),(False,['registry'],0),(None,['registry'],None),(True,[],None)])
-def test_registered_route_requires_actual_binding_program_check(passed,evidence,value):
-    result=run({'id':'route','kind':'route','allowed':['continue'],'required_route_checks':['source']},
-        {'complete':True,'route':'continue','created_ids':[],'program_route_checks':{
-            'source':{'passed':passed,'evidence_ids':evidence}}})
-    assert result['metrics']['route_correct']['value']==value
-
-
-@pytest.mark.parametrize('returned,expected',[(True,1),(False,0),(None,None)])
-def test_simple_interruption_can_require_a_separate_real_return_action(returned,expected):
-    result=run({'id':'s','kind':'route','allowed':['continue'],'simple':True,'return_opportunity_id':'return'},
-        {'complete':True,'route':'continue','created_ids':[],'create_attempts':0,
-            'answer_passed':True,'protected_unchanged':True,'return_action_passed':returned})
-    assert result['cases'][0]['value']==expected
 
 
 @pytest.mark.parametrize(

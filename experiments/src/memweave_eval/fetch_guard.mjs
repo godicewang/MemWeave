@@ -1,12 +1,8 @@
-// Transport guard with summaries and opt-in evaluator-only content evidence.
+// Common experimental transport observer. No prompt/response text is persisted.
 import fs from 'node:fs';
-import {gitWorktrees} from './workspace_git.mjs';
-import {treeProjection}from'./tree_projection.mjs';
-import {artifactSnapshot}from'./artifact_snapshot.mjs';
 import path from 'node:path';
 import {createHash, randomUUID} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
-import {contentEvidence} from './content_evidence.mjs';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 const text = value => typeof value === 'string' ? value : JSON.stringify(value ?? null);
@@ -66,28 +62,14 @@ export function requestSummary(payload, originalInstruction) {
 export function workspaceSummary(root='/app/interpreter') {
   let config={};try{config=JSON.parse(process.env.MEMWEAVE_EVAL_WORKSPACE??'{}');}catch{}
   root=config.root??root;
-  const files={},file_status={},file_refs={};
+  const files={};
   for (const name of (config.files??['src/spec.rs','src/main.rs','src/runtime.rs','src/decode.rs','src/types.rs','Cargo.toml'])) {
-    try {
-      const filename=path.resolve(root,name),bytes=fs.readFileSync(filename);
-      files[name]=hash(bytes);file_status[name]={status:'present'};
-      if((config.content_files??[]).includes(name)){
-        if(filename!==path.resolve(root)&&!filename.startsWith(path.resolve(root)+path.sep))throw Error('Content path escapes workspace');
-        if(fs.lstatSync(filename).isSymbolicLink()||bytes.length>65536)file_status[name].content_status='unsupported_link_or_size';
-        else file_refs[name]=contentEvidence()?.put(bytes)??null;
-      }
-    }
-    catch(error) { files[name]=null;file_status[name]={status:error?.code==='ENOENT'?'absent':'unreadable',error_class:error?.code??'Error'}; }
+    try { files[name]=hash(fs.readFileSync(path.join(root,name))); }
+    catch { files[name]=null; }
   }
   let cargo=null;
   try { cargo=fs.readFileSync(path.join(root,'Cargo.toml'),'utf8'); } catch {}
-  const trees={};
-  for(const [name,definition]of Object.entries(config.projection_trees??{}))
-    trees[name]=treeProjection(path.resolve(root,definition.path),definition);
-  return {files,file_status,cargo,file_refs,
-    ...(config.artifact_files?{artifacts:artifactSnapshot(root,config.artifact_files,bytes=>contentEvidence()?.put(bytes))}:{}),
-    ...(config.projection_trees?{tree_projections:trees}:{}),
-    ...(config.worktrees?{git_worktrees:gitWorktrees(root,config.worktrees)}:{})}; // No evaluator metadata enters a model.
+  return {files, cargo}; // Small task-specific configuration; never source or answers.
 }
 
 export function installGuard({ledger,trace,deadline,variant,quotaScript,credentialFile,fetchImpl=globalThis.fetch}) {
@@ -97,20 +79,12 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,credenti
   const originalInstruction=process.env.MEMWEAVE_EVAL_INSTRUCTION_PATH
     ? fs.readFileSync(process.env.MEMWEAVE_EVAL_INSTRUCTION_PATH,'utf8') : undefined;
   const quota = operation => {
-    const ipc=quotaScript.endsWith('/quota_ipc.mjs');
     const node=quotaScript.endsWith('.mjs');
-    const executable=ipc?process.execPath:node?'flock':'python3';
-    const args=ipc?[quotaScript,ledger]:node?['-w','2',ledger.replace(/\.[^/.]+$/,'.lock'),process.execPath,quotaScript,ledger,'--lock-held']:[quotaScript,ledger];
-    const result=spawnSync(executable,args,{input:JSON.stringify(operation),encoding:'utf8',timeout:ipc?13000:4000,
+    const executable=node?'flock':'python3';
+    const args=node?['-w','2',ledger.replace(/\.[^/.]+$/,'.lock'),process.execPath,quotaScript,ledger,'--lock-held']:[quotaScript,ledger];
+    const result=spawnSync(executable,args,{input:JSON.stringify(operation),encoding:'utf8',timeout:4000,
       env:{...process.env,NODE_OPTIONS:''}});
-    if (result.status !== 0) {
-      let detail;try{detail=JSON.parse(result.stderr);}catch{}
-      const failure={operation:operation.action,exit_status:result.status,signal:result.signal??null,
-        error_class:detail?.error_class??result.error?.code??'QuotaSubprocessError',
-        reason:detail?.reason??'quota_subprocess_failed',phase:detail?.phase??null};
-      record({event:'quota_operation_rejected',request_id:operation.id,...failure});
-      throw Object.assign(Error('Evaluation quota admission/settlement rejected'),{quota_failure:failure});
-    }
+    if (result.status !== 0) throw Error('Evaluation quota admission/settlement rejected');
     return JSON.parse(result.stdout);
   };
   function authorized(input,init) {
@@ -128,17 +102,7 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,credenti
     const method=(init?.method ?? input?.method ?? 'GET').toUpperCase();
     if(url.hostname==='api.deepseek.com' && method==='GET' && /\/(?:v1\/)?models\/?$/.test(url.pathname)) {
       if(url.protocol!=='https:')throw Error('Guard credential endpoint rejected');
-      const started=performance.now();record({event:'metadata_request_start'});
-      try{
-        const response=await fetchImpl(input,authorized(input,init));
-        record({event:'metadata_request_end',http_status:response.status,elapsed_ms:performance.now()-started});
-        return response;
-      }catch(error){
-        record({event:'metadata_request_error',error_class:error?.name??'Error',
-          cause_code:typeof error?.cause?.code==='string'&&/^[A-Z0-9_]{1,64}$/.test(error.cause.code)?error.cause.code:null,
-          elapsed_ms:performance.now()-started});
-        throw error;
-      }
+      return fetchImpl(input,authorized(input,init));
     }
     if (url.hostname !== 'api.deepseek.com' || method !== 'POST') return fetchImpl(input,init);
     if(url.protocol!=='https:')throw Error('Guard credential endpoint rejected');
@@ -150,13 +114,6 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,credenti
     if (payload.model !== 'deepseek-flash' || payload.stream !== true) throw Error('Unbounded provider request');
     const arm=process.env.MEMWEAVE_EVAL_BUDGET_ARM??variant;
     const id=(process.env.MEMWEAVE_EVAL_RUN_ID ?? 'fixture')+':'+arm+':'+randomUUID();
-    if(Date.now()/1000>=deadline){
-      record({event:'request_denied',request_id:id,reason:'local_deadline_before_reservation'});
-      throw Error('Evaluation deadline');
-    }
-    const evidence=contentEvidence();
-    // Capture before reservation: a local write failure must dispatch zero upstream requests.
-    const payloadRef=evidence?.put(raw);
     const maxOutput=payload.max_tokens ?? payload.max_completion_tokens;
     const configured=Number(process.env.MEMWEAVE_EVAL_MAX_OUTPUT ?? 384000);
     if (maxOutput>configured) throw Error('Output exceeds frozen experiment setting');
@@ -168,11 +125,8 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,credenti
     catch (error) { record({event:'request_denied',request_id:id,reason:'quota_or_deadline'}); throw error; }
     const boundary=globalThis[Symbol.for('memweave.eval.requestBoundary')];
     const matched=boundary?.prepared_messages_sha256===hash(JSON.stringify(payload.messages??[]));
-    const workspace=workspaceSummary();
     record({event:'request_ready',request_id:id,...requestSummary(payload,originalInstruction),
-      ...(matched?boundary:{boundary_error:'no_matching_provider_preparation'}),
-      ...(payloadRef?{payload_ref:payloadRef}:{}),workspace});
-    evidence?.event('request_ready',{request_id:id,payload_ref:payloadRef,prepared_boundary:matched?boundary:null,workspace});
+      ...(matched?boundary:{boundary_error:'no_matching_provider_preparation'}),workspace:workspaceSummary()});
     const controller=new AbortController();
     const remaining=deadline*1000-Date.now();
     if (remaining<=0) {record({event:'request_expired',request_id:id});throw Error('Evaluation deadline');}
@@ -186,22 +140,14 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,credenti
       record({event:'http_attempt',request_id:id});
       response=await fetchImpl(input,requestInit);
       record({event:'http_response',request_id:id,status:response.status});
-      evidence?.event('http_response',{request_id:id,status:response.status,
-        provider_request_id:response.headers.get('x-request-id')??response.headers.get('request-id')});
     } catch (error) {
       clearTimeout(timer);
-      record({event:'http_error',request_id:id,error_class:error?.name ?? 'Error',
-        cause_code:typeof error?.cause?.code==='string'&&/^[A-Z0-9_]{1,64}$/.test(error.cause.code)?error.cause.code:null,
-        upstream_signal_aborted:signal?.aborted===true,evaluation_signal_aborted:controller.signal.aborted});
+      record({event:'http_error',request_id:id,error_class:error?.name ?? 'Error'});
       throw error;
     }
-    if (!response.ok || !response.body) {
-      if(evidence)evidence.event('provider_error_receipt',{request_id:id,status:response.status,
-        body_ref:evidence.put(Buffer.from(await response.clone().arrayBuffer()))});
-      clearTimeout(timer); return response;
-    }
+    if (!response.ok || !response.body) { clearTimeout(timer); return response; }
     const decoder=new TextDecoder();
-    let pending='',usage=null,done=false,ended=false,responseModel=null,chunkIndex=0;
+    let pending='',usage=null,done=false,ended=false,responseModel=null;
     function finalize() {
       if (ended || !done || !usage) return;
       ended=true;
@@ -210,10 +156,8 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,credenti
       try {const billed=quota({action:'settle',id,input:usage.input,output:usage.output,
         cache_input:Number.isInteger(usage.cache_hit)?usage.cache_hit:0});settled=true;
         record({event:'budget_settled',request_id:id,charge_usd:billed.charge_usd});}
-      catch(error) {record({event:'settlement_rejected',request_id:id,
-        quota_failure:error?.quota_failure??{reason:'quota_response_not_valid_JSON'}});}
+      catch {record({event:'settlement_rejected',request_id:id});}
       record({event:'request_end',request_id:id,usage,settled,stream_done:done,response_model:responseModel});
-      evidence?.event('provider_receipt',{request_id:id,usage,settled,stream_done:done,response_model:responseModel,chunks:chunkIndex});
     }
     function consume(line) {
       if (!line.startsWith('data:')) return;
@@ -232,7 +176,6 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,credenti
     }
     const stream=response.body.pipeThrough(new TransformStream({
       transform(chunk,controller) {
-        if(evidence)evidence.event('response_chunk',{request_id:id,ordinal:++chunkIndex,chunk_ref:evidence.put(Buffer.from(chunk))});
         pending+=decoder.decode(chunk,{stream:true});
         let split;
         while ((split=pending.indexOf('\n'))>=0) {

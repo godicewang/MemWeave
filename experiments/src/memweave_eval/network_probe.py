@@ -47,11 +47,11 @@ class Checks(StrictModel):
     outside: Endpoint
 
 
-async def check_network(environment, node: str, logs: Path, *, expected_offline=True):
+async def check_network(environment, node: str, logs: Path):
     attempts = []
     for _ in range(3):
         began = time.monotonic()
-        record = await _check_once(environment, node, expected_offline=expected_offline)
+        record = await _check_once(environment, node)
         record["elapsed_seconds"] = time.monotonic() - began
         attempts.append(record)
         checks = record.get("checks", {})
@@ -61,16 +61,16 @@ async def check_network(environment, node: str, logs: Path, *, expected_offline=
                     "ECONNRESET", "ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN",
                     "ETIMEDOUT", "ENETUNREACH", "EHOSTUNREACH",
                     "CONNECT_TIMEOUT", "TOTAL_TIMEOUT",
-                } or outside.get("ok") is not (not expected_offline)):
+                } or outside.get("ok") is not False):
             break
     final = dict(attempts[-1], attempts=attempts)
     atomic_json(logs / "network-probe.json", final)
     if not final["passed"]:
-        raise RuntimeError("Declared task/model-endpoint network probes failed; see network-probe.json")
+        raise RuntimeError("Pro offline/model-endpoint network probes failed; see network-probe.json")
 
 
-async def _check_once(environment, node: str, *, expected_offline=True):
-    record = {"passed": False, "credential_free": True, "expected_offline": expected_offline}
+async def _check_once(environment, node: str):
+    record = {"passed": False, "credential_free": True}
     try:
         result = await environment.exec(
             command=shlex.quote(node) + " --input-type=module -e " + shlex.quote(PROBE_SCRIPT),
@@ -82,13 +82,10 @@ async def _check_once(environment, node: str, *, expected_offline=True):
         checks = Checks.model_validate_json(result.stdout)
         record["checks"] = checks.model_dump(mode="json")
         record["passed"] = bool(
-            checks.model.ok and checks.model.status in (200, 401)
-            and (not checks.outside.ok if expected_offline else True)
+            checks.model.ok and checks.model.status in (200, 401) and not checks.outside.ok
         )
         record["model_endpoint"] = "reachable" if checks.model.ok else "unreachable"
-        record["general_internet"] = ("blocked" if expected_offline else "probe_unreachable") if not checks.outside.ok else "reachable"
-        if not expected_offline and not checks.outside.ok:
-            record['public_probe_warning']='A single unreachable test URL does not establish an offline policy; declared public policy is unchanged'
+        record["general_internet"] = "blocked" if not checks.outside.ok else "reachable"
     except Exception as exc:  # noqa: BLE001 -- record only a safe error category.
         record["probe_error_type"] = type(exc).__name__
     return record

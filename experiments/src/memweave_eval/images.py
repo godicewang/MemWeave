@@ -160,8 +160,6 @@ def protocol_view(path: Path) -> dict:
 def prepare_task(
     source: Path, root: Path, platform: str, deadline: float, env: dict, limits: dict,
     *, frozen: dict | None = None, resources: dict | None = None, sealed: bool = False, agent_timeout: int | None = None,
-    reviewed_compose_sha256: str | None = None,
-    reviewed_multistep_sha256: str | None = None,
 ) -> dict:
     source, root = source.resolve(), root.resolve()
     if time.monotonic() >= deadline:
@@ -170,7 +168,7 @@ def prepare_task(
     text = (source / "task.toml").read_text()
     raw = tomllib.loads(text)
     cfg = TaskConfig.model_validate_toml(text)
-    if cfg.steps and original_hash != reviewed_multistep_sha256:
+    if cfg.steps:
         raise TaskPreparationError("multi-step task is outside current admission")
     verifier = resolve_verifier_environment_definition(cfg, TaskPaths(source))
     definitions = [("main", source / "environment", cfg.environment)]
@@ -207,13 +205,10 @@ def prepare_task(
     built = {}
     changed = copy.deepcopy(raw)
     for role, directory, config in definitions:
-        compose_files = [directory / name for name in
-            ("docker-compose.yaml", "docker-compose.yml", "compose.yaml", "compose.yml")
-            if (directory / name).exists()]
         if any(
             (directory / name).exists()
             for name in ("docker-compose.yaml", "docker-compose.yml", "compose.yaml", "compose.yml")
-        ) and (len(compose_files) != 1 or file_digest(compose_files[0]) != reviewed_compose_sha256):
+        ):
             raise TaskPreparationError("official Compose environment requires separate review")
         context_hash = task_digest(directory)
         name = hashlib.sha256(

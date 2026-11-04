@@ -191,8 +191,6 @@ def test_warm_install_has_no_network_installer_or_auth_in_preparation(tmp_path):
                 stdout = "v24.22.0\n1.4.0\n"
             if "id -u && id -g" in command:
                 stdout = "1000\n1000\n"
-            elif command.endswith("id -u"):
-                stdout = "1000\n"
             return SimpleNamespace(return_code=0, stdout=stdout, stderr="")
 
         async def upload_file(self, source, target):
@@ -243,30 +241,3 @@ def test_formal_budget_notice_and_timer_match_fixed_task_timeout(tmp_path):
     assert '32400 seconds (9 hours)'in instruction and 'supersedes any larger time budget'in instruction
     epoch=int(re.search(r'DEADLINE=(\d+)',uploaded['/app/timer.sh'])[1])
     assert abs(epoch-(time.time()+32400))<3
-
-
-
-@pytest.mark.parametrize('service',['main','egress-control'])
-def test_fixed_case_identity_rejects_wrong_scope_before_credentials(tmp_path,service):
-    import json
-    from types import SimpleNamespace
-    from unittest.mock import patch
-
-    from memweave_eval.storage import file_digest
-    plan=tmp_path/'plan.json';plan.write_text(json.dumps({'entries':{'fixed':{'image':{'id':'sha256:wanted'}}}}))
-    agent=ExperimentPi(version='1.4.0',logs_dir=tmp_path,model_name='deepseek/deepseek-flash',
-        node_version='24.22.0',variant='pi-native',package_path='/missing',package_sha256='a'*64,
-        auth_path='',protocol='fixed35',prepare_only=True,evaluation_resources={'cpus':2,'memory_mb':4096},
-        runtime_plan=str(plan),runtime_plan_sha256=file_digest(plan))
-    actual={'Id':'a'*64,'Image':'sha256:wrong','HostConfig':{'NanoCpus':2000000000,'Memory':4294967296},'Config':{'Labels':{
-        'com.docker.compose.project':'trusted-session','com.docker.compose.service':service}}}
-    def inspect(command,**kwargs):
-        if command[1]=='ps':
-            assert 'label=com.docker.compose.project=trusted-session' in command
-            assert 'label=com.docker.compose.service=main' in command
-            return 'a'*64+'\n'
-        return json.dumps([actual])
-    environment=SimpleNamespace(session_id='Trusted-Session',task_env_config=SimpleNamespace(docker_image='fixed'))
-    with (patch('memweave_eval.pi_agent.subprocess.check_output',side_effect=inspect),
-          pytest.raises(ValueError,match='image differs'if service=='main'else'labels do not match')):
-        asyncio.run(agent.install(environment))
