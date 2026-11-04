@@ -190,7 +190,9 @@ export function installGuard({ledger,trace,deadline,variant,quotaScript,credenti
         provider_request_id:response.headers.get('x-request-id')??response.headers.get('request-id')});
     } catch (error) {
       clearTimeout(timer);
-      record({event:'http_error',request_id:id,error_class:error?.name ?? 'Error'});
+      record({event:'http_error',request_id:id,error_class:error?.name ?? 'Error',
+        cause_code:typeof error?.cause?.code==='string'&&/^[A-Z0-9_]{1,64}$/.test(error.cause.code)?error.cause.code:null,
+        upstream_signal_aborted:signal?.aborted===true,evaluation_signal_aborted:controller.signal.aborted});
       throw error;
     }
     if (!response.ok || !response.body) {

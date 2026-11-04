@@ -65,7 +65,7 @@ const bytes='data: {"choices":[{"delta":{"content":"秘密"}}]}\\r\\n\\r\\n'+
  'data: {"usage":{"prompt_tokens":123,"completion_tokens":45}}\\n\\n'+'data: [DONE]\\n\\n';
 let calls=0;
 const fake=async (url,init)=>{if(init.body!==body)throw Error('body changed');if(new Headers(init.headers).get('accept-encoding')!=='identity')throw Error('control encoding changed');calls++;
-if(calls===2)throw Error('network');
+if(calls===2)throw Object.assign(new TypeError('sensitive upstream detail'),{cause:{code:'UND_ERR_CONNECT_TIMEOUT'}});
 return new Response(new ReadableStream({start(c){const b=new TextEncoder().encode(bytes);
 for(let i=0;i<b.length;i+=7)c.enqueue(b.slice(i,i+7));c.close();}}));};
 const fetch=installGuard({ledger:LEDGER,trace:TRACE,deadline:DEADLINE,variant:'native',
@@ -94,6 +94,10 @@ console.log(calls);
     trace = (tmp_path / "trace.jsonl").read_text()
     assert "秘密" not in trace
     assert trace.count('"event":"http_attempt"') == 2
+    failed=next(json.loads(s)for s in trace.splitlines()if json.loads(s)['event']=='http_error')
+    assert failed['cause_code']=='UND_ERR_CONNECT_TIMEOUT'
+    assert failed['upstream_signal_aborted']is False and failed['evaluation_signal_aborted']is False
+    assert 'sensitive upstream detail'not in trace
 
 
 def test_real_openai_sdk_done_cancellation_and_internal_retry(tmp_path):
