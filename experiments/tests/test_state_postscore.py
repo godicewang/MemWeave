@@ -21,6 +21,8 @@ def test_host_judge_has_separate_deadline_and_preserves_actor_original(tmp_path)
         output.write_text(json.dumps({'task_completion_pass':True}));return {'status':'OK'}
     result=score_state_trial(options,trial,scorer=scorer,judge_factory=lambda c:('task','ux'),client_factory=client)
     assert result['phase']=='host_after_Harbor_actor'
+    assert result['host_verifier_timing']['status']=='CAPTURED'and result['host_verifier_timing']['clock']=='monotonic'
+    assert result['host_verifier_timing']['wall_seconds']>=0
     assert clients[0]['deadline']==2000 and clients[0]['run_id']=='episode:judge'
     assert clients[0]['episode_budget']==.4 and original.read_text()=='{"task_id":"frozen"}'
     with pytest.raises(ValueError,match='already exists'):

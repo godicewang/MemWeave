@@ -210,3 +210,18 @@ def test_historical_checkpoint_recovery_requires_exact_byte_prefix_hash():
     assert verified_journal_prefix(b'corrupt'+later,reference)is None
     assert verified_journal_prefix(later,dict(reference,bytes=len(raw)-1))is None
     assert verified_journal_prefix(later,dict(reference,sha256='0'*64))is None
+
+
+def test_pre_registered_memory_checkpoint_requires_all_four_independent_points():
+    from memweave_eval.state_conflict import conflict_memory_checkpoint
+    def point(score,complete=True):return {'score':score,'collection_complete':complete}
+    evidence={'clarification':point(100),'followthrough':point(100),'state_records':{'pending_record':point(100),'corrected_record':point(100)}}
+    assert conflict_memory_checkpoint(evidence)['score']==100
+    import copy
+    for name in ['clarification','followthrough','pending_record','corrected_record']:
+        bad=copy.deepcopy(evidence);target=bad if name in bad else bad['state_records'];target[name]=point(0)
+        assert conflict_memory_checkpoint(bad)['score']==0
+        missing=copy.deepcopy(evidence);target=missing if name in missing else missing['state_records'];target.pop(name)
+        result=conflict_memory_checkpoint(missing);assert result['score']is None and not result['collection_complete']
+    invalid=copy.deepcopy(evidence);invalid['clarification']=point(100,False)
+    assert conflict_memory_checkpoint(invalid)['score']is None

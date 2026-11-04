@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from pathlib import Path
 
 from .aux_client import GuardedAuxClient
@@ -37,11 +38,14 @@ def score_state_trial(options,trial:Path,*,scorer=None,judge_factory=None,client
         judge_factory=judge_factory or(lambda c:(TaskRequirementsJudge(c,domain.prompts_dir,domain.judge_system_prompt),
             UXQualityJudge(c,domain.prompts_dir,domain.judge_system_prompt)))
     task_judge,ux_judge=judge_factory(client)
+    began=time.monotonic()
     result=scorer(original,source/'state_bench/domains'/domain_name/'tasks',task_judge,ux_judge,output)
+    elapsed=time.monotonic()-began
     if file_digest(original)!=before:raise ValueError('official STATE scorer changed the original trajectory')
     status={'official_status':result,'original_sha256':before,'scored_file':str(output),
         'scored_sha256':file_digest(output)if output.exists()else None,
         'phase':'host_after_Harbor_actor','judge_episode':options['evaluation_run_id']+':judge',
+        'host_verifier_timing':{'status':'CAPTURED','clock':'monotonic','wall_seconds':elapsed},
         'llm_judge_is_not_programmatic_behavior_score':True}
     atomic_json(private/'state-scoring-status.json',status,immutable=True)
     return status

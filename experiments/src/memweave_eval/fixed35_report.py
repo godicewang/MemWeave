@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261104-v54'
+VERSION='fixed35-score-20261104-v58'
 
 
 def deadline_tool_scores(collection):
@@ -254,6 +254,15 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             finance_context=finance_context,
             cache_input_utilization=collection['cache'].get('input_cache_utilization',{}).get('value'),
             cache_all_tokens_share=collection['cache'].get('all_tokens_cache_share',{}).get('value'))
+        if admission['family']=='state':
+            timing=(outcome.get('host_official_score')or{}).get('host_verifier_timing')
+            if isinstance(timing,dict)and timing.get('status')=='CAPTURED'and timing.get('clock')=='monotonic':
+                import math
+                seconds=timing.get('wall_seconds')
+                if type(seconds)in (int,float)and math.isfinite(seconds)and seconds>=0:
+                    row['phase_seconds']['verifier']=seconds
+                    row['host_verifier_timing']=timing
+                else:row['normalization_evidence']['Q6.phase.verifier']={'value':None,'status':'invalid','reason':'Invalid STATE host scoring elapsed evidence'}
         if admission['family']=='slop':
             from .fixed35_slop import normalized_source_metrics
             source_problem={'SCB-01':'circuit_eval','SCB-02':'database_migration','SCB-03':'trajectory_api'}[admission['case_id']]
@@ -486,6 +495,11 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
         elif contract.get('adapter_kind')=='state-equal-authority-v1':
             explicit('S.common.protected_constraints',behavior['followthrough']['score'],
                 'Source required cancellation fields AND original lookup ordering AND all other fields at every observed domain boundary')
+            if contract.get('state_conflict_memory_mapping')=='typed-conflict-preaction-v1'and arm=='pi-memweave':
+                from .state_conflict import conflict_memory_checkpoint
+                point=conflict_memory_checkpoint(behavior)
+                explicit('S.case_v2.C8-conflict',point['score'],
+                    'New pre-registered typed conflict: both sources retained AND clarification before mutation AND corrected current State before dependent action AND original business followthrough; all four sub-checkpoints required')
         elif contract.get('adapter_kind')=='switch-remembered-contract-v2':
             row['normalization_evidence']['S.common.protected_constraints']=behavior['common_checkpoint_metric']
             if arm=='pi-memweave':row['normalization_evidence'].update(behavior['task_checkpoint_metrics'])

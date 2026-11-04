@@ -323,3 +323,12 @@ def _grade_conflict_trial(trial,private,contract,*,arm):
             result['state_evidence_repairs']=state_repairs
             result['collection_complete']&=all(result['state_records'][name]['collection_complete']for name in ('pending_record','corrected_record'))
     return result
+
+
+def conflict_memory_checkpoint(behavior):
+    """Opt-in future case rubric; never backfill old fixture or actor scores."""
+    values={}
+    for name in ('clarification','followthrough','pending_record','corrected_record'):
+        point=(behavior.get('state_records')or{}).get(name)if name in {'pending_record','corrected_record'}else behavior.get(name)
+        values[name]=False if isinstance(point,dict)and point.get('score')==0 else True if isinstance(point,dict)and point.get('score')==100 and point.get('collection_complete')is True else None
+    return _point('pre-registered-C8-four-boundaries-v1',values)
