@@ -15,6 +15,15 @@ def register(sub):
     sources.add_argument('design',type=Path)
     sources.add_argument('--sources',type=Path,required=True)
     sources.add_argument('--output',type=Path,required=True)
+    dispatch=commands.add_parser('dispatch-contract',help='Freeze TB-09 exact event-cutoff source checks and CLI transcript; no actor execution')
+    dispatch.add_argument('--design',type=Path,required=True)
+    dispatch.add_argument('--source',type=Path,required=True)
+    dispatch.add_argument('--output',type=Path,required=True)
+    dispatch_replay=commands.add_parser('dispatch',help='Replay TB-09 real business scores; its CTRF is not a task-quality signal')
+    dispatch_replay.add_argument('trial',type=Path)
+    dispatch_replay.add_argument('--contract',type=Path,required=True)
+    dispatch_replay.add_argument('--fixture-control',action='store_true')
+    dispatch_replay.add_argument('--output',type=Path,required=True)
     selected=commands.add_parser('selected-source-contract',help='Freeze TB-01 parity or TB-03 archive parameterized source gold; no models or admission')
     selected.add_argument('case_id',choices=['TB-01','TB-03'])
     selected.add_argument('--design',type=Path,required=True)
@@ -153,6 +162,27 @@ def register(sub):
 
 
 def execute(args):
+    if args.fixed35_command=='dispatch-contract':
+        from .dispatch_gold import freeze_contract
+        design=read_design(args.design);case=next(c for c in design['selection']['cases']if c['pack_case_id']=='TB-09')
+        matrix=[r for r in applicability_matrix(design)if r['case_id']=='TB-09']
+        for row in matrix:
+            if row['metric_id']in {'S.common.protected_constraints','S.common.process_validation'}:
+                row.update(design_status='PLANNED',opportunity_ids=['selected-dispatch-source-trace'],
+                    reason='Original temporal/current-event program cases and actual command protocol; no MemWeave State adoption inference')
+            if row['metric_id']=='S3.partial_pass_rate':
+                row.update(design_status='DESIGN_NA',opportunity_ids=[],
+                    reason='Original CTRF always says 1/1 passed even for absent executable; not a meaningful task partial-test rate. Original weighted business diagnostic has a distinct supplementary ID and formula.',
+                    assignment_basis='authored_source_protocol_CTRF_is_constant_success_not_business_score')
+        value=freeze_contract(case,args.source,args.output,metric_matrix=matrix)
+        return {'case_id':'TB-09','output':str(args.output),'weighted_source_checks':len(value['weighted_checks']),
+            'source_commands':len(value['commands']),'not_formal_admission':True,'paid_requests':0}
+    if args.fixed35_command=='dispatch':
+        from .dispatch_gold import grade_trial
+        value=grade_trial(args.trial,json.loads(args.contract.read_text()),fixture_control=args.fixture_control)
+        atomic_json(args.output,value,immutable=True)
+        return {'case_id':'TB-09','output':str(args.output),'collection_complete':value['collection_complete'],
+            'fixture_only':value['fixture_only'],'paid_requests':0}
     if args.fixed35_command=='selected-source-contract':
         from .pytest_source_gold import freeze_contract
         design=read_design(args.design);case=next(c for c in design['selection']['cases']if c['pack_case_id']==args.case_id)
