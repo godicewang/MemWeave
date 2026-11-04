@@ -158,6 +158,18 @@ def score_channels(outcome):
     return result
 
 
+def verifier_resources(admission):
+    """One frozen positive resource policy is shared by both verifier arms."""
+    resources=admission['slop_verifier'].get('resources',{'cpus':2,'memory_mb':8192})
+    if not isinstance(resources,dict)or set(resources)!={'cpus','memory_mb'}or \
+            any(type(v)is not int or v<=0 for v in resources.values()):
+        raise ValueError('explicit positive Slop verifier CPU/memory required')
+    actor=admission.get('resources')
+    if isinstance(actor,dict)and resources!={k:actor.get(k)for k in ['cpus','memory_mb']}:
+        raise ValueError('Slop actor/verifier resource policy must match the frozen symmetric admission')
+    return resources
+
+
 def evaluate_trial(trial:Path,*,problem,stages,runner,environment,sources,output:Path,deadline,env,expected_image,cpus=2,memory_mb=8192,fixture_only=False):
     if problem not in PROBLEMS or stages!=[f'checkpoint_{i}'for i in range(1,PROBLEMS[problem]+1)]:
         raise ValueError('Slop fixed checkpoint sequence mismatch')
@@ -240,7 +252,7 @@ def score_pair(root:Path,output:Path,*,fixture_only=False):
     from .fixed35_campaign_config import campaign_config
     admission=json.loads((root/'admission.json').read_text());pair=json.loads((root/'pair-result.json').read_text())
     campaign=campaign_config(admission);deadline=campaign['container_cutoff']
-    config=admission['slop_verifier']
+    config=admission['slop_verifier'];resources=verifier_resources(admission)
     if file_digest(Path(config['environment']))!=config['environment_sha256']:raise ValueError('frozen Slop verifier config changed')
     for path,sha in [(config['sources'],config['problem_revision']),(config['runner_source'],config['runner_revision'])]:
         if subprocess.check_output(['git','-C',path,'rev-parse','HEAD'],text=True).strip()!=sha or subprocess.check_output(['git','-C',path,'status','--porcelain'],text=True).strip():
@@ -252,10 +264,11 @@ def score_pair(root:Path,output:Path,*,fixture_only=False):
         outcome=next(x for x in pair['arms']if x['arm']==arm)
         return arm,evaluate_trial(Path(outcome['result_path']).parent,problem=config['problem'],stages=config['stages'],
             runner=config['runner'],environment=config['environment'],sources=config['sources'],output=output/arm,
-            deadline=deadline,env=env,expected_image=config['image_id'],fixture_only=fixture_only)
+            deadline=deadline,env=env,expected_image=config['image_id'],fixture_only=fixture_only,**resources)
     with ThreadPoolExecutor(max_workers=2)as pool:arms=dict(pool.map(score,['pi-native','pi-memweave']))
     record={'case_id':admission['case_id'],'arms':arms,'fixture_scores_included':fixture_only,
         'version':'fixed35-slop-applicable-20261102-v2','admission_sha256':file_digest(root/'admission.json'),
+        'symmetric_verifier_resources':resources,
         'campaign_sha256':admission['campaign']['sha256'],'verifier_deadline_unix':deadline,
         'deadline_source':'hash_bound_campaign.container_cutoff'}
     atomic_json(output/'pair-official-outcomes.json',record,immutable=True)

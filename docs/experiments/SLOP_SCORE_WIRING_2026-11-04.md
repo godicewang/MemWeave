@@ -11,3 +11,5 @@ SCB-02的`S.common.process_validation`取固定五阶段**原始严格**checkpoi
 Slop原生verifier在Harbor Actor结束后由宿主运行，不能从被禁用的Harbor verifier阶段伪造耗时。新执行以monotonic时钟采集每臂实际宿主验收墙钟（含交接检查和原eval-snapshot），接入Q6.phase.verifier，并标明范围；即使因必交文件缺失而未执行pytest，交接门禁实际耗时仍可测。旧报告没有时钟时保持unknown，不用文件mtime推算或补0。
 
 1103项实验全量回归及Ruff通过；专项报告集成控制验证原始严格0、检查点部分宏平均、SCB-02阶段40与派生100分列。保留的真实Pi假provider旧轨迹离线复算也得到原始0／部分99.45318937012871／FK业务100／阶段40；该旧控制没有供应商cache字段或宿主验收时钟，8项诊断仍缺证据，采集验收明确false。不能把这些软件控制当模型成绩，正式准入前需要当前采集版本的新控制。
+
+资源适配候选为双方Actor与原始host verifier均1CPU/4GiB，保留全部源阶段、测试和1800秒单阶段预算；原2CPU/8GiB控制不冒充这个候选已经可用。必须重新核验18个source checkpoint各自reference／nop的真实HostConfig与原测试结果，并完成当前真实CLI／守卫／canary后才能正式准入。新的显式verifier资源配置严格正整数，必须与同一配对的Actor资源声明一致；不再允许缩小Actor后遗漏host verifier仍申请更大资源。默认2CPU/8GiB保持，既有历史结果不覆写。

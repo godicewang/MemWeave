@@ -110,3 +110,43 @@ def test_actual_host_clock_is_recorded_even_when_required_submission_prevents_te
     assert r['host_verifier_timing']['status']=='CAPTURED'and r['host_verifier_timing']['wall_seconds']>=0
     assert all(p['official_test_execution'].startswith('not started')for p in r['checkpoints'].values())
     assert normalized_source_metrics(r)['partial']['value']==0
+
+
+@pytest.mark.parametrize('resources',[{'cpus':True,'memory_mb':4096},{'cpus':0,'memory_mb':4096},
+    {'cpus':1,'memory_mb':-1},{'cpus':1,'memory_mb':float('inf')},{'cpus':1,'memory_mb':4096,'extra':1}])
+def test_verifier_resource_override_is_explicit_strict_and_symmetric(resources):
+    from memweave_eval.fixed35_slop import verifier_resources
+    with pytest.raises(ValueError):verifier_resources({'slop_verifier':{'resources':resources}})
+
+
+def test_verifier_resource_defaults_preserved_but_cannot_hide_larger_unbudgeted_verifier():
+    from memweave_eval.fixed35_slop import verifier_resources
+    assert verifier_resources({'slop_verifier':{}})=={'cpus':2,'memory_mb':8192}
+    a={'slop_verifier':{'resources':{'cpus':1,'memory_mb':4096}},'resources':{'cpus':1,'memory_mb':4096,'storage_mb':20480}}
+    assert verifier_resources(a)=={'cpus':1,'memory_mb':4096}
+    a['slop_verifier'].pop('resources')
+    with pytest.raises(ValueError):verifier_resources(a)
+
+
+def test_pair_source_verifier_actually_receives_the_same_declared_limits(tmp_path,monkeypatch):
+    from memweave_eval.fixed35_slop import score_pair
+    from memweave_eval.storage import atomic_json, file_digest
+
+    env=tmp_path/'environment.yaml';env.write_text('unit fixture')
+    atomic_json(tmp_path/'admission.json',{'case_id':'SCB-01','code_path':str(tmp_path),
+        'resources':{'cpus':1,'memory_mb':4096},'campaign':{'sha256':'unit'},
+        'slop_verifier':{'resources':{'cpus':1,'memory_mb':4096},'environment':str(env),
+            'environment_sha256':file_digest(env),'sources':str(tmp_path/'sources'),'problem_revision':'a'*40,
+            'runner_source':str(tmp_path/'runner'),'runner_revision':'a'*40,'problem':'circuit_eval',
+            'stages':['checkpoint_1'],'runner':'unit','image_id':'unit'}})
+    atomic_json(tmp_path/'pair-result.json',{'arms':[{'arm':a,'result_path':str(tmp_path/a/'result.json')}for a in ['pi-native','pi-memweave']]})
+    monkeypatch.setattr('memweave_eval.fixed35_campaign_config.campaign_config',lambda _: {'container_cutoff':100})
+    monkeypatch.setattr('memweave_eval.fixed35_campaign.trusted_environment',lambda _: {})
+    monkeypatch.setattr('memweave_eval.fixed35_slop.subprocess.check_output',lambda args,**kwargs:''if args[-1]=='--porcelain'else'a'*40)
+    seen=[]
+    def evaluate(path,**kwargs):
+        seen.append((path.name,kwargs['cpus'],kwargs['memory_mb']))
+        return {'collection_complete':True}
+    monkeypatch.setattr('memweave_eval.fixed35_slop.evaluate_trial',evaluate)
+    score_pair(tmp_path,tmp_path/'out',fixture_only=True)
+    assert sorted(seen)==[('pi-memweave',1,4096),('pi-native',1,4096)]
