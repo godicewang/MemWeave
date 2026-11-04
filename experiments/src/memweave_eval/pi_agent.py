@@ -603,8 +603,8 @@ positive:true,lost_guard_upstream_requests:0,actual_cli_pid_deadline:true}));
                     self._episode_started_unix,timeout,time.time(),self._evaluation_stage,stages)
                 resource=self.options.evaluation_resources
                 instruction+=('\n\nEvaluation budget notice (same policy for both variants): '
-                    +(f'the sum of original actor allowances is {timeout} seconds; '
-                      f'this source stage has its original {stages[self._evaluation_stage-1]:g}-second allowance; '
+                    +(f'the sum of frozen actor allowances is {timeout} seconds; '
+                      f'this stage has its frozen {stages[self._evaluation_stage-1]:g}-second allowance; '
                       'intermediate verifier/setup time is not deducted from the next stage; 'if stages else
                       f'the total case budget across all stages is {timeout} seconds; ')+
                     f'allocated resources: {json.dumps(resource,sort_keys=True)}. '

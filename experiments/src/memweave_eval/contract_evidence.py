@@ -90,6 +90,19 @@ def _receipts(paths, journal):
     return receipts
 
 
+def confirmed_receipts(paths,journals,*,complete):
+    """Bind native successful receipts to validated whole-episode journal IDs."""
+    if not complete or not isinstance(journals,dict):return None
+    indexed={}
+    for task,rows in journals.items():
+        if not isinstance(task,str)or not isinstance(rows,list)or any(
+                not isinstance(r,dict)or not isinstance(r.get('op_id'),str)for r in rows):return None
+        operations={row['op_id']:n for n,row in enumerate(rows,1)}
+        if len(operations)!=len(rows):return None
+        indexed[task]=operations
+    return _receipts(paths,indexed)
+
+
 def causal_state_minimum(requests, receipts, *, enabled):
     """Only a lower-bound contract: visible acknowledged writes precede preparation.
 
@@ -104,7 +117,7 @@ def causal_state_minimum(requests, receipts, *, enabled):
         if receipts is None:
             checks.append(_item(identity, reason='journal_or_receipt_provenance_missing'))
             continue
-        visible = [m.get('tool_call_id') for m in request.get('messages', []) if m.get('role') == 'tool']
+        visible = [m.get('receipt_lookup_id',m.get('tool_call_id')) for m in request.get('messages', []) if m.get('role') == 'tool']
         observed = [receipts[c] for c in visible if c in receipts]
         if any(len(values) != 1 for values in observed):
             checks.append(_item(identity, reason='ambiguous_reused_tool_call_identity'))
@@ -128,6 +141,48 @@ def causal_state_minimum(requests, receipts, *, enabled):
                                      evidence=[c for c in visible if c in receipts]),
                                task_id=task, minimum_confirmed_version=max(required), delivered_version=delivered))
     return summarize(checks)
+
+
+def request_receipt_floor(requests,payloads,receipts,*,enabled):
+    """Resolve reused provider call IDs by actual request/message and ack version.
+
+    Lookup IDs are evaluator metadata; original provider IDs/content are untouched.
+    Journal/Session provenance remains mandatory, and cross-task ambiguity is unknown.
+    """
+    if not enabled:return causal_state_minimum(requests,receipts,enabled=False)
+    points=[]
+    for request in requests:
+        identity=request.get('request_id');payload=payloads.get(identity)
+        if receipts is None or not isinstance(payload,dict)or not isinstance(payload.get('messages'),list):
+            points.append(_item(identity,reason='actual_payload_or_receipt_provenance_missing'));continue
+        calls={};messages=[];scoped={};unpaired=False
+        for index,message in enumerate(payload['messages']):
+            if not isinstance(message,dict):unpaired=True;continue
+            if message.get('role')=='assistant':
+                for call in message.get('tool_calls')or[]:
+                    if not isinstance(call,dict)or not isinstance(call.get('function'),dict):unpaired=True;continue
+                    calls[call.get('id')]=call['function'].get('name')
+            if message.get('role')!='tool':continue
+            call_id=message.get('tool_call_id');name=calls.pop(call_id,None)
+            if not isinstance(name,str):unpaired=True;continue
+            if name not in {'state_append','modify_fact','update_goal','state_remain','task_create'}:continue
+            text=message.get('content')
+            if isinstance(text,list):text='\n'.join(p.get('text','')for p in text if isinstance(p,dict)and p.get('type')=='text')
+            if not isinstance(text,str):unpaired=True;continue
+            match=re.fullmatch(r'State updated: v(\d+)\s*',text);task=None;version=int(match[1])if match else None
+            if name=='task_create':
+                try:
+                    created=json.loads(text)
+                    if isinstance(created,dict):task=created.get('task_id');version=created.get('state_version')
+                except ValueError:pass
+            if type(version)is not int:continue  # No visible confirmed version, e.g. an error receipt.
+            key=str(identity)+':provider-message:'+str(index)
+            scoped[key]={(t,v)for t,v in receipts.get(call_id,set())if v==version and(task is None or t==task)}
+            messages.append({'role':'tool','tool_call_id':call_id,'receipt_lookup_id':key})
+        if unpaired:points.append(_item(identity,reason='provider_tool_receipt_caller_missing_or_malformed'));continue
+        item=causal_state_minimum([dict(request,messages=messages)],scoped,enabled=True)['items'][0]
+        item['original_tool_call_ids']=[m['tool_call_id']for m in messages];points.append(item)
+    return dict(summarize(points),identity_scope='actual request ID plus provider message index; verified original Session/journal associations, never renamed model IDs')
 
 
 def task_contract_metrics(agent: Path, *, enabled, contracts=None):

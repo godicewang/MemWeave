@@ -129,7 +129,8 @@ export default function fixture(pi:any) {
         project_name:'probe',summary:'offline CLI smoke',keywords:['probe']})}}]}:{role:'assistant',content:'OK'};
     const frames=[{id:'cli-fixture',model:'deepseek-flash',choices:[{index:0,delta,finish_reason:null}]},
       {id:'cli-fixture',choices:[{index:0,delta:{},finish_reason:(scripted?Boolean(scripted.tool):!ephemeral&&(routed?Boolean(route):(create||query||domain||remember||change)))?'tool_calls':'stop'}],
-      usage:{prompt_tokens:100,completion_tokens:50}}];
+      usage:{prompt_tokens:100,completion_tokens:50,
+        ...(process.env.MEMWEAVE_EVAL_FIXTURE_OMIT_CACHE==='1'?{}:{prompt_cache_hit_tokens:0})}}];
     return deliver(frames.map(f=>'data: '+JSON.stringify(f)+'\n\n').join('')+'data: [DONE]\n\n','text/event-stream',init);
   };
   const diagnosed=async(input:any,init:any)=>{

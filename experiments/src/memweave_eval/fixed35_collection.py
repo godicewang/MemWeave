@@ -5,7 +5,7 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
-from .engineering_metrics import error_class, quantile
+from .engineering_metrics import episode_telemetry, error_class, quantile
 from .evidence_replay import read_object, replay_content
 from .finance_metrics import cache_metrics
 from .state_metrics import task_state_metrics
@@ -151,8 +151,10 @@ def collect_episode(trial: Path, *, arm, ledger: Path,auxiliary_roots=(),expecte
     usage=totals(actor_http);all_usage=totals(requests)
     known_usage={'input_tokens':sum(r['input']for r in settled),'output_tokens':sum(r['output']for r in settled)}
     qualified=qualified_actor_calls({i:requests[i]for i in actor_http},responses,fixture_control=fixture_control)
+    from .contract_evidence import confirmed_receipts
     from .fixed35_delivery import delivery_metrics
-    delivery=delivery_metrics(transport_records,actor_http,enabled=arm=='pi-memweave')
+    receipts=confirmed_receipts(sessions,source.get('journals'),complete=source['complete'])if arm=='pi-memweave'else None
+    delivery=delivery_metrics(transport_records,actor_http,enabled=arm=='pi-memweave',confirmed_receipts=receipts,request_payloads=requests)
     tools=known_zero_tools(tools,complete=boundary['complete'])
     from .fixed35_references import grade_known_references
     references=grade_known_references(trial,events=events,locations=locations)
@@ -161,12 +163,16 @@ def collect_episode(trial: Path, *, arm, ledger: Path,auxiliary_roots=(),expecte
         'fixture_control':fixture_control,
         'transport_collection_complete':not unresolved,'execution_boundary_collection':boundary,'requests':len(requests),
         'delivery_metrics':delivery,
+        'episode_engineering':episode_telemetry(events,transport_records,actor_http),
         'known_reference_integrity':references,
         'actor_http_attempts':len(actor_http),'auxiliary_http_attempts':len(requests)-len(actor_http),
         'completed_unique_actor_agent_calls':len(qualified),
+        'completed_unique_actor_agent_call_ids':sorted(qualified),
         'usage_assistant_returns':sum(e['event']=='assistant_return'for e in events),
         'known_settled_usage':known_usage,'usage_request_coverage':len(settled)/len(requests)if requests else None,
         'request_ids':sorted(requests),'unsettled_request_ids':unresolved,
+        'requested_models':sorted({requests[i].get('model')for i in actor_http if isinstance(requests[i].get('model'),str)}),
+        'ledger_path':str(ledger.resolve()),
         'estimated_usd':sum(r['charge_usd']for r in settled),
         'unsettled_exposure_usd':sum(account[i]['charge_usd']for i in unresolved),
         'usage':usage,'all_role_usage':all_usage,'cache':cache_metrics(usage),

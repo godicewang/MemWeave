@@ -3,10 +3,60 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
+
+
+def episode_phase_seconds(raw):
+    def duration(value):
+        try:
+            seconds=(datetime.fromisoformat(value['finished_at'])-datetime.fromisoformat(value['started_at'])).total_seconds()
+            return seconds if seconds>=0 else None
+        except (KeyError,TypeError,ValueError):return None
+    result={}
+    for phase in ['environment_setup','agent_setup','agent_execution','verifier']:
+        if raw.get(phase)is not None:result[phase]=duration(raw[phase]);continue
+        values=[duration(s.get(phase))for s in raw.get('step_results')or[]]
+        result[phase]=sum(values)if values and all(v is not None for v in values)else None
+    return result
+
+
+def episode_telemetry(events,transport,request_ids):
+    """All-stage request timing and per-producer sampled CPU/RSS, not full CPU."""
+    ready={e['request_id']:e for e in events if e.get('event')=='request_ready'and e.get('request_id')in request_ids}
+    transport_ready={e['request_id']:e for e in transport if e.get('event')=='request_ready'and e.get('request_id')in request_ids}
+    resource_complete=set(ready)==set(request_ids)and bool(request_ids);cpu={};rss=[]
+    for event in ready.values():
+        sample=event if 'process_usage'in event else transport_ready.get(event['request_id'],{})
+        resource=sample.get('process_usage')or{};producer=event.get('producer_id')
+        values=[resource.get(k)for k in ['userCPUTime','systemCPUTime','maxRSS']]
+        valid=isinstance(producer,str)and bool(producer)and all(type(v)in (int,float)and math.isfinite(v)and v>=0 for v in values)
+        resource_complete &= valid
+        if valid:
+            cpu[producer]=max(cpu.get(producer,0),values[0]+values[1]);rss.append(values[2])
+    by={};bad=set()
+    for event in transport:
+        kind=event.get('event');identity=event.get('request_id')
+        if kind not in {'http_attempt','request_end'}or identity not in request_ids:continue
+        key=identity,kind
+        if key in by and by[key]!=event:bad.add(identity)
+        by[key]=event
+    elapsed=[]
+    for identity in request_ids:
+        try:
+            value=(datetime.fromisoformat(by[identity,'request_end']['timestamp'])-
+                datetime.fromisoformat(by[identity,'http_attempt']['timestamp'])).total_seconds()
+            if identity not in bad and value>=0:elapsed.append(value)
+        except (KeyError,TypeError,ValueError):pass
+    full=len(elapsed)==len(request_ids)and bool(request_ids)
+    return {'pi_process_cpu_seconds':sum(cpu.values())/1e6 if resource_complete else None,
+        'pi_process_peak_rss_kb':max(rss)if resource_complete and rss else None,'resource_producers':len(cpu),
+        'request_wall_seconds':{'samples':len(elapsed),'p50':quantile(elapsed,.5)if full else None,
+            'p95':quantile(elapsed,.95)if full else None},
+        'resource_scope':'All actor request-ready snapshots: sum of each distinct Pi evidence producer maximum observed cumulative CPU; sampled lower bound, excludes child tools and post-last-sample CPU. RSS is observed producer maxRSS in KiB, not an unsampled whole-run peak.'}
 
 
 def quantile(values, probability):

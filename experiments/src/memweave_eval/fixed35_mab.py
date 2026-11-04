@@ -236,6 +236,21 @@ def grade_mab_trial(trial:Path,contract,*,arm):
     for support,item in zip(support_text,sources or[],strict=True):
         if support not in Path(item['path']).read_text():raise ValueError('frozen critical support missing from source instruction')
     source_seen=False;seen_sources=set();window_proof=None
+    rate_contract=contract.get('semantic_rate_contract')
+    rate_enabled=rate_contract=='target-fact-cards-v1'
+    if rate_enabled and not contract.get('typed_fact_memory'):
+        raise ValueError('target-fact semantic rates require independent typed source gold')
+    seen_changes=set();post_source_changes=[];precision_source_seen=False
+    def observe_changes(rows):
+        if not rate_enabled:return
+        for row in rows:
+            identity=row['op_id']
+            if identity in seen_changes:continue
+            seen_changes.add(identity)
+            if not precision_source_seen:continue
+            if row['op']=='append_fact':post_source_changes.append(row['fact'])
+            elif row['op']=='append_decision':post_source_changes.append(row['decision'])
+            elif row['op']=='modify_fact':post_source_changes.append(row['append_fact']['content'])
     projection={};before_calls={};workspace_v2=contract.get('action_observation')=='workspace-content-v2'
     previous_action_hash=None;initial_action_observed=False
     for event in events:
@@ -246,6 +261,7 @@ def grade_mab_trial(trial:Path,contract,*,arm):
             state=event.get('binding')or{}
             if state.get('journal_ref'):
                 rows=[json.loads(line)for line in read_object(store,state['journal_ref']).decode().splitlines()]
+                observe_changes(rows)
                 views=state_text_projection(rows)
                 before_calls[(event['producer_id'],event['call_id'])]=(views['visible'],views['unarchived'],True)
             elif state.get('status')=='NO_BOUND_TASK':before_calls[(event['producer_id'],event['call_id'])]=([],[],True)
@@ -272,6 +288,7 @@ def grade_mab_trial(trial:Path,contract,*,arm):
             texts=None;semantic_texts=None;before=None
             if ref:
                 rows=[json.loads(line)for line in read_object(store,ref).decode().splitlines()]
+                observe_changes(rows)
                 views=state_text_projection(rows);texts=views['visible'];semantic_texts=views['unarchived'];before=True
             elif boundary.get('expected_task_id')is None and 'expected_task_id'in boundary:
                 texts=[];semantic_texts=[];before=True
@@ -285,6 +302,7 @@ def grade_mab_trial(trial:Path,contract,*,arm):
             visible=source_visible(messages,originals,support_text)
             for index,text in enumerate(originals):
                 if any(text in value for value in messages):seen_sources.add(index)
+            precision_source_seen=len(seen_sources)==len(originals)
             stage=int(event.get('stage_id')or 0)
             eligible=eviction_eligible(protocol=contract.get('eviction_protocol'),stage=stage,
                 valid_after=contract.get('literal_valid_after_stage',1),
@@ -317,6 +335,9 @@ def grade_mab_trial(trial:Path,contract,*,arm):
                     'request_id':event['request_id'],'expected_state_version':expected,
                     'payload_ref':event.get('payload_ref'),'journal_ref':boundary.get('expected_journal_ref'),
                     'event_identity':[event['producer_id'],event['sequence']]})
+                if rate_enabled:
+                    from .fixed35_fact_cards import fact_snapshot
+                    evictions[-1]['semantic_unarchived_checks']=fact_snapshot(semantic_texts,contract['typed_fact_memory'])
                 config=contract.get('window_contract')or{}
                 if config.get('kind')in {'native-identity-plain-text-v1','native-identity-plain-text-v2'}:
                     if window_proof is None:
@@ -334,6 +355,7 @@ def grade_mab_trial(trial:Path,contract,*,arm):
             snapshot=event.get('state',{});texts=None;semantic_texts=None;before=None
             if snapshot.get('journal_ref'):
                 rows=[json.loads(line)for line in read_object(store,snapshot['journal_ref']).decode().splitlines()]
+                observe_changes(rows)
                 views=state_text_projection(rows);texts=views['visible'];semantic_texts=views['unarchived'];before=True
             elif snapshot.get('status')=='NO_BOUND_TASK':texts=[];semantic_texts=[];before=True
         elif event['event']=='tool_call':
@@ -364,6 +386,11 @@ def grade_mab_trial(trial:Path,contract,*,arm):
             unarchived_texts=semantic_texts,
             correct_action=first_action_correct if action_seen else False if complete else None,
             before=before if action_seen else False if complete else None)
+    if rate_enabled:
+        checks={key:value['value']for key,value in correction['assertions'].items()}
+        checks['source_exposed_before_dependency']=precision_source_seen if complete else None
+        correction=checkpoint_verdict({'id':correction['checkpoint_id']+'-source-exposed-v1',
+            'required_assertions':list(checks)},checks)
     result['memory']={'correction':correction,
         'three_evictions':grade_three_evictions(evictions,observation_complete=complete,
             require_identity=(contract.get('window_contract')or{}).get('kind')in {'native-identity-plain-text-v1','native-identity-plain-text-v2'}),
@@ -371,4 +398,8 @@ def grade_mab_trial(trial:Path,contract,*,arm):
         'parser_scope':'finite canonical entity/value literal predicates; not general free-text semantics',
         'literal_contract':literal,'dependent_write_observed':action_seen}
     result['memory']['semantic_invalidation_policy']='unarchived-conflicts-v2; display-window eviction alone does not retire a fact'
+    if rate_enabled:
+        from .mab_semantic_rates import semantic_rates
+        result['semantic_rates']=semantic_rates(contract['typed_fact_memory'],evictions,correction,
+            post_source_changes,complete=complete)
     return result

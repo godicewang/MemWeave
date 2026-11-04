@@ -6,12 +6,12 @@ import json
 from pathlib import Path
 
 from .contract_evidence import task_contract_metrics
-from .engineering_metrics import task_engineering_metrics
+from .engineering_metrics import episode_phase_seconds, task_engineering_metrics
 from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261104-v35'
+VERSION='fixed35-score-20261104-v36'
 
 
 def raw_display(metric):
@@ -90,6 +90,15 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
     if file_digest(Path(admission['contract_path']))!=admission['contract_sha256']:
         raise ValueError('frozen scoring contract changed')
     pair=json.loads((root/'pair-result.json').read_text());rows=[]
+    if not isinstance(pair.get('arms'),list)or len(pair['arms'])!=2 or {a.get('arm')for a in pair['arms']}!={'pi-native','pi-memweave'}:
+        raise ValueError('exactly one native and one plugin episode required')
+    by_arm={a['arm']:a for a in pair['arms']}
+    finance_context=None
+    if admission.get('campaign'):
+        from .fixed35_campaign_config import campaign_config
+        cfg=campaign_config(admission)
+        finance_context={k:cfg.get(k)for k in ['model','model_version','price_version','currency','price_source','prices_per_million']}
+        finance_context.update(cost_basis='peak_reference_estimate_not_account_bill',campaign_sha256=admission['campaign']['sha256'])
     official=json.loads(official_outcomes.read_text())if official_outcomes else None
     if admission['family']=='slop'and (not official or official.get('case_id')!=admission['case_id']or
             official.get('fixture_scores_included')is not False and not(fixture_control and official.get('fixture_scores_included')is True)):
@@ -101,6 +110,7 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
         agents=[p.parent for p in trial.rglob('request-trace.jsonl')]
         agent=max(agents,key=lambda p:(p/'request-trace.jsonl').stat().st_size)if agents else None
         engineering=task_engineering_metrics(agent)if agent else {}
+        engineering.update(collection.get('episode_engineering')or{})
         delivery=collection.get('delivery_metrics')
         if delivery:
             engineering.update(delivery['engineering'])
@@ -182,6 +192,13 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             'contract_metrics':task_contract_metrics(agent,enabled=arm=='pi-memweave')if agent else {},
             'finance':{'cache_metrics':collection['cache']},'normalization_evidence':{},
             'collection':collection,'original_exception':outcome['exception'],'case_behavior':behavior}
+        raw_result=json.loads(Path(outcome['result_path']).read_text())if Path(outcome['result_path']).is_file()else{}
+        row.update(finance_usage=collection.get('usage'),
+            finance_estimated_usd=collection['estimated_usd']if collection.get('transport_collection_complete')is True else None,
+            finance_known_settled_lower_bound_usd=collection['estimated_usd'],phase_seconds=episode_phase_seconds(raw_result),
+            finance_context=finance_context,
+            cache_input_utilization=collection['cache'].get('input_cache_utilization',{}).get('value'),
+            cache_all_tokens_share=collection['cache'].get('all_tokens_cache_share',{}).get('value'))
         if contract.get('adapter_kind')=='wal-source-v1':
             from .wal_gold import checkpoint_rows
             row['wal_component']=behavior;row['derived_behavior_checkpoints']=checkpoint_rows(behavior)
@@ -236,8 +253,8 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             row['behavior_metrics']=grade_task_trial(trial,contract['task_behavior'])
             row['task_behavior']=row['behavior_metrics']
         if delivery:
-            for name in ('state_latest_at_prepare','provider_delivery_integrity'):
-                row['contract_metrics'][name]=delivery[name]
+            for name in ('state_latest_at_prepare','state_confirmed_receipt_lower_bound','provider_delivery_integrity'):
+                if name in delivery:row['contract_metrics'][name]=delivery[name]
         if contract.get('reference_contract')=='known-complete-text-v1':
             row['contract_metrics']['reference_integrity']=collection.get('known_reference_integrity',{})
         if contract.get('window_contract',{}).get('kind')=='uncut-plain-text-v1':
@@ -253,9 +270,15 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                 collection['delivery_metrics']['request_ids'],recent_turns=window['recent_turns'],
                 evict_turns=window['evict_turns'],enabled=arm=='pi-memweave',
                 max_source_bytes=window.get('max_source_bytes',4000000))
-        row['_normalization_cost_pair']={'native':pair['arms'][0]['collection']['estimated_usd'],
-            'plugin':pair['arms'][1]['collection']['estimated_usd'],
-            'compatible':all(a['collection']['collection_complete']for a in pair['arms'])}
+        costs_complete=all(a['collection'].get('transport_collection_complete')is True for a in pair['arms'])
+        fixture_pair=fixture_control and all(a['collection'].get('fixture_control')is True for a in pair['arms'])
+        matching_context=bool(finance_context and all(finance_context.get(k)is not None for k in
+            ['model','price_version','currency','prices_per_million']))and all(
+                a['collection'].get('ledger_path')==cfg['ledger']and
+                a['collection'].get('requested_models')==[cfg['model']]for a in pair['arms'])
+        row['_normalization_cost_pair']={'native':by_arm['pi-native']['collection']['estimated_usd'],
+            'plugin':by_arm['pi-memweave']['collection']['estimated_usd'],
+            'compatible':costs_complete and(fixture_pair or matching_context)}
         def explicit(identity,score,reason=None,row=row,status=None):
             row['normalization_evidence'][identity]={'value':None if score is None else score/100,
                 'status':status or('unknown'if score is None else 'scored'),'reason':reason}
@@ -270,6 +293,11 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             row['normalization_evidence']['Q3.rule_integrity']=proof
         if admission['family']=='mab':
             from .fixed35_mab import normalization_points
+            proxy=behavior.get('memory',{}).get('three_evictions')or{}
+            row.setdefault('behavior_metrics',{})['constraint_retention_proxy']={
+                'value':proxy['score']/100 if proxy.get('score')is not None else None,
+                'status':'scored'if proxy.get('score')is not None else'unknown',
+                'reason':'Observed selected-source three-cut checkpoint conjunction; not internal adoption or causal memory benefit'}
             explicit('S.common.protected_constraints',behavior['derived_action']['score'],
                 'MAB typed-action overlay: correct final answer AND exact one-value JSON schema AND correct file value')
             for identity,point in normalization_points(behavior,admission['case_id']).items():
@@ -277,6 +305,12 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                 explicit(identity,point.get('score'),point.get('reason')or(
                     'Selected finite typed source relation AND no known incompatible active card AND pre-action timing AND actual first answer-file value; not general free-text memory semantics'
                     if 'C1-'in identity else'controlled checkpoint evidence unavailable'))
+            if arm=='pi-memweave'and behavior.get('semantic_rates'):
+                rates=behavior['semantic_rates']
+                for prefix,names in [('S1.',['timely_write','retention','write_precision','pollution']),
+                                     ('S2.',['correction','adoption'])]:
+                    for name in names:
+                        row['normalization_evidence'][prefix+name]=dict(rates[name],reason=rates[name].get('reason')or rates['scope'])
         elif contract.get('adapter_kind')in {'readonly-before-first-change-v1','readonly-before-first-change-v2'}:
             explicit('S.common.protected_constraints',behavior['common_constraint']['score'])
             point=behavior['plugin_memory']
@@ -402,6 +436,13 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
         if admission['family']=='mab':
             mark_checkpoint_collection(metrics,{'S.common.protected_constraints':behavior['derived_action'],
                 **{metric_alias(identity):point for identity,point in normalization_points(behavior,admission['case_id']).items()}})
+            if arm=='pi-memweave'and behavior.get('semantic_rates'):
+                rates=behavior['semantic_rates']
+                for item in metrics:
+                    if item['id'].startswith(('S1.','S2.'))and item['id'].split('.',1)[1]in rates:
+                        item['controlled_coverage']=rates['controlled_coverage'];item['semantic_rate_scope']=rates['scope']
+                        if not rates[item['id'].split('.',1)[1]]['collection_complete']and item['status']!='DESIGN_NA':
+                            item['collection_status']='REPAIR_REQUIRED'
         if contract.get('adapter_kind')=='source-protection-v2':
             mark_checkpoint_collection(metrics,{'S.common.protected_constraints':behavior['common'],
                 'F35.C3-before-dependent-edit':behavior['plugin']})

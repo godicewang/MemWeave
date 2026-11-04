@@ -28,3 +28,12 @@ def test_missing_preparation_keeps_denominator_and_conflicting_copies_fail():
     assert result['provider_delivery_integrity']['unknown']==1
     with pytest.raises(ValueError,match='conflicting'):
         delivery_metrics([a,dict(a,expected_version_at_prepare=9)],{'a'},enabled=True)
+
+
+def test_confirmed_receipt_floor_is_distinct_from_full_boundary_freshness():
+    a=ready('a',3,3);a['messages'].append({'role':'tool','tool_call_id':'write1'})
+    result=delivery_metrics([a],{'a'},enabled=True,confirmed_receipts={'write1':{('task_test',4)}})
+    assert result['state_latest_at_prepare']['value']==1
+    assert result['state_confirmed_receipt_lower_bound']['value']==0
+    assert delivery_metrics([a],{'a'},enabled=True,confirmed_receipts={})['state_confirmed_receipt_lower_bound']['status']=='not_applicable'
+    assert delivery_metrics([a],{'a'},enabled=True)['state_confirmed_receipt_lower_bound']['status']=='unknown'
