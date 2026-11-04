@@ -1,6 +1,7 @@
 """Eval-only SDK configuration adapter; leaves upstream scoring code untouched."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -48,7 +49,22 @@ def scoped_exec(original,build,*,run_id,cpus,memory_mb,expected_image,audit,clie
         return args[:2]+['--label','org.memweave.eval.run='+run_id,'--cpus',str(cpus),
             '--memory',str(memory_mb)+'m','--cidfile',str(owner._memweave_cidfile)]+args[3:]
     def execute(owner,*args,**kwargs):
-        try:return original(owner,*args,**kwargs)
+        try:
+            result=original(owner,*args,**kwargs)
+            stdout=getattr(result,'stdout','');stderr=getattr(result,'stderr','')
+            stdout=stdout if isinstance(stdout,str)else'';stderr=stderr if isinstance(stderr,str)else''
+            code=getattr(result,'exit_code',None)
+            record={'event':'original_runtime_result','run_id':run_id,'exit_code':code,'timestamp':time.time(),
+                'stdout_sha256':hashlib.sha256(stdout.encode()).hexdigest(),
+                'stderr_sha256':hashlib.sha256(stderr.encode()).hexdigest()}
+            if code not in (0,1,5):
+                text=stdout[-6000:]+'\n'+stderr[-6000:]
+                secret=re.search(r'(?i)bearer\s+|(?:api[_-]?key|authorization|password|secret|token)\s*[:=]',text)
+                record['failure_tail']='[potential credential field omitted]'if secret else text
+                record['failure_tail_redacted']=bool(secret)
+            with audit.with_name(audit.stem+'-runtime.jsonl').open('a')as stream:
+                stream.write(json.dumps(record)+'\n');stream.flush();os.fsync(stream.fileno())
+            return result
         finally:
             path=getattr(owner,'_memweave_cidfile',None)
             if path and path.exists():
