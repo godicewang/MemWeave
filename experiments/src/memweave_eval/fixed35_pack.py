@@ -82,6 +82,11 @@ def profile_with_classes(rows,registry,profile):
     for category in ('engineering','behavior'):
         identities={m['id']for m in registry if m.get('category')==category}
         result['classes'][category]=profile_score([r for r in rows if r['metric_id']in identities],registry,profile)
+    definition=catalogue()['profiles'].get(profile)
+    if definition and {m['id']for m in registry}=={metric_alias(m['id'])for m in catalogue()['metrics']}:
+        from .balanced_profile import balanced_profile
+        balanced=balanced_profile(rows,definition)
+        return dict(result,legacy_flat_profile=result,**balanced)
     return result
 
 
@@ -218,15 +223,19 @@ def pack_report(manifest:Path,output:Path):
     result['capability_coverage']=capability_coverage(result['rows'])
     result['long_qualification']=long_qualification_proof(frozen.get('long_qualification'))
     result['package_accepted']=result['collection_accepted']and result['capability_coverage']['complete']and result['long_qualification']['complete']
-    result.update(version='fixed35-pack-20261104-v6',manifest_sha256=file_digest(manifest),source_sha256=source_hashes,
+    result.update(version='fixed35-pack-20261104-v7',manifest_sha256=file_digest(manifest),source_sha256=source_hashes,
         aggregation='valid cases equally within benchmark, then valid benchmark means equally; no test-count weighting')
     output.mkdir(parents=True,exist_ok=False);atomic_json(output/'results.json',result,immutable=True)
     with (output/'metrics.csv').open('w',newline='')as stream:
         columns=['case_id','benchmark','arm','metric_id','meaning','raw','raw_formula','score','score_formula',
-            'mapping_version','weights','status','reason','repair_attempts','support_s','support_f','support_u','support_n',
+            'mapping_version','weights','effective_weights','status','reason','repair_attempts','support_s','support_f','support_u','support_n',
             'receipt_version','session_receipt_counts','execution_receipt_counts']
         writer=csv.DictWriter(stream,fieldnames=columns,extrasaction='ignore');writer.writeheader()
-        writer.writerows(dict(r,raw=json.dumps(r.get('raw'),ensure_ascii=False),weights=json.dumps(r['weights']),
+        effective={(x['case_id'],x['arm']):{name:p.get('effective_leaf_weights',{})for name,p in x['profiles'].items()}for x in result['case_totals']}
+        def weights(row):
+            identity=row['metric_id'];identity='S.case_v2.'+identity[4:]if identity.startswith('F35.')else identity
+            return {name:values.get(identity,0)for name,values in effective.get((row['case_id'],row['arm']),{}).items()}
+        writer.writerows(dict(r,raw=json.dumps(r.get('raw'),ensure_ascii=False),weights=json.dumps(r['weights']),effective_weights=json.dumps(weights(r)),
             repair_attempts=json.dumps(r.get('repair_attempts'),ensure_ascii=False),
             receipt_version=r.get('receipt_evidence',{}).get('receipt_version'),
             session_receipt_counts=json.dumps(r.get('receipt_evidence',{}).get('observed_session_counts')),

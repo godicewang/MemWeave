@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261104-v58'
+VERSION='fixed35-score-20261104-v59'
 
 
 def deadline_tool_scores(collection):
@@ -89,7 +89,7 @@ def weighted_profile(metrics,profile,*,allowed_ids=None):
         and m.get('collection_complete')is not False and m.get('collection_status')!='REPAIR_REQUIRED']
     weight=sum(m['weights'][profile]for m in known)
     contribution=sum(m['weights'][profile]*m['score']for m in known)
-    return {'score':contribution/planned if planned and weight==planned else None,
+    legacy={'score':contribution/planned if planned and weight==planned else None,
         'conditional_score':contribution/weight if weight else None,'coverage':weight/planned if planned else None,
         'eligible_weight':planned,'observed_weight':weight,'lower':contribution/planned if planned else None,
         'design_weight':design,'excluded_weight':sum(m['weight']for m in excluded),'excluded_metrics':excluded,
@@ -97,6 +97,13 @@ def weighted_profile(metrics,profile,*,allowed_ids=None):
         'upper':(contribution+100*(planned-weight))/planned if planned else None,
         'missing_metric_ids':[m['id']for m in eligible if m not in known],
         'interpretation':'fixed leaf weights; design NA and audited collection exceptions leave the effective denominator; ordinary missing evidence still blocks a full score; pre-exclusion coverage remains explicit'}
+    from .normalized_scores import catalogue
+    definition=catalogue()['profiles'].get(profile)
+    if definition:
+        from .balanced_profile import balanced_profile
+        result=balanced_profile(metrics,definition,allowed_ids=allowed_ids)
+        return dict(legacy,legacy_flat_profile=legacy,**result)
+    return legacy
 
 
 def metric_alias(identity):
@@ -518,6 +525,9 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
         row['state_write_receipt_evidence']=write_receipts
         row['normalization_evidence'].update({identity:write_receipts[tool]for identity,tool in METRICS.items()if tool in write_receipts})
         row['normalization_evidence'].update(deadline_tool_scores(collection))
+        if admission['family']=='mab':
+            from .mab_rubric_audit import measured_components
+            row.setdefault('derived_behavior_checkpoints',[]).extend(measured_components(behavior,arm=arm))
         normalized=normalize_trial_scores(row)
         metrics=[]
         assigned={m['metric_id']:m for m in contract['metric_matrix']}
@@ -565,6 +575,9 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             if contract.get('adapter_kind')=='state-equal-authority-v1'and not behavior['collection_complete']and original_id in {
                     'S.common.protected_constraints','S.case_v2.C8-conflict'}and item['status']!='DESIGN_NA':
                 item['collection_status']='REPAIR_REQUIRED'
+            if admission['family']=='mab':
+                from .mab_rubric_audit import reject_mismatched_slot
+                reject_mismatched_slot(item,original_id)
             item['opportunity_ids']=spec['opportunity_ids'];item['mapping_version']=VERSION
             metrics.append(item)
         if source_outcome is not None:
@@ -657,6 +670,9 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                     metric.update(collection_status='REPAIR_REQUIRED',collection_reason='Selected Switch action/Task checkpoint proof incomplete')
         row['normalized_metrics']=metrics
         row['profiles']={name:weighted_profile(metrics,name)for name in ('common_product','plugin_memory')}
+        for metric in metrics:
+            identity=metric.get('legacy_registry_id',metric['id'])
+            metric['effective_weights']={name:value.get('effective_leaf_weights',{}).get(identity,0)for name,value in row['profiles'].items()}
         if arm=='pi-native':
             row['profiles']['plugin_memory']={'score':None,'status':'DESIGN_NA','reason':'Native Pi has no plugin memory profile'}
         rows.append(row)
@@ -681,7 +697,7 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
         'contract_sha256':admission['contract_sha256'],'contract_version':contract['version']}
     atomic_json(output/'results.json',result,immutable=True)
     columns=['case_id','arm','metric_id','meaning','raw','observed_raw','raw_formula','score','status','score_formula',
-        'weight','reason','support_s','support_f','support_u','support_n','score_coverage','lower','upper',
+        'weight','effective_weights','reason','support_s','support_f','support_u','support_n','score_coverage','lower','upper',
         'collection_status','controlled_coverage','mapping_version','receipt_version','session_receipt_counts','execution_receipt_counts']
     with (output/'metrics.csv').open('w',newline='')as stream:
         writer=csv.DictWriter(stream,fieldnames=columns);writer.writeheader()
@@ -690,7 +706,7 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                 writer.writerow({'case_id':row['case_id'],'arm':row['variant_id'],'metric_id':m['id'],
                     'meaning':m.get('meaning'), 'raw':json.dumps(m['raw'],ensure_ascii=False),'observed_raw':m.get('observed_raw'),
                     'raw_formula':m.get('raw_formula'),'score':m['score'],'status':m['status'],
-                    'score_formula':m.get('score_formula'),'weight':json.dumps(m['weights']), 'reason':m.get('reason'),
+                    'score_formula':m.get('score_formula'),'weight':json.dumps(m['weights']),'effective_weights':json.dumps(m.get('effective_weights')), 'reason':m.get('reason'),
                     'score_coverage':m.get('coverage'),'lower':m.get('lower'),'upper':m.get('upper'),
                     'collection_status':m.get('collection_status'),
                     'controlled_coverage':json.dumps(m.get('controlled_coverage'),ensure_ascii=False),
@@ -728,12 +744,12 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
         with(output/'ruby-source-counts.csv').open('w',newline='')as stream:
             writer=csv.DictWriter(stream,fieldnames=list(ruby_rows[0]));writer.writeheader();writer.writerows(ruby_rows)
     text=['# 固定案例配对报告',f"\n案例：{admission['case_id']}；评分版本：{VERSION}。原始结果、派生行为与采集验收分别保留。\n",
-          '|变体|指标|含义／原公式／百分制公式|原始值|百分制|状态/原因|','|---|---|---|---|---|---|']
+          '|变体|指标|含义／原公式／百分制公式|原始值|百分制|基础／当前有效权重|状态/原因|','|---|---|---|---|---|---|---|']
     for row in rows:
         for m in row['normalized_metrics']:
             if m['status']=='diagnostic' or m['status']=='DESIGN_NA':continue
             values=[row['variant_id'],m['id'],str(m.get('meaning',''))+' / '+str(m.get('raw_formula',''))+' / '+str(m.get('score_formula','')),
-                raw_display(m),str(m['score']),m['status']+': '+str(m.get('reason'))]
+                raw_display(m),str(m['score']),json.dumps({'base':m['weights'],'effective':m.get('effective_weights')}),m['status']+': '+str(m.get('reason'))]
             text.append('| '+' | '.join(v.replace('|','\\|').replace('\n',' ')for v in values)+' |')
     if slop_rows:
         text.extend(['','## Slop原始严格与派生适用测试口径','',

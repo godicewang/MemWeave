@@ -178,10 +178,10 @@ def normalization_points(behavior,case_id):
         'S.case_v2.C4-three-window-checkpoints':memory.get('three_evictions')}
     if 'prior_active_record_seen'in memory and memory['prior_active_record_seen']is not True:
         known=memory['prior_active_record_seen']is False
-        points['S.case_v2.C5-correct-before-action']={'checkpoint_id':'F35.C5.actual-prior-card-v2','score':None,
-            'status':'CONDITIONAL_NO_OPPORTUNITY'if known else'MISSING_EVIDENCE','collection_complete':known,
-            'reason':'Complete source-boundary State proves no previously active canonical old card; current validity is separate, not a successful correction'if known else
-                'Prior active-record eligibility at current-source exposure cannot be determined',
+        points['S.case_v2.C5-correct-before-action']={'checkpoint_id':'F35.C5.prior-establish-update-v3',
+            'score':0 if known else None,'status':'FAIL'if known else'MISSING_EVIDENCE','collection_complete':known,
+            'reason':'Complete boundary proves the prerequisite old card was never established: the whole establish/update pipeline fails, while the raw conditional update-operation rate remains zero-opportunity'if known else
+                'Prior-record boundary cannot be determined; this is missing evidence, not zero opportunity',
             'eligibility_evidence':memory.get('prior_record_boundary_evidence')}
     if case_id=='MAB-05':points['S.case_v2.C1-transient-baseline']=memory.get('correction')
     if case_id in {'MAB-06','MAB-07','MAB-08'}or case_id=='MAB-04'and \

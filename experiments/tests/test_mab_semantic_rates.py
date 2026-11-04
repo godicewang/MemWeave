@@ -60,12 +60,12 @@ def test_never_storing_old_card_is_not_a_successful_update_and_missing_history_n
     assert missing['correction']['value']is None and missing['correction']['unknown']==1
 
 
-@pytest.mark.parametrize('prior,status',[(False,'CONDITIONAL_NO_OPPORTUNITY'),(None,'MISSING_EVIDENCE')])
+@pytest.mark.parametrize('prior,status',[(False,'FAIL'),(None,'MISSING_EVIDENCE')])
 def test_c5_case_point_does_not_award_update_success_when_no_prior_record(prior,status):
     from memweave_eval.fixed35_mab import normalization_points
     behavior={'memory':{'correction':{'score':100},'prior_active_record_seen':prior}}
     point=normalization_points(behavior,'MAB-01')['S.case_v2.C5-correct-before-action']
-    assert point['score']is None and point['status']==status
+    assert point['score']==(0 if prior is False else None)and point['status']==status
 
 
 def test_counterevidence_boundary_is_its_own_source_not_later_unrelated_hop():
