@@ -151,3 +151,42 @@ console.log(calls);
     trace = (tmp_path / "trace.jsonl").read_text()
     assert trace.count('"event":"request_end"') == 1
     assert trace.count('"event":"http_attempt"') == 2
+
+
+def test_sdk_repeated_real_local_sse_sockets_settle_without_waiting_for_eof(tmp_path):
+    """Socket/stream regression only: no real provider and no full-Pi claim."""
+    ledger=tmp_path/'quota.json';initialize(ledger,19,time.time()+60)
+    script=r"""
+import http from 'node:http';import fs from 'node:fs';import OpenAI from OPENAI;
+import{installGuard}from GUARD;
+let calls=0;const server=http.createServer((req,res)=>{
+ calls++;req.resume();res.writeHead(200,{'content-type':'text/event-stream'});
+ const frame={id:'mock',model:'deepseek-flash',choices:[{index:0,delta:{content:'ok'},finish_reason:'stop'}],usage:{prompt_tokens:100,completion_tokens:2,prompt_cache_hit_tokens:0}};
+ res.write('data: '+JSON.stringify(frame)+'\n\n'+'data: [DONE]\n\n');
+ const timer=setInterval(()=>res.write(': keepalive\n\n'),1000);res.on('close',()=>clearInterval(timer));
+});
+await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+const actual=globalThis.fetch.bind(globalThis),port=server.address().port;
+globalThis.fetch=installGuard({ledger:LEDGER,trace:TRACE,deadline:Date.now()/1000+30,variant:'local-fixture',quotaScript:QUOTA,
+ fetchImpl:(_input,init)=>actual('http://127.0.0.1:'+port+'/chat/completions',init)});
+try{
+ const client=new OpenAI({apiKey:'fixture-not-a-real-key',baseURL:'https://api.deepseek.com',maxRetries:0});
+ const owner=new AbortController();
+ for(let i=0;i<8;i++){
+  const stream=await client.chat.completions.create({model:'deepseek-flash',stream:true,max_tokens:128,messages:[{role:'user',content:'fixture'}]},{signal:owner.signal});
+  for await(const _chunk of stream){}
+  if(owner.signal.aborted)throw Error('caller signal was changed');
+ }
+ const ledger=JSON.parse(fs.readFileSync(LEDGER));if(calls!==8||Object.values(ledger.requests).some(r=>r.status!=='settled'))throw Error('lost settlement or unwanted retry');
+ console.log(calls);
+}finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+"""
+    replacements={'OPENAI':str(GUARD.parents[3]/'node_modules/openai/index.mjs'),'GUARD':str(GUARD),
+        'LEDGER':str(ledger),'TRACE':str(tmp_path/'trace.jsonl'),'QUOTA':str(GUARD.with_name('budget_guard.py'))}
+    for key,value in replacements.items():script=script.replace(key,json.dumps(value))
+    run=subprocess.run([NODE,'--input-type=module','-e',script],capture_output=True,text=True,timeout=20,check=False)
+    assert run.returncode==0,run.stderr
+    assert run.stdout.strip()=='8'
+    rows=[json.loads(s)for s in (tmp_path/'trace.jsonl').read_text().splitlines()]
+    assert not any(r['event']=='http_error'for r in rows)
+    assert sum(r['event']=='request_end'for r in rows)==8
