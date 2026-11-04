@@ -274,3 +274,40 @@ def test_raw_count_missing_invalid_and_false_na_flags_cannot_hide_opportunities(
     assert missing['status']=='unknown'and missing['score']is None
     empty=score_value(None,'rate',support={'numerator':0,'denominator':0,'unknown':0},status='not_applicable')
     assert empty['status']=='not_applicable'and empty['score']is None
+
+
+@pytest.mark.parametrize('missing',[False,True])
+def test_claim_memory_checkpoint_reaches_primary_score_with_counts_and_collection_gate(tmp_path,monkeypatch,missing):
+    from memweave_eval import warranty_gold
+    from memweave_eval.fixed35_report import single_report
+    from memweave_eval.normalized_scores import catalogue
+    from memweave_eval.storage import file_digest
+    def grade(trial,contract,*,arm):
+        common={'score':100,'s':20,'f':0,'u':0,'n':20,'status':'SCORED','collection_complete':True}
+        memory={'score':50,'s':2,'f':2,'u':0,'n':4,'status':'SCORED','collection_complete':not missing}
+        if arm=='pi-native':memory={'score':None,'status':'DESIGN_NA','collection_complete':True}
+        return {'fixture_only':True,'common_metric':common,'first_submission_metric':common,
+            'memory_metric':memory,'native_source_trace':{'status':'SCORED','passed':20,'total':20,
+                'unit':'source claims','source_sha256':'0'*64},'collection_complete':not missing}
+    monkeypatch.setattr(warranty_gold,'grade_trial',grade)
+    identity='S.case_v2.C3-before-dependent-edit'
+    contract=tmp_path/'contract.json';contract.write_text(json.dumps({'version':'unit','adapter_kind':'warranty-source-v1',
+        'metric_matrix':[{'metric_id':m['id'],'design_status':'PLANNED'if m['id']==identity else'DESIGN_NA',
+            'reason':'Unit source card scope','opportunity_ids':['unit']}for m in catalogue()['metrics']]}))
+    (tmp_path/'admission.json').write_text(json.dumps({'case_id':'TB-02','benchmark':'unit','family':'unit',
+        'contract_path':str(contract),'contract_sha256':file_digest(contract)}))
+    arms=[]
+    for arm in ['pi-native','pi-memweave']:
+        folder=tmp_path/arm;folder.mkdir();rp=folder/'result.json';rp.write_text('{}')
+        arms.append({'arm':arm,'result_path':str(rp),'exception':None,'verifier':{'rewards':{'reward':1}},
+            'collection':{'state_metrics':{},'tools':{},'cache':{},'estimated_usd':0,
+                'transport_collection_complete':True,'collection_complete':True,'fixture_control':True}})
+    (tmp_path/'pair-result.json').write_text(json.dumps({'arms':arms}))
+    single_report(tmp_path,tmp_path/'report',fixture_control=True)
+    result=json.loads((tmp_path/'report/results.json').read_text());row=next(r for r in result['rows']if r['variant_id']=='pi-memweave')
+    metric=next(m for m in row['normalized_metrics']if m['id']=='F35.C3-before-dependent-edit')
+    assert metric['score']==50 and metric['raw']==.5
+    assert [metric['support_'+k]for k in ['s','f','u','n']]==[2,2,0,4]
+    assert 'portal submission'in metric['meaning']
+    assert result['collection_accepted']is(not missing)
+    if missing:assert metric['collection_status']=='REPAIR_REQUIRED'

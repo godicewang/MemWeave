@@ -103,4 +103,7 @@ def test_attached_original_outcome_runs_through_existing_report_and_normalizatio
         metrics={m['id']:m for m in row['normalized_metrics']}
         assert metrics['S3.partial_pass_rate']['raw']==1
         assert metrics['S.common.process_validation']['score']==100
+        assert 'cargo integration'in metrics['S.common.process_validation']['meaning']
+        assert 'cargo integration'in metrics['S.common.process_validation']['raw_formula']
+        assert '原题公开测试'in metrics['S.common.process_validation']['legacy_registry_meaning']
         assert row['attached_original_source_outcome']['source_counts']['raw_uncapped_passed']==9

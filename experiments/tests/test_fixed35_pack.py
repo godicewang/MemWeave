@@ -105,6 +105,19 @@ def test_existing_cli_writes_all_35_rows_even_with_no_run_reports(tmp_path):
     assert len(table)==35 and all(r['S3.original_reward']=='NOT_RUN'for r in table)
 
 
+def test_required_capture_repair_stays_in_case_weight_denominator_and_out_of_matched_pairs():
+    registry,expected,rows=setup_rows()
+    registry[0]['weights']={'common_product':1,'plugin_memory':1}
+    for item in registry:item['applicability']='all'
+    rows[-1]=dict(rows[-1],collection_complete=False)
+    result=package_metrics(rows,expected,registry)
+    case=rows[-1]['case_id'];pair=next(p for p in result['comparisons']if p['case_id']==case)
+    assert not pair['matched_metric_ids']
+    assert all(p['score']is None and p['coverage']==0 for p in pair['arms'].values())
+    total=next(p for p in result['case_totals']if p['case_id']==case and p['arm']==rows[-1]['arm'])
+    assert total['profiles']['common_product']['score']is None
+
+
 def test_two_classes_keep_fixed_half_weights_and_comparison_denominators():
     registry=[{'id':identity,'mapping':'rate','meaning':identity,'raw_formula':'s/n','score_formula':'100*s/n',
         'category':category,'applicability':'all','weights':{'common_product':.5,'plugin_memory':.5}}

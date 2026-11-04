@@ -1,6 +1,14 @@
 from memweave_eval.fixed35_report import weighted_profile
 
 
+def test_missing_mandatory_capture_cannot_produce_a_complete_weighted_point_score():
+    rows=[{'id':i,'weights':{'p':.5},'status':'scored','score':100,'collection_status':status}
+        for i,status in [('a',None),('b','REPAIR_REQUIRED')]]
+    result=weighted_profile(rows,'p')
+    assert result['score']is None and result['coverage']==.5
+    assert result['conditional_score']==100 and result['missing_metric_ids']==['b']
+
+
 def test_fixed_profile_keeps_missing_weight_and_does_not_make_a_point_total():
     rows=[{'id':'a','weights':{'p':.4},'score':100,'status':'scored'},
           {'id':'b','weights':{'p':.4},'score':None,'status':'unknown'},

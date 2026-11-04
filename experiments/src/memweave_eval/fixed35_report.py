@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261104-v42'
+VERSION='fixed35-score-20261104-v43'
 
 
 def raw_display(metric):
@@ -47,7 +47,8 @@ def weighted_profile(metrics,profile,*,allowed_ids=None):
                 **collection_exception(metric)))
     eligible=[m for m in eligible if m['status']!='EXCLUDED_UNCOLLECTABLE']
     planned=sum(m['weights'][profile]for m in eligible)
-    known=[m for m in eligible if m['status']in {'scored','SCORED'}and m['score']is not None]
+    known=[m for m in eligible if m['status']in {'scored','SCORED'}and m['score']is not None
+        and m.get('collection_complete')is not False and m.get('collection_status')!='REPAIR_REQUIRED']
     weight=sum(m['weights'][profile]for m in known)
     contribution=sum(m['weights'][profile]*m['score']for m in known)
     return {'score':contribution/planned if planned and weight==planned else None,
@@ -363,6 +364,13 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                 'numerator':common['s'],'denominator':common['n']-common['u'],'unknown':common['u'],
                 'status':'scored'if common['score']is not None else'unknown',
                 'reason':'Fixed mean over 20 independently ANDed source claim decisions; first submissions and State are separate supplement rows'}
+            memory=behavior['memory_metric']
+            if arm=='pi-memweave':
+                row['normalization_evidence']['S.case_v2.C3-before-dependent-edit']={
+                    'value':memory['score']/100 if memory['score']is not None else None,
+                    'numerator':memory['s'],'denominator':memory['n']-memory['u'],'unknown':memory['u'],
+                    'status':'scored'if memory['score']is not None else'unknown',
+                    'reason':'Mean over fixed source claim/basis/claim-only cards before each first dependent portal submission; each card checkpoint ANDs active correctness, scope, timing and complete independent boundaries. This is not a source-edit or general free-text judgement.'}
             if behavior.get('semantic_rates')and arm=='pi-memweave':
                 for name in ['timely_write','retention','write_precision','pollution']:
                     row['normalization_evidence']['S1.'+name]=dict(behavior['semantic_rates'][name],
@@ -429,6 +437,8 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
         from .state_write_receipts import METRICS, qualify_receipt, receipt_evidence
         if source_outcome is not None:
             explicit('S.common.process_validation',source_outcome['whole_protocol']['score'],
+                'Original protected cargo integration manifest/caps AND source-parser counts/structure AND matching terminal reward; primary State/protection oracle remains separate'
+                if source_outcome.get('adapter_kind')=='kubernetes-source-v1'else
                 'Attached fixed original source verifier: every source test AND consistent stdout/CTRF/reward; primary State/protection oracle remains separate')
         write_receipts=receipt_evidence(collection)if arm=='pi-memweave'else{}
         row['state_write_receipt_evidence']=write_receipts
@@ -439,6 +449,12 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
         for item in normalized['metrics']:
             original_id=item['id'];spec=assigned[original_id]
             item['id']=metric_alias(original_id);item['legacy_registry_id']=original_id
+            predicate=(row['normalization_evidence'].get(original_id)or{}).get('reason')
+            if original_id.startswith(('S.common.','S.case_v2.'))and predicate:
+                item.update(legacy_registry_meaning=item['meaning'],case_predicate=predicate,
+                    meaning='本题源约束／业务检查点：'+predicate,
+                    raw_formula='按本题冻结检查点内必要断言AND、再按预登记机会聚合；'+predicate,
+                    definition_scope='case-bound predicate; legacy slot name is not a universal file/dependency constraint')
             if spec['design_status']=='DESIGN_NA'or arm=='pi-native'and item['applicability']=='plugin':
                 item.update(score=None,status='DESIGN_NA',reason='Plugin-only metric in native mode'
                     if arm=='pi-native'and item['applicability']=='plugin'else spec['reason'])
@@ -489,7 +505,8 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
         if contract.get('adapter_kind')=='wdm-artifact-v1':
             mark_checkpoint_collection(metrics,{'S.common.protected_constraints':behavior['checkpoint']})
         if contract.get('adapter_kind')=='warranty-source-v1':
-            mark_checkpoint_collection(metrics,{'S.common.protected_constraints':behavior['common_metric']})
+            mark_checkpoint_collection(metrics,{'S.common.protected_constraints':behavior['common_metric'],
+                'F35.C3-before-dependent-edit':behavior['memory_metric']})
             if behavior.get('semantic_rates')and arm=='pi-memweave':
                 for m in metrics:
                     if m['id'].startswith('S1.'):

@@ -62,7 +62,8 @@ def profile_score(rows,registry,profile):
     excluded_weight=sum(r['weight']for r in excluded)
     eligible=[r for r in eligible if r['status']!='EXCLUDED_UNCOLLECTABLE']
     planned=sum(weights[r['metric_id']]for r in eligible)
-    known=[r for r in eligible if r['status']=='SCORED'and r['score']is not None]
+    known=[r for r in eligible if r['status']=='SCORED'and r['score']is not None
+        and r.get('collection_complete')is not False and r.get('collection_status')!='REPAIR_REQUIRED']
     observed=sum(weights[r['metric_id']]for r in known)
     contribution=sum(weights[r['metric_id']]*r['score']for r in known)
     return {'score':contribution/planned if planned and observed==planned else None,
@@ -147,6 +148,7 @@ def package_metrics(rows,expected,registry):
                 exclusions[identity]={'status':status,'reasons':[r.get('reason')for r in pair if r['status']==status],
                     'repair_attempts':[r.get('repair_attempts')for r in pair if r['status']==status]}
         scored_pair={i for i in common_ids if all(any(r['metric_id']==i and r['status']=='SCORED'and r.get('score')is not None
+            and r.get('collection_complete')is not False and r.get('collection_status')!='REPAIR_REQUIRED'
             for r in selected[a])for a in selected)}
         comparison={'case_id':case,'eligible_metric_ids':sorted(common_ids),'matched_metric_ids':sorted(scored_pair),
             'excluded_metrics':exclusions,'arms':{}}
