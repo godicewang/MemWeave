@@ -131,8 +131,10 @@ def evaluate_trial(trial:Path,*,problem,stages,runner,environment,sources,output
         artifacts=trial/'steps'/stage/'artifacts'
         snapshot=artifacts/'submission'
         manifest=artifacts/'manifest.json'
-        receipt=json.loads(manifest.read_text())if manifest.is_file()else[]
-        if not any(r.get('source')=='/workspace'and r.get('destination')=='artifacts/submission'and r.get('status')in {'ok','empty'}for r in receipt):
+        try:receipt=json.loads(manifest.read_text())if manifest.is_file()else None
+        except (OSError,ValueError,UnicodeError):receipt=None
+        if not isinstance(receipt,list)or not any(isinstance(r,dict)and r.get('source')=='/workspace'and
+                r.get('destination')=='artifacts/submission'and r.get('status')in {'ok','empty'}for r in receipt):
             reports[stage]=None;evidence[stage]={'status':'HANDOFF_RECEIPT_MISSING_OR_FAILED'};continue
         if not snapshot.is_dir():
             reports[stage]=None;evidence[stage]={'status':'MISSING_SUBMISSION_SNAPSHOT'};continue
@@ -142,8 +144,12 @@ def evaluate_trial(trial:Path,*,problem,stages,runner,environment,sources,output
         entry={'circuit_eval':'circopt.py','database_migration':'migration_tool.py','trajectory_api':'trajectory_api.py'}[problem]
         missing=[name for name in ('requirements.txt',entry)if not (snapshot/name).is_file()]
         if missing:
-            reports[stage]={'submission_contract':{'handoff_complete':True,'missing_required_files':missing}}
-            evidence[stage]={'status':'KNOWN_SUBMISSION_CONTRACT_FAILURE','manifest_sha256':file_digest(manifest)};continue
+            reports[stage]={'problem_name':problem,'checkpoint_name':stage,'submission_contract':{
+                'handoff_complete':True,'missing_required_files':missing,'handoff_manifest_sha256':file_digest(manifest)}}
+            receipt_path=output/(stage+'-submission-contract.json')
+            atomic_json(receipt_path,reports[stage],immutable=True)
+            evidence[stage]={'status':'KNOWN_SUBMISSION_CONTRACT_FAILURE','manifest_path':str(manifest),
+                'manifest_sha256':file_digest(manifest),'report':str(receipt_path),'sha256':file_digest(receipt_path)};continue
         remaining=deadline-time.time()
         if remaining<=30:
             evidence[stage]={'status':'GLOBAL_VERIFIER_DEADLINE'};reports[stage]=None;continue

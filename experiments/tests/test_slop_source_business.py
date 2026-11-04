@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 
@@ -48,6 +49,77 @@ def test_known_failed_and_damaged_point_remains_zero_but_does_not_pass_collectio
     assert result['checkpoints']['checkpoint_2:regression']['score']==0
     assert result['common_checkpoint']['score']==50
     assert not result['common_checkpoint']['collection_complete']and not result['collection_complete']
+
+
+@pytest.mark.parametrize('mode',['known-missing','wrong-problem','wrong-stage','unproved-handoff','wrong-required-file'])
+def test_absent_source_entry_is_delivery_failure_only_with_complete_identity_and_handoff(bundle,mode):
+    from memweave_eval.slop_source_business import grade_reports
+    c,r=bundle
+    raw={'problem_name':'circuit_eval','checkpoint_name':'checkpoint_2',
+        'submission_contract':{'handoff_complete':True,'missing_required_files':['circopt.py']}}
+    if mode=='wrong-problem':raw['problem_name']='trajectory_api'
+    elif mode=='wrong-stage':raw['checkpoint_name']='checkpoint_3'
+    elif mode=='unproved-handoff':raw['submission_contract']['handoff_complete']=False
+    elif mode=='wrong-required-file':raw['submission_contract']['missing_required_files']=['unrelated.txt']
+    r['checkpoint_2']=raw;g=grade_reports(r,c,fixture_control=True)
+    if mode=='known-missing':
+        assert g['collection_complete']and g['checkpoints']['checkpoint_2:current']['score']==0
+        assert g['checkpoints']['checkpoint_2:regression']['score']==0
+        assert g['stage_inventory']['checkpoint_2']['reported_occurrences']==0
+        assert g['stage_inventory']['checkpoint_2']['unexecuted_reported_occurrences']==4
+    else:assert not g['collection_complete']
+
+
+@pytest.mark.parametrize('mode',['valid','manifest-changed','no-receipt','no-manifest-proof','malformed-contract'])
+def test_delivery_failure_raw_receipt_must_be_bound_to_original_handoff(bundle,tmp_path,mode):
+    from memweave_eval.slop_source_business import grade_official
+    from memweave_eval.storage import file_digest
+    c,_=bundle;receipt=tmp_path/'manifest.json'
+    receipt.write_text(json.dumps([{'source':'/workspace','destination':'artifacts/submission','status':'empty'}]))
+    raw={'problem_name':'circuit_eval','checkpoint_name':'checkpoint_2','submission_contract':{'handoff_complete':True,
+        'missing_required_files':['circopt.py'],'handoff_manifest_sha256':file_digest(receipt)}}
+    if mode=='malformed-contract':raw['submission_contract']=['bad']
+    path=tmp_path/'raw.json';path.write_text(json.dumps(raw))
+    descriptor={'status':'KNOWN_SUBMISSION_CONTRACT_FAILURE','report':str(path),'sha256':file_digest(path),
+        'manifest_path':str(receipt),'manifest_sha256':file_digest(receipt)}
+    if mode=='manifest-changed':receipt.write_text('[]')
+    elif mode=='no-receipt':receipt.unlink()
+    elif mode=='no-manifest-proof':descriptor.pop('manifest_path')
+    contract=dict(c,stages={'checkpoint_2':c['stages']['checkpoint_2']})
+    g=grade_official({'fixture_scores_included':True,'source_evidence':{'checkpoint_2':descriptor}},contract,fixture_control=True)
+    if mode=='valid':assert g['collection_complete']and g['common_checkpoint']['score']==0
+    else:assert not g['collection_complete']
+
+
+@pytest.mark.parametrize('bad_receipt',[None,'not-json','null','[null]','["bad"]'])
+def test_host_evaluator_keeps_broken_handoff_unknown_without_starting_verifier(tmp_path,monkeypatch,bad_receipt):
+    from memweave_eval.fixed35_slop import evaluate_trial
+    monkeypatch.setattr('memweave_eval.fixed35_slop.subprocess.Popen',lambda *a,**k:pytest.fail('No verifier may start'))
+    stages=['checkpoint_'+str(n)for n in range(1,9)]
+    for stage in stages:
+        artifacts=tmp_path/'trial/steps'/stage/'artifacts';(artifacts/'submission').mkdir(parents=True)
+        if bad_receipt is not None:(artifacts/'manifest.json').write_text(bad_receipt)
+    r=evaluate_trial(tmp_path/'trial',problem='circuit_eval',stages=stages,runner='unused',environment='unused',
+        sources='unused',output=tmp_path/'out',deadline=0,env={},expected_image='unused',fixture_only=True)
+    assert not r['collection_complete']and r['original_all_reported_tests_AND']is None
+    assert all(v['status']=='HANDOFF_RECEIPT_MISSING_OR_FAILED'for v in r['source_evidence'].values())
+
+
+def test_host_evaluator_persists_replayable_delivery_failure_before_any_verifier(tmp_path,monkeypatch):
+    from memweave_eval.fixed35_slop import evaluate_trial
+    from memweave_eval.storage import file_digest
+    monkeypatch.setattr('memweave_eval.fixed35_slop.subprocess.Popen',lambda *a,**k:pytest.fail('No verifier may start'))
+    stages=['checkpoint_'+str(n)for n in range(1,9)]
+    for stage in stages:
+        artifacts=tmp_path/'trial/steps'/stage/'artifacts';(artifacts/'submission').mkdir(parents=True)
+        (artifacts/'manifest.json').write_text(json.dumps([{'source':'/workspace','destination':'artifacts/submission','status':'empty'}]))
+    r=evaluate_trial(tmp_path/'trial',problem='circuit_eval',stages=stages,runner='unused',environment='unused',
+        sources='unused',output=tmp_path/'out',deadline=0,env={},expected_image='unused',fixture_only=True)
+    assert r['collection_complete']and r['original_all_reported_tests_AND']==0
+    for stage,e in r['source_evidence'].items():
+        path=Path(e['report']);assert file_digest(path)==e['sha256']
+        raw=json.loads(path.read_text());assert raw['problem_name']=='circuit_eval'and raw['checkpoint_name']==stage
+        assert set(raw['submission_contract']['missing_required_files'])=={'requirements.txt','circopt.py'}
 
 
 @pytest.mark.parametrize('mode',['duplicate','wrong-id','count','hash','missing-stage','extra-stage','bad-json','nested-null','bad-status-list'])

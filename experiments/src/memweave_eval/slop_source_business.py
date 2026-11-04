@@ -11,7 +11,7 @@ from .fixed35 import checkpoint_verdict
 from .fixed35_slop import checkpoint_outcome
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-slop-source-business-20261104-v1'
+VERSION='fixed35-slop-source-business-20261104-v2'
 CASES={'SCB-01':('circuit_eval',8),'SCB-03':('trajectory_api',5)}
 
 
@@ -97,6 +97,21 @@ def grade_reports(reports,contract,*,fixture_control=False):
     if set(reports)-set(contract['stages']):issues.append('unexpected source stage')
     for stage,expected in contract['stages'].items():
         raw=reports.get(stage);errors=[];observed={};groups={};passes=Counter();totals=Counter()
+        original=checkpoint_outcome(raw)
+        required={'requirements.txt','circopt.py'if contract['problem']=='circuit_eval'else'trajectory_api.py'}
+        missing=original.get('missing_required_files')
+        delivery_failure=bool(isinstance(raw,dict)and raw.get('problem_name')==contract['problem']and raw.get('checkpoint_name')==stage
+            and original.get('reason')=='required submitted file absent'and isinstance(missing,list)and
+            len(missing)==len(set(missing))and set(missing)<=required)
+        if delivery_failure:
+            counts[stage]={'reported_occurrences':0,'skipped_occurrences':0,'initial_collected':0,
+                'unexecuted_reported_occurrences':sum(len(v)for v in expected['groups'].values()),
+                'mandatory_submission_missing':missing,'reported_inventory_sha256':None,'source_initial_collection_hash':None}
+            for kind in ['current','regression']:
+                if kind=='regression'and stage=='checkpoint_1':untriggered.append(stage+':'+kind);continue
+                points[stage+':'+kind]=checkpoint_verdict({'id':'F35.SOURCE.'+contract['case_id']+'.'+stage+'.'+kind,
+                    'required_assertions':['mandatory_source_submission_delivered']},{'mandatory_source_submission_delivered':False})
+            continue
         try:groups,observed,passes,totals=inventory(raw)
         except ValueError as error:errors.append(str(error))
         if groups!=expected['groups']:errors.append('complete reported inventory mismatch')
@@ -111,6 +126,7 @@ def grade_reports(reports,contract,*,fixture_control=False):
             if not isinstance(value,dict)or any(type(n)is not int for n in value.values())or {k:n for k,n in counter.items()if n}!={k:n for k,n in value.items()if n}:
                 errors.append('source category counts mismatch:'+key)
         counts[stage]={'reported_occurrences':sum(len(v)for v in groups.values())if groups else None,
+            'unexecuted_reported_occurrences':0 if groups==expected['groups']else None,
             'skipped_occurrences':sum(len(v['skipped'])for v in raw['tests'].values())if groups else None,
             'initial_collected':raw.get('pytest_collected'),'reported_inventory_sha256':inventory_hash(groups)if groups else None,
             'source_initial_collection_hash':raw.get('test_collection_hash')}
@@ -142,8 +158,21 @@ def grade_official(outcome,contract,*,fixture_control=False):
         try:
             path=Path(item['report'])
             if file_digest(path)!=item['sha256']:raise ValueError('captured raw source report changed')
-            reports[stage]=json.loads(path.read_text())
+            raw=json.loads(path.read_text())
+            if isinstance(raw,dict)and raw.get('submission_contract'):
+                if not isinstance(raw['submission_contract'],dict):raise TypeError('invalid source delivery contract')
+                manifest=Path(item['manifest_path']);digest=file_digest(manifest)
+                if item.get('status')!='KNOWN_SUBMISSION_CONTRACT_FAILURE'or digest!=item['manifest_sha256']or \
+                        raw['submission_contract'].get('handoff_manifest_sha256')!=digest:
+                    raise ValueError('source delivery failure lacks bound handoff evidence')
+                receipt=json.loads(manifest.read_text())
+                if not isinstance(receipt,list)or not any(isinstance(r,dict)and r.get('source')=='/workspace'and
+                    r.get('destination')=='artifacts/submission'and r.get('status')in {'ok','empty'}for r in receipt):
+                    raise ValueError('source handoff is not complete')
+            reports[stage]=raw
         except (OSError,ValueError,KeyError,TypeError):reports[stage]=None
+    if isinstance(evidence,dict):
+        for stage in set(evidence)-set(contract['stages']):reports[stage]=None
     return grade_reports(reports,contract,fixture_control=fixture_control)
 
 

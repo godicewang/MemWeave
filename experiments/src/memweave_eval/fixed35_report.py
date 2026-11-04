@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261104-v33'
+VERSION='fixed35-score-20261104-v34'
 
 
 def raw_display(metric):
