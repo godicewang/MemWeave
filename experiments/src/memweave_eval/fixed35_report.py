@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261104-v38'
+VERSION='fixed35-score-20261104-v39'
 
 
 def raw_display(metric):
@@ -325,7 +325,8 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                 for prefix,names in [('S1.',['timely_write','retention','write_precision','pollution']),
                                      ('S2.',['correction','adoption'])]:
                     for name in names:
-                        row['normalization_evidence'][prefix+name]=dict(rates[name],reason=rates[name].get('reason')or rates['scope'])
+                        if name in rates:
+                            row['normalization_evidence'][prefix+name]=dict(rates[name],reason=rates[name].get('reason')or rates['scope'])
         elif contract.get('adapter_kind')in {'readonly-before-first-change-v1','readonly-before-first-change-v2'}:
             explicit('S.common.protected_constraints',behavior['common_constraint']['score'])
             point=behavior['plugin_memory']

@@ -66,3 +66,12 @@ def test_c5_case_point_does_not_award_update_success_when_no_prior_record(prior,
     behavior={'memory':{'correction':{'score':100},'prior_active_record_seen':prior}}
     point=normalization_points(behavior,'MAB-01')['S.case_v2.C5-correct-before-action']
     assert point['score']is None and point['status']==status
+
+
+def test_counterevidence_boundary_is_its_own_source_not_later_unrelated_hop():
+    from memweave_eval.fixed35_mab import counterevidence_visible
+    old={'counterevidence_source':{'support':'475. Christianity was founded in the city of Taipei.'}}
+    assert counterevidence_visible(['475. Christianity was founded in the city of Taipei.'],old,all_current_exposed=False)
+    assert not counterevidence_visible(['Later unrelated bridge fact'],old,all_current_exposed=True)
+    assert not counterevidence_visible(['# Symbolic State\n475. Christianity was founded in the city of Taipei.'],old,all_current_exposed=True)
+    assert counterevidence_visible([],{},all_current_exposed=True)

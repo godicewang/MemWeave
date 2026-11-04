@@ -163,6 +163,14 @@ def source_visible(messages,originals,supports=()):
     return any(needle in message for message in messages if not message.startswith('# Symbolic State')for needle in needles)
 
 
+def counterevidence_visible(messages,old_control,*,all_current_exposed):
+    proof=old_control.get('counterevidence_source')
+    if proof is None:return all_current_exposed
+    support=proof.get('support')if isinstance(proof,dict)else None
+    if not isinstance(support,str)or not support:raise ValueError('explicit counterevidence source support required')
+    return source_visible(messages,[],[support])
+
+
 def normalization_points(behavior,case_id):
     """Bind actual source-specific points; no generic fixture label becomes evidence."""
     memory=behavior.get('memory')or{}
@@ -176,7 +184,8 @@ def normalization_points(behavior,case_id):
                 'Prior active-record eligibility at current-source exposure cannot be determined',
             'eligibility_evidence':memory.get('prior_record_boundary_evidence')}
     if case_id=='MAB-05':points['S.case_v2.C1-transient-baseline']=memory.get('correction')
-    if case_id in {'MAB-06','MAB-07','MAB-08'}:
+    if case_id in {'MAB-06','MAB-07','MAB-08'}or case_id=='MAB-04'and \
+            (behavior.get('semantic_rates')or{}).get('version')=='fixed35-mab-target-book-rates-20261104-v1':
         points['S.case_v2.C1-transient-baseline']=behavior.get('typed_book_memory')
     return points
 
@@ -242,11 +251,20 @@ def grade_mab_trial(trial:Path,contract,*,arm):
     support_text=[s['support']for s in sources]if sources else[]
     for support,item in zip(support_text,sources or[],strict=True):
         if support not in Path(item['path']).read_text():raise ValueError('frozen critical support missing from source instruction')
+    counterproof=(contract.get('old_fact_control')or{}).get('counterevidence_source')
+    if counterproof is not None:
+        path=Path(counterproof['path'])
+        if file_digest(path)!=counterproof['sha256']or counterproof['support']not in path.read_text():
+            raise ValueError('frozen counterevidence source changed')
     source_seen=False;seen_sources=set();window_proof=None
     rate_contract=contract.get('semantic_rate_contract')
-    rate_enabled=rate_contract in {'target-fact-cards-v1','target-fact-cards-v2'}
-    if rate_enabled and not contract.get('typed_fact_memory'):
+    fact_rates=rate_contract in {'target-fact-cards-v1','target-fact-cards-v2'}
+    book_rates=rate_contract=='target-book-cards-v1'
+    rate_enabled=fact_rates or book_rates
+    if fact_rates and not contract.get('typed_fact_memory'):
         raise ValueError('target-fact semantic rates require independent typed source gold')
+    if book_rates and not contract.get('typed_book_memory'):
+        raise ValueError('target-book semantic rates require independent typed source gold')
     seen_changes=set();post_source_changes=[];precision_source_seen=False;prior_record_seen=None;prior_evidence=None
     def observe_changes(rows):
         if not rate_enabled:return
@@ -310,7 +328,9 @@ def grade_mab_trial(trial:Path,contract,*,arm):
             for index,text in enumerate(originals):
                 if any(text in value for value in messages):seen_sources.add(index)
             now_exposed=len(seen_sources)==len(originals)
-            if rate_enabled and now_exposed and not precision_source_seen and contract.get('old_fact_control'):
+            old_control=contract.get('old_fact_control')or{}
+            if fact_rates and old_control and prior_evidence is None and counterevidence_visible(
+                    messages,old_control,all_current_exposed=now_exposed):
                 from .fixed35_fact_cards import fact_snapshot
                 old=contract['old_fact_control']['card']
                 aliases=next((f['relation_aliases']for f in contract['typed_fact_memory']['facts']if f['card']['s']==old['s']),[])
@@ -351,9 +371,12 @@ def grade_mab_trial(trial:Path,contract,*,arm):
                     'request_id':event['request_id'],'expected_state_version':expected,
                     'payload_ref':event.get('payload_ref'),'journal_ref':boundary.get('expected_journal_ref'),
                     'event_identity':[event['producer_id'],event['sequence']]})
-                if rate_enabled:
+                if fact_rates:
                     from .fixed35_fact_cards import fact_snapshot
                     evictions[-1]['semantic_unarchived_checks']=fact_snapshot(semantic_texts,contract['typed_fact_memory'])
+                elif book_rates:
+                    from .fixed35_mab_cards import card_snapshot
+                    evictions[-1]['semantic_unarchived_checks']=card_snapshot(semantic_texts,contract['typed_book_memory'])
                 config=contract.get('window_contract')or{}
                 if config.get('kind')in {'native-identity-plain-text-v1','native-identity-plain-text-v2'}:
                     if window_proof is None:
@@ -402,7 +425,7 @@ def grade_mab_trial(trial:Path,contract,*,arm):
             unarchived_texts=semantic_texts,
             correct_action=first_action_correct if action_seen else False if complete else None,
             before=before if action_seen else False if complete else None)
-    if rate_enabled:
+    if fact_rates:
         checks={key:value['value']for key,value in correction['assertions'].items()}
         checks['source_exposed_before_dependency']=precision_source_seen if complete else None
         correction=checkpoint_verdict({'id':correction['checkpoint_id']+'-source-exposed-v1',
@@ -414,7 +437,7 @@ def grade_mab_trial(trial:Path,contract,*,arm):
         'parser_scope':'finite canonical entity/value literal predicates; not general free-text semantics',
         'literal_contract':literal,'dependent_write_observed':action_seen}
     result['memory']['semantic_invalidation_policy']='unarchived-conflicts-v2; display-window eviction alone does not retire a fact'
-    if rate_enabled:
+    if fact_rates:
         from .mab_semantic_rates import semantic_rates
         from .stage_execution import stage_execution
         rate_complete=complete and stage_execution(trial,events)['evidence_complete']is True
@@ -426,4 +449,11 @@ def grade_mab_trial(trial:Path,contract,*,arm):
         result['memory']['correction']=normalization_points(result,contract.get('case_id'))['S.case_v2.C5-correct-before-action']
         result['semantic_rates']=semantic_rates(contract['typed_fact_memory'],evictions,correction,
             post_source_changes,complete=rate_complete,prior_active_record=prior)
+    elif book_rates:
+        from .book_semantic_rates import book_semantic_rates
+        from .stage_execution import stage_execution
+        rate_complete=complete and stage_execution(trial,events)['evidence_complete']is True
+        result['semantic_rates']=book_semantic_rates(contract['typed_book_memory'],evictions,
+            result['typed_book_memory'],post_source_changes,complete=rate_complete,
+            source_exposed=precision_source_seen if rate_complete else None)
     return result
