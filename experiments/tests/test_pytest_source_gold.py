@@ -78,6 +78,34 @@ def test_static_source_parametrization_never_executes_test_code(tmp_path):
         'test_outputs.py::test_encode[standard]','test_outputs.py::test_encode[durable]','test_outputs.py::test_plain']
 
 
+def test_source_class_methods_keep_their_identity_without_importing(tmp_path):
+    from memweave_eval.pytest_source_gold import test_identities
+    p=tmp_path/'test_state.py';p.write_text('raise RuntimeError("must not import")\nclass TestCheckpointConsolidation:\n def test_exists(self):pass\n def test_shapes(self):pass\n')
+    assert test_identities(p,{})==['test_state.py::TestCheckpointConsolidation::test_exists',
+        'test_state.py::TestCheckpointConsolidation::test_shapes']
+
+
+def test_error_is_only_controlled_when_an_explicit_output_absence_was_observed(source_bundle):
+    t,c=source_bundle;c['setup_error_prerequisite']='tests.py::test_second'
+    c['controlled_setup_error_ids']=['tests.py::test_first[a]','tests.py::test_first[b]']
+    v=t/'verifier';p=v/'test-stdout.txt';p.write_text('=== short test summary info ===\n'+
+        'ERROR tests/tests.py::test_first[a] - missing output\nERROR tests/tests.py::test_first[b] - missing output\n'+
+        'FAILED tests/tests.py::test_second - output missing\n=== 1 failed, 2 errors in 1.0s ===\n')
+    p=v/'ctrf.json';x=json.loads(p.read_text())
+    for row in x['results']['tests']:row['status']='failed'
+    x['results']['summary'].update(passed=0,failed=3);p.write_text(json.dumps(x))
+    (v/'reward.txt').write_text('0');p=t/'result.json';x=json.loads(p.read_text());x['verifier_result']['rewards']['reward']=0;p.write_text(json.dumps(x))
+    r=grade(source_bundle)
+    assert r['collection_complete']and r['checkpoints']['behavior']['score']==0
+    assert len(r['controlled_setup_errors'])==2 and r['source_counts']['failed']==1
+    assert r['native_metrics']['passed']==0 and r['native_metrics']['total']==3
+    assert all(r['observations'][i]is None for i in c['controlled_setup_error_ids'])
+    p=v/'test-stdout.txt';p.write_text(p.read_text().replace('FAILED tests/tests.py::test_second','PASSED tests/tests.py::test_second'))
+    p=v/'ctrf.json';x=json.loads(p.read_text());x['results']['tests'][2]['status']='passed';x['results']['summary'].update(passed=1,failed=2);p.write_text(json.dumps(x))
+    r=grade(source_bundle)
+    assert not r['collection_complete']and not r['controlled_setup_errors']
+
+
 def test_existing_report_scores_selected_source_and_keeps_capture_failure(source_bundle,tmp_path):
     import csv
 

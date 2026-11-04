@@ -11,7 +11,7 @@ from pathlib import Path
 from .fixed35 import checkpoint_verdict
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-parity-archive-20261103-v1'
+VERSION='fixed35-selected-pytest-source-20261104-v2'
 CASES={
  'TB-01':{'task':'batched-eval-parity','test_file':'test_eval_parity.py','count':5,
   'groups':{'parity':['test_batched_evaluator_matches_hidden_oracle',
@@ -28,7 +28,22 @@ CASES={
    'provenance':['test_not_repackaged_binary']},
   'common_groups':['encoding-package-transforms','repair-recovery','invalid-input-side-effects'],
   'dependency_group':'provenance'},
+ 'TB-06':{'task':'telecom-entity-resolution','test_file':'test_outputs.py','count':10,
+  'groups':{'artifact-contract':['test_output_file_exists','test_output_format','test_records_exist_in_data','test_no_duplicate_records'],
+   'global-quality':['test_precision','test_recall','test_f1_score'],
+   'stress-quality':['test_stress_precision','test_stress_recall','test_stress_f1']},
+  'common_groups':['global-quality','stress-quality'],'dependency_group':None,
+  'setup_error_prerequisite':'test_output_file_exists','setup_error_groups':['global-quality','stress-quality']},
+ 'TB-07':{'task':'mp-checkpoint-consolidation','test_file':'test_state.py','count':4,
+  'groups':{'artifact-present':['test_output_file_exists'],
+   'keys-and-shapes':['test_state_dict_keys_match','test_parameter_shapes_correct'],
+   'bitwise-values':['test_state_dict_values_match_reference']},
+  'common_groups':['keys-and-shapes','bitwise-values'],'dependency_group':None},
 }
+MEANINGS={'TB-01':'batched parity, position/order, calibration, source runtime bound and determinism',
+ 'TB-03':'archive transforms, repair/recovery, invalid-input side effects and finite non-wrapper checks',
+ 'TB-06':'entity output validity, source global precision/recall/F1 and adversarial-household thresholds',
+ 'TB-07':'checkpoint presence, exact parameter keys/shapes and bit-identical weights; no separate logits claim'}
 
 
 def _vectors(node,vectors):
@@ -40,10 +55,15 @@ def _vectors(node,vectors):
 
 def test_identities(path:Path,vectors):
     identities=[]
-    for item in ast.parse(path.read_text()).body:
+    functions=[]
+    for node in ast.parse(path.read_text()).body:
+        if isinstance(node,ast.FunctionDef):functions.append((node,''))
+        elif isinstance(node,ast.ClassDef)and node.name.startswith('Test'):
+            functions.extend((method,node.name+'::')for method in node.body if isinstance(method,ast.FunctionDef))
+    for item,prefix in functions:
         if not isinstance(item,ast.FunctionDef)or not item.name.startswith('test_'):continue
         parameters=[d for d in item.decorator_list if isinstance(d,ast.Call)and isinstance(d.func,ast.Attribute)and d.func.attr=='parametrize']
-        base=path.name+'::'+item.name
+        base=path.name+'::'+prefix+item.name
         if not parameters:identities.append(base);continue
         if len(parameters)!=1:raise ValueError('multiple parameter decorators need an explicit source adaptation')
         parameter=parameters[0]
@@ -70,7 +90,7 @@ def freeze_contract(case,source:Path,output:Path,*,metric_matrix=None):
     vectors=json.loads((tests/'fixtures/vectors.json').read_text())['vectors']if identity=='TB-03'else{}
     ids=test_identities(tests/spec['test_file'],vectors)
     if len(ids)!=spec['count']:raise ValueError('selected source case count changed')
-    groups={name:[i for i in ids if i.split('::')[1].split('[')[0]in names]for name,names in spec['groups'].items()}
+    groups={name:[i for i in ids if i.rsplit('::',1)[-1].split('[')[0]in names]for name,names in spec['groups'].items()}
     if any(not group for group in groups.values())or sorted(i for group in groups.values()for i in group)!=sorted(ids):
         raise ValueError('source group partition is incomplete or overlapping')
     paths=[task/'instruction.md',task/'task.toml',*tests.rglob('*')]
@@ -78,14 +98,16 @@ def freeze_contract(case,source:Path,output:Path,*,metric_matrix=None):
     result={'version':VERSION,'adapter_kind':'pytest-selected-source-v1','case_id':identity,'source_revision':pin,
         'source_hashes':{str(p):file_digest(p)for p in paths if p.is_file()},'test_ids':ids,'groups':groups,
         'common_groups':spec['common_groups'],'dependency_group':spec['dependency_group'],
+        'setup_error_prerequisite':next((i for i in ids if i.rsplit('::',1)[-1]==spec.get('setup_error_prerequisite')),None),
+        'controlled_setup_error_ids':[i for name in spec.get('setup_error_groups',[])for i in groups[name]],
         'metric_matrix':metric_matrix or[],'fixture_only':False,'not_formal_admission':True,'gold_actor_visible':False,
-        'scope':'Selected original parity/archive test data and explicit source assertions; no State or memory-adoption inference'}
+        'scope':identity+': '+MEANINGS[identity]+'; original source assertions, no State or memory-adoption inference'}
     atomic_json(output,result,immutable=True)
     return result
 
 
 def _evidence(verifier,expected):
-    issues=[];console={};text='';ctrf=[];summary={}
+    issues=[];console={};kinds={};text='';ctrf=[];summary={}
     log=verifier/'test-stdout.txt';report=verifier/'ctrf.json'
     if log.is_file():text=log.read_text()
     else:issues.append('console_missing')
@@ -93,11 +115,13 @@ def _evidence(verifier,expected):
     if len(parts)<2:issues.append('short_summary_missing')
     else:
         for line in parts[-1].splitlines():
-            match=re.match(r'^(PASSED|FAILED|SKIPPED) (?:tests/)?(\S+)',line)
+            match=re.match(r'^(PASSED|FAILED|SKIPPED|ERROR) (\S+)',line)
             if not match:continue
-            identity=match[2]
+            identity=match[2].rsplit('/',1)[-1]
             if identity in console:issues.append('duplicate_console_id:'+identity)
-            else:console[identity]={'PASSED':True,'FAILED':False,'SKIPPED':None}[match[1]]
+            else:
+                console[identity]={'PASSED':True,'FAILED':False,'SKIPPED':None,'ERROR':None}[match[1]]
+                kinds[identity]=match[1]
     if set(console)!=set(expected):issues.append('console_id_set_mismatch')
     terminal=bool(re.search(r'^=+ .*\bin [\d.]+(?:s| seconds).* =+\s*$',text,re.MULTILINE))
     if not terminal:issues.append('terminal_summary_missing')
@@ -105,14 +129,15 @@ def _evidence(verifier,expected):
         value=json.loads(report.read_text())['results'];ctrf=value['tests'];summary=value['summary']
         if not isinstance(ctrf,list)or not isinstance(summary,dict):raise TypeError('invalid CTRF structure')
         actual=Counter((v['name'],v['status'])for v in ctrf)
-        desired=Counter((identity.split('[')[0],'passed'if result is True else'failed'if result is False else'skipped')for identity,result in console.items())
+        desired=Counter((identity.split('[')[0],'passed'if result is True else'failed'if result is False or kinds.get(identity)=='ERROR'else'skipped')for identity,result in console.items())
         if actual!=desired:issues.append('ctrf_console_multiset_mismatch')
         counts=Counter(v['status']for v in ctrf)
         for key in ['tests','passed','failed','skipped','pending','other']:
             n=summary.get(key)
             if type(n)is not int or n!=(len(ctrf)if key=='tests'else counts[key]):issues.append('ctrf_summary_mismatch:'+key)
     except (FileNotFoundError,ValueError,KeyError,TypeError):issues.append('ctrf_missing_or_invalid')
-    return console,issues,{'stdout':str(log),'ctrf':str(report),'terminal':terminal}
+    return console,issues,{'stdout':str(log),'ctrf':str(report),'terminal':terminal,
+        'setup_error_ids':[i for i,k in kinds.items()if k=='ERROR']}
 
 
 def grade_trial(trial:Path,contract,*,fixture_control=False):
@@ -129,15 +154,21 @@ def grade_trial(trial:Path,contract,*,fixture_control=False):
         if type(reported)in (int,float)and value in (0,1)and value==reported:reward=value
     except (FileNotFoundError,ValueError):pass
     coherent=not issues;points={}
+    prerequisite=contract.get('setup_error_prerequisite')
+    controlled_errors=set(evidence['setup_error_ids'])&set(contract.get('controlled_setup_error_ids',[]))if observations.get(prerequisite)is False else set()
     for name,identities in contract['groups'].items():
         checks={identity:observations.get(identity)for identity in identities}
+        if controlled_errors and any(i in controlled_errors for i in identities):
+            checks={i:v for i,v in checks.items()if i not in controlled_errors}
+            checks['mandatory_output_artifact_available']=False
         checks['console_ctrf_source_identity_agrees']=True if coherent else None
         points[name]=checkpoint_verdict({'id':'F35.SOURCE.'+contract['case_id']+'.'+name,'required_assertions':list(checks)},checks)
     values=[observations.get(i)for i in contract['test_ids']]
     counts={'passed':sum(v is True for v in values),'failed':sum(v is False for v in values),
         'unknown':sum(type(v)is not bool for v in values),'total':len(values)}
-    contradictory=coherent and counts['unknown']==0 and reward is not None and bool(reward)!=(counts['failed']==0)
-    checks={identity:observations.get(identity)for identity in contract['test_ids']}
+    resolved=counts['unknown']==len(controlled_errors)
+    contradictory=coherent and(counts['failed']or resolved)and reward is not None and bool(reward)!=(counts['failed']==counts['unknown']==0)
+    checks={identity:observations.get(identity)for identity in contract['test_ids']if identity not in controlled_errors}
     checks.update(console_ctrf_source_identity_agrees=True if coherent else None,
         official_reward_matches=not contradictory if reward is not None else None)
     whole=checkpoint_verdict({'id':'F35.SOURCE.'+contract['case_id']+'.whole-protocol','required_assertions':list(checks)},checks)
@@ -146,8 +177,13 @@ def grade_trial(trial:Path,contract,*,fixture_control=False):
     common_checks={name:points[name]['score']==100 if points[name]['collection_complete']else None for name in contract['common_groups']}
     common=checkpoint_verdict({'id':'F35.SOURCE.'+contract['case_id']+'.core-behavior','required_assertions':list(common_checks)},common_checks)
     return {'version':VERSION,'case_id':contract['case_id'],'fixture_only':fixture,'original_reward':reward,
-        'source_counts':counts,'native_metrics':{'passed':counts['passed'],'total':counts['total'],
-            'unit':'fixed original source test cases; derived partial rate, original reward separate'}if coherent and counts['unknown']==0 else None,
+        'source_counts':counts,'controlled_setup_errors':sorted(controlled_errors),
+        'outcome_dispositions':{'passed':counts['passed'],'failed_assertions':counts['failed'],
+            'observed_setup_errors':len(evidence['setup_error_ids']),'controlled_unexecuted_setup_errors':len(controlled_errors),
+            'unexplained_unknown_or_skipped':counts['unknown']-len(controlled_errors),
+            'unknown_assertion_values_are_not_automatically_missing_capture':True},
+        'native_metrics':{'passed':counts['passed'],'total':counts['total'],
+            'unit':'fixed original source test outcome rows; controlled setup ERROR is nonpass, not an executed numerical assertion; raw ERROR list separate'}if coherent and resolved else None,
         'observations':observations,'evidence_issues':issues,'evidence':evidence,'checkpoints':points,'whole_protocol':whole,
         'common_checkpoint':common,'dependency_checkpoint':points.get(contract.get('dependency_group')),
         'contradictory_reward':contradictory,'collection_complete':coherent and reward is not None and not contradictory

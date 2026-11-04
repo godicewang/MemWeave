@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261104-v27'
+VERSION='fixed35-score-20261104-v28'
 
 
 def raw_display(metric):
@@ -295,7 +295,7 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                 ('S.common.process_validation',behavior['whole_protocol']),
                 ('S.common.dependency_constraints',behavior['dependency_checkpoint'])]:
                 if point is not None:explicit(identity,point['score'],
-                    'Exact selected parity/archive source test cases and matched console/CTRF evidence; no memory-adoption or general cleanroom-origin inference')
+                    'Exact selected source business cases and matched console/CTRF evidence; no memory-adoption or general cleanroom-origin inference')
         elif contract.get('adapter_kind')=='dispatch-source-v1':
             explicit('S.common.protected_constraints',behavior['common_checkpoint']['score'],
                 'AND of original temporal visibility and current-correction/ledger source cases; not MemWeave memory adoption')

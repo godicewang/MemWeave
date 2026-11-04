@@ -24,12 +24,12 @@ def register(sub):
     dispatch_replay.add_argument('--contract',type=Path,required=True)
     dispatch_replay.add_argument('--fixture-control',action='store_true')
     dispatch_replay.add_argument('--output',type=Path,required=True)
-    selected=commands.add_parser('selected-source-contract',help='Freeze TB-01 parity or TB-03 archive parameterized source gold; no models or admission')
-    selected.add_argument('case_id',choices=['TB-01','TB-03'])
+    selected=commands.add_parser('selected-source-contract',help='Freeze parity/archive/entity/checkpoint exact source gold; no models or admission')
+    selected.add_argument('case_id',choices=['TB-01','TB-03','TB-06','TB-07'])
     selected.add_argument('--design',type=Path,required=True)
     selected.add_argument('--source',type=Path,required=True)
     selected.add_argument('--output',type=Path,required=True)
-    selected_replay=commands.add_parser('selected-source',help='Replay exact parity/archive source cases with console and CTRF identity cross-checks')
+    selected_replay=commands.add_parser('selected-source',help='Replay exact selected source cases with console and CTRF identity cross-checks')
     selected_replay.add_argument('trial',type=Path)
     selected_replay.add_argument('--contract',type=Path,required=True)
     selected_replay.add_argument('--fixture-control',action='store_true')
@@ -191,7 +191,7 @@ def execute(args):
             if row['metric_id']in {'S.common.protected_constraints','S.common.process_validation'}or(
                     args.case_id=='TB-03'and row['metric_id']=='S.common.dependency_constraints'):
                 row.update(design_status='PLANNED',opportunity_ids=['selected-exact-source-tests'],
-                    reason='Pinned original parity/archive business cases, complete source validation and TB-03 finite readable/non-wrapper checks; no general memory or provenance inference')
+                    reason='Pinned original selected business cases, complete source validation and TB-03 finite readable/non-wrapper checks; no general memory or provenance inference')
         value=freeze_contract(case,args.source,args.output,metric_matrix=matrix)
         return {'case_id':args.case_id,'output':str(args.output),'source_test_ids':len(value['test_ids']),
             'not_formal_admission':True,'paid_requests':0}
