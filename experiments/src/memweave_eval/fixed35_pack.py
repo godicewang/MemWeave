@@ -212,15 +212,19 @@ def pack_report(manifest:Path,output:Path):
                         status='SCORED'if metric['status']=='scored'else'DIAGNOSTIC'if metric['status']=='diagnostic'else metric['status'],
                         collection_complete=metric.get('collection_status')!='REPAIR_REQUIRED'))
     result=package_metrics(rows,expected,registry)
-    result.update(version='fixed35-pack-20261103-v4',manifest_sha256=file_digest(manifest),source_sha256=source_hashes,
+    result.update(version='fixed35-pack-20261104-v5',manifest_sha256=file_digest(manifest),source_sha256=source_hashes,
         aggregation='valid cases equally within benchmark, then valid benchmark means equally; no test-count weighting')
     output.mkdir(parents=True,exist_ok=False);atomic_json(output/'results.json',result,immutable=True)
     with (output/'metrics.csv').open('w',newline='')as stream:
         columns=['case_id','benchmark','arm','metric_id','meaning','raw','raw_formula','score','score_formula',
-            'mapping_version','weights','status','reason','repair_attempts','support_s','support_f','support_u','support_n']
+            'mapping_version','weights','status','reason','repair_attempts','support_s','support_f','support_u','support_n',
+            'receipt_version','session_receipt_counts','execution_receipt_counts']
         writer=csv.DictWriter(stream,fieldnames=columns,extrasaction='ignore');writer.writeheader()
         writer.writerows(dict(r,raw=json.dumps(r.get('raw'),ensure_ascii=False),weights=json.dumps(r['weights']),
-            repair_attempts=json.dumps(r.get('repair_attempts'),ensure_ascii=False))for r in result['rows'])
+            repair_attempts=json.dumps(r.get('repair_attempts'),ensure_ascii=False),
+            receipt_version=r.get('receipt_evidence',{}).get('receipt_version'),
+            session_receipt_counts=json.dumps(r.get('receipt_evidence',{}).get('observed_session_counts')),
+            execution_receipt_counts=json.dumps(r.get('receipt_evidence',{}).get('observed_independent_counts')))for r in result['rows'])
     for arm in ('pi-native','pi-memweave'):
         with (output/(arm+'-wide.csv')).open('w',newline='')as stream:
             columns=['case_id',*[m['id']for m in registry if m['mapping']!='diagnostic'],'weighted_total','weighted_coverage',

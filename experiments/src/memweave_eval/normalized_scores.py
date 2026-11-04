@@ -201,7 +201,9 @@ def normalize_trial_scores(row):
         reason = parent.get('reason') if isinstance(parent, dict) else None
         if identity == 'S3.partial_pass_rate':
             source_status, reason = _get(view, 'quality.partial_status'), _get(view, 'quality.partial_reason')
-        if identity.startswith(('Q2.write.', 'Q1.tool.')):
+        if identity.startswith(('Q2.write.', 'Q1.tool.'))and not (
+                identity.startswith('Q2.write.')and isinstance(explicit,dict)and
+                explicit.get('receipt_version')=='fixed35-state-write-receipts-20261104-v1'):
             # Counts can still expose a useful interval when the original scalar is null.
             source_status = None
         if identity == 'Q7.uniformity_cv':

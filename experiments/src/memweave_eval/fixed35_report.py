@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261104-v34'
+VERSION='fixed35-score-20261104-v35'
 
 
 def raw_display(metric):
@@ -19,6 +19,9 @@ def raw_display(metric):
     if metric.get('observed_raw')is not None:data['observed_raw']=metric['observed_raw']
     if any(metric.get('support_'+k)is not None for k in ('s','f','u','n')):
         data.update({k:metric.get('support_'+k)for k in ('s','f','u','n')})
+    proof=metric.get('receipt_evidence')or{}
+    for key in ['observed_session_counts','observed_independent_counts']:
+        if proof.get(key)is not None:data[key]=proof[key]
     return json.dumps(data,ensure_ascii=False)
 
 
@@ -358,6 +361,10 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             # legacy C5/Task families. Their explicit rows have zero extra weight.
             explicit('S.common.protected_constraints',row['slop_fk_component']['checkpoints']['source-business-3']['score'],
                 'AND of five pinned independent FK/rollback source tests at checkpoint 3; original strict source outcome remains separate')
+        from .state_write_receipts import METRICS, qualify_receipt, receipt_evidence
+        write_receipts=receipt_evidence(collection)if arm=='pi-memweave'else{}
+        row['state_write_receipt_evidence']=write_receipts
+        row['normalization_evidence'].update({identity:write_receipts[tool]for identity,tool in METRICS.items()if tool in write_receipts})
         normalized=normalize_trial_scores(row)
         metrics=[]
         assigned={m['metric_id']:m for m in contract['metric_matrix']}
@@ -380,6 +387,7 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             elif item['status'] in {'unknown','partial','invalid'}:
                 item['collection_status']='REPAIR_REQUIRED'
             qualify_state_statistics(item,original_id,row['state_metrics'])
+            if original_id in METRICS and arm=='pi-memweave':qualify_receipt(item,write_receipts[METRICS[original_id]])
             if contract.get('adapter_kind')in {'readonly-before-first-change-v1','readonly-before-first-change-v2'}and not behavior['boundary_coverage']['complete']and original_id in {
                     'S.common.protected_constraints','S.case_v2.C3-before-dependent-edit'}and item['status']!='DESIGN_NA':
                 item['collection_status']='REPAIR_REQUIRED'
@@ -487,7 +495,7 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
     atomic_json(output/'results.json',result,immutable=True)
     columns=['case_id','arm','metric_id','meaning','raw','observed_raw','raw_formula','score','status','score_formula',
         'weight','reason','support_s','support_f','support_u','support_n','score_coverage','lower','upper',
-        'collection_status','controlled_coverage','mapping_version']
+        'collection_status','controlled_coverage','mapping_version','receipt_version','session_receipt_counts','execution_receipt_counts']
     with (output/'metrics.csv').open('w',newline='')as stream:
         writer=csv.DictWriter(stream,fieldnames=columns);writer.writeheader()
         for row in rows:
@@ -499,6 +507,9 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                     'score_coverage':m.get('coverage'),'lower':m.get('lower'),'upper':m.get('upper'),
                     'collection_status':m.get('collection_status'),
                     'controlled_coverage':json.dumps(m.get('controlled_coverage'),ensure_ascii=False),
+                    'receipt_version':m.get('receipt_evidence',{}).get('receipt_version'),
+                    'session_receipt_counts':json.dumps(m.get('receipt_evidence',{}).get('observed_session_counts')),
+                    'execution_receipt_counts':json.dumps(m.get('receipt_evidence',{}).get('observed_independent_counts')),
                     **{k:m.get(k)for k in ('support_s','support_f','support_u','support_n','mapping_version')}})
     derived=[dict(m,case_id=row['case_id'],arm=row['variant_id'])for row in rows for m in row.get('derived_behavior_checkpoints',[])]
     if derived:

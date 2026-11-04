@@ -5,6 +5,7 @@ import hashlib
 import json
 import re
 import subprocess
+from copy import deepcopy
 from pathlib import Path
 
 from .fixed35 import VERSION, validate_selection
@@ -17,6 +18,19 @@ FAMILIES = {'Terminal-Bench 4.0': 'tb4', 'SlopCodeBench': 'slop',
             'InterruptBench current main': 'interrupt', 'MemoryAgentBench': 'mab',
             'SWE-Marathon': 'marathon'}
 PROTOCOL_OPPORTUNITIES={'tool_execution','cost_resource','density','rule_template','projection_window','native_outcome'}
+
+
+def author_write_receipt_opportunities(rows):
+    from .state_write_receipts import METRICS, VERSION
+    result=deepcopy(rows)
+    for row in result:
+        tool=METRICS.get(row['metric_id'])
+        if tool and row['design_status']in {'PLANNED','DESIGN_UNRESOLVED'}:
+            row.update(design_status='PLANNED',opportunity_ids=sorted({
+                *row.get('opportunity_ids',[]),'actual-plugin-write-receipts:'+tool}),
+                reason='Each actual declared plugin write-tool call; complete dual-source proof required for zero denominator; native remains structurally NA',
+                assignment_basis='authored_conditional_write_receipt_opportunity',opportunity_version=VERSION)
+    return result
 
 
 def read_design(path: Path):
@@ -130,7 +144,7 @@ def applicability_matrix(design):
                             'missing instrumentation or an unimplemented checker is not zero or design NA',
                          'implementation_status':'NOT_ACCEPTED',
                          'design_sha256':DESIGN_SHA256})
-    return rows
+    return author_write_receipt_opportunities(rows)
 
 
 def freeze_draft_contracts(source_manifest,matrix,output:Path):
