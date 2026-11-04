@@ -6,6 +6,8 @@
 
 [Ruby禁用集合与SQLite例外](experiments/RUBY_EXCEPTION_CASE_2026-11-04.md)记录C2的事前派生协议、有限卡片／锁包集合断言及准入边界；不把不要求Rust的脚本题或未运行软件控制算成实际能力。
 
+[独立verifier所有权与停止检查](experiments/OWNED_VERIFIER_STOP_2026-11-04.md)记录Harbor独立验证器不继承run标签的资源采集与硬停止缺口、可信trial发现、拒绝误认及真实Docker断网验证；仅评估观察器变更，不修改Actor输入或原分。
+
 2026-11-04续轮的[需求偏离审计与修复边界](experiments/FIXED35_DESIGN_AUDIT_2026-11-04.md)区分整包能力覆盖与逐题适用性、千调用候选与真实资格、MAB阶段上限与必需耗时，并在新预算准入中保留旧未知预留风险；原报告与运行时契约不改。
 
 [整包能力与长例资格门禁](experiments/FIXED35_PACKAGE_ACCEPTANCE_2026-11-04.md)将24组真实观测及五个千调用成功案例独立接入整包报告；采集通过不再被误称为完整实验交付，历史输出和逐题适用性保持不变。

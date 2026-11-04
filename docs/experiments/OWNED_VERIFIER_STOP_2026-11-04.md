@@ -1,0 +1,13 @@
+# 独立verifier所有权与停止检查
+
+2026-11-04无模型WDM资源控制发现：Harbor独立verifier不继承Actor的自定义run标签。原参考解reward=1，但按run标签收集不到verifier实际限额，控制正确地拒绝准入。原结果和失败日志保留；按原trial精确项目和源镜像恢复仍保留的停止verifier回执后，参考解无需重跑，2CPU8GiB参考／空解控制分别为1／0。
+
+这也是通用截止观察器的潜在缺口。本次仅修评估侧只读发现与清理确认，不改变模型可见内容、Actor资源、原题／原验证器、State协议或分数定义。
+
+`owned_verifiers.running_containers`保留既有run标签发现；对正式运行，另验证experiment.lock的admission哈希、case与Task路径、原Harbor trial配置中的运行／variant／case身份，按源Task声明中的独立verifier阶段生成精确Compose项目，检查实际service及声明镜像。不会仅凭名称前缀接管其他项目，也不查询宿主进程。
+
+模型截止仅对Actor执行原有停止操作；容器硬截止同时覆盖经验证的独立verifier。Docker查询／inspect失败、文件重定向、身份或镜像不匹配均保留“未确认”，不得当作空列表成功。`run_pair`的最终停止检查复用同一判定，保存实际检查结果，verifier仍活动时不停止独立watchdog、不声称cleanup成功。
+
+已有冻结运行不热改Actor或旧评分器；必要时可另启相同截止的外部只读观察器，并保留两版本来源。缺少正式admission的既有免费控制仍仅自动匹配明确run标签，其独立verifier须由控制程序基于可信原trial单独核验／清理；本修复不宣称自动覆盖任意第三方Compose sidecar。
+
+已验证：模型截止不触及verifier、硬截止覆盖两者，查询失败与恢复、跨项目／镜像拒绝、锁文件变更、配置重定向和共享verifier边界。真实Docker断网控制创建Actor、无run标签verifier及第三个对照，硬截止只停止前两者，第三个保持运行，随后三个本测试容器均清理；没有模型请求或凭据。完整回归与最终提交证据在本轮实验工件中另存。

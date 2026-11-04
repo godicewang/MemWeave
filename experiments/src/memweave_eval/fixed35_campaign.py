@@ -256,9 +256,12 @@ def run_pair(admission: Path, root: Path):
             'run_id':run_id,'arms':arms,'report':report,'finished_at':datetime.now(UTC).isoformat()})
         return {'root':str(root),'case_id':record['case_id'],'arms':len(arms)}
     finally:
-        check=subprocess.run(['docker','ps','--filter','label=org.memweave.eval.run='+run_id,
-            '--format','{{.ID}}'],env=env,capture_output=True,text=True,timeout=15,check=False)
-        if check.returncode==0 and not check.stdout.strip():
+        from .owned_verifiers import running_containers
+        def ownership_query(args):
+            return subprocess.run(['docker',*args],env=env,capture_output=True,text=True,timeout=15,check=False)
+        check=running_containers(root,run_id,ownership_query)
+        atomic_json(root/'final-owned-container-check.json',check,immutable=True)
+        if check['complete']and check['identities']==[]:
             (root/'.watchdog-stop').touch();watch.wait(timeout=20)
             atomic_json(root/'cleanup.json',{'confirmed_stopped':True,'at':datetime.now(UTC).isoformat()},immutable=True)
         sleep_guard.terminate();sleep_guard.wait(timeout=10)
