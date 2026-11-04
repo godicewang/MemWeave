@@ -9,6 +9,37 @@ from pathlib import Path
 from .storage import file_digest
 
 
+def carry_in_exposure(config):
+    """Read-only outstanding old reservations; never settle or release them."""
+    risks=config.get('carry_in_risk',[])
+    if not isinstance(risks,list):raise TypeError('carry-in risk must be an explicit list')
+    total=0.;seen=set()
+    for risk in risks:
+        if not isinstance(risk,dict)or set(risk)!={'ledger','sha256','reserved_usd'}:
+            raise ValueError('carry-in risk proof is incomplete')
+        old=Path(risk['ledger']);declared=risk['reserved_usd']
+        if old.name!='quota.json'or old.parent.name==config['budget_id']or old.resolve()in seen \
+                or type(declared)not in (int,float)or not math.isfinite(declared)or declared<0:
+            raise ValueError('invalid or duplicate old-budget risk')
+        seen.add(old.resolve())
+        if file_digest(old)!=risk['sha256']:raise ValueError('old risk ledger changed; reconcile before new admission')
+        requests=json.loads(old.read_text()).get('requests')
+        if not isinstance(requests,dict):raise TypeError('old risk request evidence missing')
+        observed=0.
+        for row in requests.values():
+            if not isinstance(row,dict)or row.get('status')not in {'reserved','settled'}:
+                raise ValueError('old risk request status invalid')
+            if row['status']=='reserved':
+                charge=row.get('charge_usd')
+                if type(charge)not in (int,float)or not math.isfinite(charge)or charge<0:
+                    raise ValueError('old risk reservation invalid')
+                observed+=charge
+        if not math.isclose(declared,observed,rel_tol=1e-12,abs_tol=1e-12):
+            raise ValueError('old outstanding risk was understated or changed')
+        total+=observed
+    return total
+
+
 def campaign_config(record):
     """Bind an admission to its own ledger, never to a process-wide default."""
     proof=record.get('campaign')
@@ -35,10 +66,13 @@ def campaign_config(record):
     ledger=Path(config['ledger'])
     if ledger.name!='quota.json'or ledger.parent.name!=config['budget_id']:
         raise ValueError('ledger must belong to this independent budget identity')
+    if maximum+carry_in_exposure(config)>authorized:
+        raise ValueError('new admission plus old outstanding risk exceeds authorization')
     return config
 
 
 def verify_account(config):
+    carry_in_exposure(config)
     account=json.loads(Path(config['ledger']).read_text())
     if account['maximum_usd']!=config['maximum_usd']or account['arm_limits']!=config['arm_limits']or account['deadline']!=config['judge_cutoff']:
         raise ValueError('campaign ledger budget or deadline mismatch')

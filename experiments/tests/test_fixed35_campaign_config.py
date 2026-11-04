@@ -40,6 +40,24 @@ def test_ledger_configuration_mismatch_is_fail_closed(tmp_path):
     with pytest.raises(ValueError,match='mismatch'):verify_account(config)
 
 
+@pytest.mark.parametrize('mode',['valid','overallocated','changed','understated','invalid'])
+def test_old_unknown_risk_is_hash_bound_and_cannot_be_spent_again(tmp_path,mode):
+    old=tmp_path/'old-budget'/'quota.json';old.parent.mkdir()
+    old.write_text(json.dumps({'requests':{'old-call':{'status':'reserved','charge_usd':.3}}}))
+    risk={'ledger':str(old),'sha256':file_digest(old),'reserved_usd':.3}
+    changes={'carry_in_risk':[risk]}
+    if mode=='overallocated':changes.update(maximum_usd=19.8)
+    elif mode=='understated':risk['reserved_usd']=.2
+    elif mode=='invalid':risk['reserved_usd']=True
+    record=freeze(tmp_path,**changes)
+    if mode=='changed':old.write_text('{}')
+    if mode=='valid':
+        assert campaign_config(record)['carry_in_risk']==[risk]
+        assert json.loads(old.read_text())['requests']['old-call']['status']=='reserved'
+    else:
+        with pytest.raises(ValueError):campaign_config(record)
+
+
 def test_schedule_uses_admission_campaign_clock_not_old_global(tmp_path):
     from memweave_eval.fixed35_schedule import pair_policy
     task=tmp_path/'task';task.mkdir()
