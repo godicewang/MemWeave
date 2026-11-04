@@ -118,7 +118,7 @@ def scoped_execution_boundaries(trial:Path,events,*,stage_id=None):
             errors.append('invocation_stage_differs_from_observer')
         starts=[e for e in related if e['event']=='workspace_checkpoint'and e.get('phase')=='agent_start']
         finishes=[e for e in related if e['event']=='workspace_checkpoint'and e.get('phase')=='agent_end'or
-            proof is not None and e['event']=='execution_terminated'and e.get('sequence')==proof['boundary_sequence']]
+            proof is not None and e['event']in {'execution_terminated','execution_deadline_snapshot'}and e.get('sequence')==proof['boundary_sequence']]
         if not starts or not finishes:errors.append('initial_or_terminal_boundary_missing')
         elif starts[0]['timestamp']>finishes[-1]['timestamp']:errors.append('boundary_order_invalid')
     identities=set(manifests)

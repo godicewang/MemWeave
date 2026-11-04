@@ -64,7 +64,7 @@ def test_missing_assistant_callback_is_not_mistaken_for_an_observed_empty_answer
     assert scoped_execution_boundaries(tmp_path,events)['complete']
 
 
-def terminated_capture(root):
+def terminated_capture(root,*,external=False):
     events=capture(root,'one','1');folder=root/'execution-invocations'
     output=folder/'one.stdout.jsonl';rows=[json.loads(s)for s in output.read_text().splitlines()]
     output.write_text('\n'.join(json.dumps(r)for r in rows if r['type']not in {'agent_end','tool_execution_end'})+'\n')
@@ -77,15 +77,30 @@ def terminated_capture(root):
         observation_source='evaluation_signal_microtask_not_native_agent_end',capture_status='CAPTURED',
         workspace={'files':{},'file_status':{}},registry={'complete':True,'tasks':[]}))
     (root/'request-trace.jsonl').write_text(json.dumps({'event':'local_deadline_stop','pid':25,'timestamp':1793750400})+'\n')
+    if external:
+        import gzip
+        import hashlib
+        raw=(root/'request-trace.jsonl').read_bytes();digest=hashlib.sha256(raw).hexdigest()
+        p=root/'request-content/objects'/(digest+'.gz');p.parent.mkdir(parents=True);p.write_bytes(gzip.compress(raw))
+        event=events[-1];event.pop('signal');event.update(event='execution_deadline_snapshot',phase='execution_deadline_snapshot',
+            observation_source='evaluation_external_after_deadline_guard',
+            guard_stop_ref={'object':'objects/'+p.name,'sha256':digest,'bytes':len(raw)})
     return events
 
 
-def test_verified_deadline_retains_cancellation_instead_of_fabricating_result(tmp_path):
-    events=terminated_capture(tmp_path);result=scoped_execution_boundaries(tmp_path,events)
+@pytest.mark.parametrize('external',[False,True])
+def test_verified_deadline_retains_cancellation_instead_of_fabricating_result(tmp_path,external):
+    events=terminated_capture(tmp_path,external=external);result=scoped_execution_boundaries(tmp_path,events)
     assert result['complete']and result['terminal_execution_observed']
     assert result['native_terminal_execution_observed']is False
     assert result['completed_tool_calls']==0 and len(result['deadline_cancelled_tool_calls'])==1
     assert result['deadline_cancelled_tool_calls'][0]['call_id']=='reused'
+
+
+def test_external_snapshot_requires_actual_guard_object_and_matching_run(tmp_path):
+    events=terminated_capture(tmp_path,external=True)
+    events[-1]['guard_stop_ref']['sha256']='0'*64
+    assert not scoped_execution_boundaries(tmp_path,events)['complete']
 
 
 @pytest.mark.parametrize('mode',['no_guard','wrong_pid','early','failed_capture','wrong_stage',
