@@ -71,6 +71,49 @@ def test_known_zero_model_return_denominator_is_distinct_from_missing_usage():
     assert unknown['status']=='unknown'and unknown['collection_status']=='REPAIR_REQUIRED'
 
 
+def test_no_state_writes_proves_undefined_interval_diagnostics_without_faking_zero():
+    from memweave_eval.fixed35_report import qualify_state_statistics
+    state={'source_status':'ok','write_model_positions':[], 'model_responses_with_usage':2,
+        'uniformity':{'status':'insufficient_sample','intervals':[],
+            'mean_interval':None,'max_interval':None,'head_calls':None,'tail_calls':None}}
+    for identity in ['Q7.mean_interval','Q7.max_interval','Q7.head_calls','Q7.tail_calls']:
+        item={'status':'unknown','raw':None,'score':None,'collection_status':'REPAIR_REQUIRED'}
+        qualify_state_statistics(item,identity,state)
+        assert item['status']=='CONDITIONAL_NO_OPPORTUNITY'and item['raw']is None
+        assert 'collection_status'not in item
+        assert item['statistical_denominator']['whole_no_write_span']==2
+
+
+def test_one_write_has_head_and_tail_but_no_internal_gap():
+    from memweave_eval.fixed35_report import qualify_state_statistics
+    state={'source_status':'ok','write_model_positions':[3], 'model_responses_with_usage':5,
+        'uniformity':{'status':'insufficient_sample','intervals':[],
+            'mean_interval':None,'max_interval':None,'head_calls':3,'tail_calls':2}}
+    for identity in ['Q7.mean_interval','Q7.max_interval']:
+        item={'status':'unknown','raw':None,'score':None,'collection_status':'REPAIR_REQUIRED'}
+        qualify_state_statistics(item,identity,state)
+        assert item['status']=='CONDITIONAL_NO_OPPORTUNITY'
+    for identity,value in [('Q7.head_calls',3),('Q7.tail_calls',2)]:
+        item={'status':'diagnostic','raw':value,'score':None}
+        qualify_state_statistics(item,identity,state)
+        assert item['status']=='diagnostic'and item['raw']==value
+
+
+def test_missing_or_incoherent_state_positions_never_waive_missing_diagnostics():
+    from copy import deepcopy
+
+    from memweave_eval.fixed35_report import qualify_state_statistics
+    base={'source_status':'ok','write_model_positions':[], 'model_responses_with_usage':2,
+        'uniformity':{'status':'insufficient_sample','intervals':[]}}
+    for patch in [{'source_status':'missing_initial_inventory'}, {'write_model_positions':None},
+                  {'model_responses_with_usage':None}, {'write_model_positions':[True]},
+                  {'write_model_positions':[3]}, {'uniformity':{'status':'unknown','intervals':[]}}]:
+        state=deepcopy(base);state.update(patch)
+        item={'status':'unknown','raw':None,'score':None,'collection_status':'REPAIR_REQUIRED'}
+        qualify_state_statistics(item,'Q7.mean_interval',state)
+        assert item['status']=='unknown'and item['collection_status']=='REPAIR_REQUIRED'
+
+
 def test_existing_report_keeps_slop_original_and_derived_channels_separate(tmp_path):
     import csv
     import json

@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261104-v37'
+VERSION='fixed35-score-20261104-v38'
 
 
 def raw_display(metric):
@@ -69,6 +69,20 @@ def metric_alias(identity):
 def qualify_state_statistics(item,identity,state):
     """A proved zero statistical denominator is not a lost observation."""
     positions=state.get('write_model_positions');uniform=state.get('uniformity')or{}
+    total=state.get('model_responses_with_usage')
+    known_positions=(state.get('source_status')=='ok'and type(total)is int and total>=0
+        and isinstance(positions,list)and all(type(p)is int and 0<=p<=total for p in positions)
+        and positions==sorted(positions))
+    no_internal_gaps=known_positions and len(positions)<2 and uniform.get('intervals')==[] \
+        and uniform.get('status')=='insufficient_sample'
+    undefined_diagnostic=(identity in {'Q7.mean_interval','Q7.max_interval'}and no_internal_gaps
+        or identity in {'Q7.head_calls','Q7.tail_calls'}and no_internal_gaps and not positions)
+    if undefined_diagnostic and item.get('status')=='unknown'and item.get('raw')is None:
+        item.update(score=None,status='CONDITIONAL_NO_OPPORTUNITY',
+            reason='Complete committed journal and model positions prove no internal interval, or no first/last write; undefined diagnostic is not lost evidence or a zero-valued interval',
+            statistical_denominator={'committed_batches':len(positions),'internal_intervals':0,
+                'whole_no_write_span':total if not positions else None})
+        item.pop('collection_status',None)
     if identity=='Q7.fd_density'and item.get('status')=='unknown'and item.get('raw')is None \
             and state.get('source_status')=='ok'and state.get('ratio_status')=='zero_model_responses' \
             and type(state.get('model_responses_with_usage'))is int and state['model_responses_with_usage']==0 \

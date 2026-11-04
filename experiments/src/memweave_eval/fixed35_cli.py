@@ -179,9 +179,16 @@ def register(sub):
     package=commands.add_parser('pack-report',help='Report the complete frozen 35-case matrix')
     package.add_argument('manifest',type=Path)
     package.add_argument('--output',type=Path,required=True)
+    long=commands.add_parser('long-qualification',help='Audit five fixed long cases from successful original verifiers and deduplicated real actor requests; no model calls')
+    long.add_argument('--design',type=Path,required=True)
+    long.add_argument('--manifest',type=Path,required=True)
+    long.add_argument('--output',type=Path,required=True)
 
 
 def execute(args):
+    if args.fixed35_command=='long-qualification':
+        from .long_qualification import qualification_table
+        return qualification_table(args.design,args.manifest,args.output)
     if args.fixed35_command=='dispatch-contract':
         from .dispatch_gold import freeze_contract
         design=read_design(args.design);case=next(c for c in design['selection']['cases']if c['pack_case_id']=='TB-09')
