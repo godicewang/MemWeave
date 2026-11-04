@@ -253,8 +253,9 @@ def test_explicit_finite_card_counts_reach_normalized_raw_score_support_and_boun
 
 def test_component_not_admitted_marker_cannot_be_bypassed_with_planned_rows():
     from memweave_eval.fixed35_campaign import validate_case_design
-    contract={'metric_matrix':[{'metric_id':'unit','design_status':'PLANNED',
-        'applicability_version':'fixed35-research-assignments-20261102-v2'}]}
+    from memweave_eval.normalized_scores import catalogue
+    contract={'metric_matrix':[{'metric_id':m['id'],'design_status':'PLANNED','opportunity_ids':['unit-frozen-source'],
+        'applicability_version':'fixed35-research-assignments-20261102-v2'}for m in catalogue()['metrics']]}
     validate_case_design(contract)
     for marker in [True,'true',1]:
         with pytest.raises(ValueError):validate_case_design(dict(contract,not_formal_admission=marker))

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import subprocess
 import sys
 import time
@@ -58,20 +59,51 @@ def validate_paid_canary(record,ledger=None):
 
 
 def validate_case_design(contract):
+    if not isinstance(contract,dict):raise TypeError('case contract must be an object')
     matrix=contract.get('metric_matrix')
+    if 'fixture_only'in contract and(type(contract['fixture_only'])is not bool or contract['fixture_only']):
+        raise ValueError('fixture scoring contracts cannot enter a real admission')
     if 'not_formal_admission'in contract and type(contract['not_formal_admission'])is not bool:
         raise ValueError('component admission marker must be boolean')
     if contract.get('not_formal_admission')is True or contract.get('contract_status')in {'DRAFT_NOT_ADMITTED','SOURCE_COMPONENT_NOT_ADMITTED'}or not isinstance(matrix,list)or not matrix:
         raise ValueError('source draft or empty case opportunities cannot be admitted')
+    if any(not isinstance(m,dict)or not isinstance(m.get('metric_id'),str)or not m['metric_id']for m in matrix):
+        raise ValueError('case metric identities must be explicit strings')
     if len({m.get('metric_id')for m in matrix})!=len(matrix):
         raise ValueError('case design repeats a metric')
+    from .normalized_scores import catalogue
+    if {m.get('metric_id')for m in matrix}!={m['id']for m in catalogue()['metrics']}:
+        raise ValueError('case design must cover the complete current metric registry')
     for metric in matrix:
         if metric.get('applicability_version')!='fixed35-research-assignments-20261102-v2':
             raise ValueError('legacy research-as-NA matrix must be migrated before admission')
         if metric.get('design_status')not in {'PLANNED','DESIGN_NA'}:
             raise ValueError('unresolved case opportunities cannot be admitted')
-        if metric['design_status']=='DESIGN_NA'and not metric.get('reason'):
+        if metric['design_status']=='DESIGN_NA'and(not isinstance(metric.get('reason'),str)or not metric['reason'].strip()):
             raise ValueError('structural design NA requires an explicit frozen reason')
+        if metric['design_status']=='PLANNED':
+            opportunities=metric.get('opportunity_ids')
+            if not isinstance(opportunities,list)or not opportunities or any(
+                    not isinstance(i,str)or not i.strip()for i in opportunities)or len(opportunities)!=len(set(opportunities)):
+                raise ValueError('planned metric requires explicit unique frozen opportunities')
+
+
+def verify_evaluator_checkout(record):
+    """Read-only provenance gate before any authority or actor can be started."""
+    identity=record.get('evaluator_commit')
+    if not isinstance(identity,str)or not re.fullmatch(r'[a-f0-9]{40}',identity):
+        raise ValueError('full frozen evaluator commit required')
+    root=Path(record['code_path']).resolve()
+    if Path(__file__).resolve()!=(root/'experiments/src/memweave_eval/fixed35_campaign.py').resolve():
+        raise ValueError('loaded evaluator does not belong to the frozen code path')
+    try:
+        actual_root=subprocess.check_output(['git','-C',str(root),'rev-parse','--show-toplevel'],text=True,stderr=subprocess.PIPE).strip()
+        head=subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True,stderr=subprocess.PIPE).strip()
+        dirty=subprocess.check_output(['git','--no-optional-locks','-C',str(root),'status','--porcelain','--untracked-files=all'],text=True,stderr=subprocess.PIPE)
+    except (OSError,subprocess.SubprocessError):
+        raise ValueError('evaluator checkout could not be verified')from None
+    if Path(actual_root).resolve()!=root or head!=identity or dirty.strip():
+        raise ValueError('evaluator checkout differs from the clean frozen canary revision')
 
 
 def validate_adapter_observers(record,contract):
@@ -97,6 +129,7 @@ def validate_admission(record):
                 'preflight_evidence'):
         if key not in record:
             raise ValueError('missing admission field '+key)
+    verify_evaluator_checkout(record)
     campaign=campaign_config(record)
     validate_paid_canary(record,Path(campaign['ledger']))
     if not record['preflight_evidence']:

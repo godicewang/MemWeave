@@ -71,11 +71,25 @@ def test_admission_rejects_drafts_unresolved_and_obsolete_false_na_matrices():
     import pytest
 
     from memweave_eval.fixed35_campaign import validate_case_design
-    good={'metric_matrix':[{'metric_id':'m','design_status':'PLANNED',
-        'applicability_version':'fixed35-research-assignments-20261102-v2'}]}
+    from memweave_eval.normalized_scores import catalogue
+    good={'metric_matrix':[{'metric_id':m['id'],'design_status':'PLANNED','opportunity_ids':['frozen-unit-source'],
+        'applicability_version':'fixed35-research-assignments-20261102-v2'}for m in catalogue()['metrics']]}
     validate_case_design(good)
     for bad in ({'metric_matrix':[]},dict(good,contract_status='DRAFT_NOT_ADMITTED'),
         {'metric_matrix':[dict(good['metric_matrix'][0],design_status='DESIGN_UNRESOLVED')]},
         {'metric_matrix':[dict(good['metric_matrix'][0],design_status='DESIGN_NA')]},
         {'metric_matrix':[{'metric_id':'m','design_status':'DESIGN_NA','reason':'No assigned opportunity in approved design'}]}):
         with pytest.raises(ValueError):validate_case_design(bad)
+
+
+def test_admission_requires_the_whole_registry_and_rejects_fixtures():
+    import pytest
+
+    from memweave_eval.fixed35_campaign import validate_case_design
+    from memweave_eval.normalized_scores import catalogue
+    good={'metric_matrix':[{'metric_id':m['id'],'design_status':'PLANNED','opportunity_ids':['unit-source'],
+        'applicability_version':'fixed35-research-assignments-20261102-v2'}for m in catalogue()['metrics']]}
+    for change in [{'metric_matrix':good['metric_matrix'][:-1]},{'fixture_only':True},{'fixture_only':'false'},
+        {'metric_matrix':[dict(m,opportunity_ids=[])for m in good['metric_matrix']]},
+        {'metric_matrix':[dict(m,opportunity_ids=['same','same'])for m in good['metric_matrix']]}]:
+        with pytest.raises(ValueError):validate_case_design(dict(good,**change))

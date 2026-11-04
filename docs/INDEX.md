@@ -71,6 +71,8 @@ v4之后新增[INT-04同权威冲突与State纠错v5离线验收](experiments/FI
 
 [匿名化源gold](experiments/ANONYMIZATION_SOURCE_GOLD_2026-11-04.md)补TB-10真实时间合并、跨租户身份、历史、内存及seed原程序检查，并严格限定缺实现文件的明确前置失败分支；其他setup异常仍待修复。
 
+[正式准入完整性](experiments/FIXED35_ADMISSION_INTEGRITY_2026-11-04.md)在付费启动前拒绝漏指标矩阵、fixture合同、空机会及偏离canary的实际代码checkout；不替代gold／真实CLI和资源验收。
+
 2026-10-25 用户确认启动模式与本机宿主解耦：同一 Pi 配置目录，TUI 启动选择启用/未启用并显示状态，未启用恢复全局自动压缩且仅保留启动接线；详细行为以 Rule 技术稿 §14 与 PACKAGING.md 启动模式节为准，取代早期对启动框禁用时不恢复压缩的约定。
 
 | 文档 | 权威范围 |
