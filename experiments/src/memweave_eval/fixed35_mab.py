@@ -168,6 +168,13 @@ def normalization_points(behavior,case_id):
     memory=behavior.get('memory')or{}
     points={'S.case_v2.C5-correct-before-action':memory.get('correction'),
         'S.case_v2.C4-three-window-checkpoints':memory.get('three_evictions')}
+    if 'prior_active_record_seen'in memory and memory['prior_active_record_seen']is not True:
+        known=memory['prior_active_record_seen']is False
+        points['S.case_v2.C5-correct-before-action']={'checkpoint_id':'F35.C5.actual-prior-card-v2','score':None,
+            'status':'CONDITIONAL_NO_OPPORTUNITY'if known else'MISSING_EVIDENCE','collection_complete':known,
+            'reason':'Complete source-boundary State proves no previously active canonical old card; current validity is separate, not a successful correction'if known else
+                'Prior active-record eligibility at current-source exposure cannot be determined',
+            'eligibility_evidence':memory.get('prior_record_boundary_evidence')}
     if case_id=='MAB-05':points['S.case_v2.C1-transient-baseline']=memory.get('correction')
     if case_id in {'MAB-06','MAB-07','MAB-08'}:
         points['S.case_v2.C1-transient-baseline']=behavior.get('typed_book_memory')
@@ -237,10 +244,10 @@ def grade_mab_trial(trial:Path,contract,*,arm):
         if support not in Path(item['path']).read_text():raise ValueError('frozen critical support missing from source instruction')
     source_seen=False;seen_sources=set();window_proof=None
     rate_contract=contract.get('semantic_rate_contract')
-    rate_enabled=rate_contract=='target-fact-cards-v1'
+    rate_enabled=rate_contract in {'target-fact-cards-v1','target-fact-cards-v2'}
     if rate_enabled and not contract.get('typed_fact_memory'):
         raise ValueError('target-fact semantic rates require independent typed source gold')
-    seen_changes=set();post_source_changes=[];precision_source_seen=False
+    seen_changes=set();post_source_changes=[];precision_source_seen=False;prior_record_seen=None;prior_evidence=None
     def observe_changes(rows):
         if not rate_enabled:return
         for row in rows:
@@ -302,7 +309,16 @@ def grade_mab_trial(trial:Path,contract,*,arm):
             visible=source_visible(messages,originals,support_text)
             for index,text in enumerate(originals):
                 if any(text in value for value in messages):seen_sources.add(index)
-            precision_source_seen=len(seen_sources)==len(originals)
+            now_exposed=len(seen_sources)==len(originals)
+            if rate_enabled and now_exposed and not precision_source_seen and contract.get('old_fact_control'):
+                from .fixed35_fact_cards import fact_snapshot
+                old=contract['old_fact_control']['card']
+                aliases=next((f['relation_aliases']for f in contract['typed_fact_memory']['facts']if f['card']['s']==old['s']),[])
+                prior_record_seen=fact_snapshot(semantic_texts,{'facts':[{'card':old,'relation_aliases':aliases}]})['all_current_relations']
+                prior_evidence={'request_id':event['request_id'],'producer_id':event['producer_id'],'sequence':event['sequence'],
+                    'payload_ref':event.get('payload_ref'),'expected_task_id':boundary.get('expected_task_id'),
+                    'expected_state_version':boundary.get('expected_version_at_prepare'),'journal_ref':boundary.get('expected_journal_ref')}
+            precision_source_seen=now_exposed
             stage=int(event.get('stage_id')or 0)
             eligible=eviction_eligible(protocol=contract.get('eviction_protocol'),stage=stage,
                 valid_after=contract.get('literal_valid_after_stage',1),
@@ -400,6 +416,14 @@ def grade_mab_trial(trial:Path,contract,*,arm):
     result['memory']['semantic_invalidation_policy']='unarchived-conflicts-v2; display-window eviction alone does not retire a fact'
     if rate_enabled:
         from .mab_semantic_rates import semantic_rates
+        from .stage_execution import stage_execution
+        rate_complete=complete and stage_execution(trial,events)['evidence_complete']is True
+        prior=prior_record_seen if rate_complete and contract.get('old_fact_control')else None
+        result['memory']['prior_active_record_seen']=prior
+        result['memory']['prior_record_boundary_evidence']=prior_evidence
+        result['memory']['current_validity_before_action']=correction
+        result['memory']['current_validity_is_not_proof_of_an_update_operation']=True
+        result['memory']['correction']=normalization_points(result,contract.get('case_id'))['S.case_v2.C5-correct-before-action']
         result['semantic_rates']=semantic_rates(contract['typed_fact_memory'],evictions,correction,
-            post_source_changes,complete=complete)
+            post_source_changes,complete=rate_complete,prior_active_record=prior)
     return result

@@ -23,7 +23,7 @@ def test_source_target_semantic_rates_have_distinct_denominators_and_missing(mod
     elif mode=='wrong-write':writes.append(card.replace('Steve Jobs','Satya Nadella'))
     elif mode=='no-write':writes=[]
     elif mode=='missing':points[1].pop('current_facts_retained')
-    result=semantic_rates(f,points,correction,writes,complete=True)
+    result=semantic_rates(f,points,correction,writes,complete=True,prior_active_record=True)
     if mode=='missing':assert result['retention']['unknown']==1 and not result['retention']['collection_complete']
     elif mode=='late':assert result['timely_write']['value']==0
     elif mode=='middle-loss':assert result['retention']['value']==pytest.approx(2/3)
@@ -46,6 +46,23 @@ def test_unparsed_or_other_subject_text_is_outside_controlled_precision_not_a_fr
 def test_correct_guess_without_proven_source_exposure_is_not_correction(observed):
     from memweave_eval.mab_semantic_rates import semantic_rates
     f,card,points,correction=inputs();correction['assertions']['source_exposed_before_dependency']['value']=observed
-    result=semantic_rates(f,points,correction,[card],complete=True)
+    result=semantic_rates(f,points,correction,[card],complete=True,prior_active_record=True)
     assert result['correction']['value']==(0 if observed is False else None)
     assert result['adoption']['value']==(0 if observed is False else None)
+
+
+def test_never_storing_old_card_is_not_a_successful_update_and_missing_history_not_zero_opportunity():
+    from memweave_eval.mab_semantic_rates import semantic_rates
+    f,card,points,correction=inputs()
+    absent=semantic_rates(f,points,correction,[card],complete=True,prior_active_record=False)
+    assert absent['correction']['status']=='not_applicable'and absent['correction']['denominator']==0
+    missing=semantic_rates(f,points,correction,[card],complete=True,prior_active_record=None)
+    assert missing['correction']['value']is None and missing['correction']['unknown']==1
+
+
+@pytest.mark.parametrize('prior,status',[(False,'CONDITIONAL_NO_OPPORTUNITY'),(None,'MISSING_EVIDENCE')])
+def test_c5_case_point_does_not_award_update_success_when_no_prior_record(prior,status):
+    from memweave_eval.fixed35_mab import normalization_points
+    behavior={'memory':{'correction':{'score':100},'prior_active_record_seen':prior}}
+    point=normalization_points(behavior,'MAB-01')['S.case_v2.C5-correct-before-action']
+    assert point['score']is None and point['status']==status

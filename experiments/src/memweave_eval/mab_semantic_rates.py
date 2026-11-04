@@ -5,7 +5,7 @@ import json
 
 from .fixed35_fact_cards import fact_snapshot
 
-VERSION='fixed35-mab-target-fact-rates-20261104-v1'
+VERSION='fixed35-mab-target-fact-rates-20261104-v2'
 
 
 def _and(values):
@@ -40,7 +40,7 @@ def classify_target_card(text,contract):
     return None
 
 
-def semantic_rates(contract,evictions,correction,writes,*,complete):
+def semantic_rates(contract,evictions,correction,writes,*,complete,prior_active_record=None):
     """Three source-retention opportunities, one deadline, actual target changes."""
     points=[evictions[i]if i<len(evictions)else{}for i in range(3)]
     retained=[_and([p.get('original_source_absent'),p.get('current_facts_retained')])for p in points]
@@ -54,12 +54,15 @@ def semantic_rates(contract,evictions,correction,writes,*,complete):
     return {'version':VERSION,'timely_write':_rate([timely],complete=complete),
         'retention':_rate(retained,complete=complete),'pollution':_rate(pollution,complete=complete),
         'write_precision':_rate(known,complete=complete),
-        'correction':_rate([_and([check(k)for k in ['all_current_relations','no_competing_current_relation',
+        'correction':_rate([]if prior_active_record is False else[None]if prior_active_record is None else
+            [_and([check(k)for k in ['all_current_relations','no_competing_current_relation',
             'snapshot_precedes_dependency','action_uses_current_value','source_exposed_before_dependency']])],complete=complete),
         'adoption':_rate([_and([check(k)for k in ['all_current_relations','snapshot_precedes_dependency',
             'action_uses_current_value','source_exposed_before_dependency']])],complete=complete),
         'controlled_coverage':{'all_observed_post_source_fd_changes':len(writes),'target_card_changes':len(known),
-            'outside_parser_or_target':len(writes)-len(known),'required_retention_boundaries':3},
+            'outside_parser_or_target':len(writes)-len(known),'required_retention_boundaries':3,
+            'prior_active_record_observed':prior_active_record},
         'scope':'Only frozen target subject/relation/object/serial cards after all target source exposure; '
             'unparsed or unrelated text is outside precision scope, not proven correct. '
+            'Correction rate requires a separately observed previously active old card. '
             'Action consistency does not prove internal reading or causal State adoption.'}

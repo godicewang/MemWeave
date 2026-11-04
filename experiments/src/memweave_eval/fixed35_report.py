@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261104-v36'
+VERSION='fixed35-score-20261104-v37'
 
 
 def raw_display(metric):
@@ -304,7 +304,8 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
                 point=point or{}
                 explicit(identity,point.get('score'),point.get('reason')or(
                     'Selected finite typed source relation AND no known incompatible active card AND pre-action timing AND actual first answer-file value; not general free-text memory semantics'
-                    if 'C1-'in identity else'controlled checkpoint evidence unavailable'))
+                    if 'C1-'in identity else'controlled checkpoint evidence unavailable'),
+                    status='not_applicable'if point.get('status')=='CONDITIONAL_NO_OPPORTUNITY'else None)
             if arm=='pi-memweave'and behavior.get('semantic_rates'):
                 rates=behavior['semantic_rates']
                 for prefix,names in [('S1.',['timely_write','retention','write_precision','pollution']),
