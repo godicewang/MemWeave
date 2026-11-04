@@ -4,6 +4,8 @@
 
 [Slop原始阶段评分接线](experiments/SLOP_SCORE_WIRING_2026-11-04.md)在正式派发前区分原始报告阶段宏平均、原始严格checkpoint验收与派生适用分；未执行交付失败和缺证据分开，不为reference控制刷满分。
 
+[Ruby禁用集合与SQLite例外](experiments/RUBY_EXCEPTION_CASE_2026-11-04.md)记录C2的事前派生协议、有限卡片／锁包集合断言及准入边界；不把不要求Rust的脚本题或未运行软件控制算成实际能力。
+
 2026-11-04续轮的[需求偏离审计与修复边界](experiments/FIXED35_DESIGN_AUDIT_2026-11-04.md)区分整包能力覆盖与逐题适用性、千调用候选与真实资格、MAB阶段上限与必需耗时，并在新预算准入中保留旧未知预留风险；原报告与运行时契约不改。
 
 [整包能力与长例资格门禁](experiments/FIXED35_PACKAGE_ACCEPTANCE_2026-11-04.md)将24组真实观测及五个千调用成功案例独立接入整包报告；采集通过不再被误称为完整实验交付，历史输出和逐题适用性保持不变。
