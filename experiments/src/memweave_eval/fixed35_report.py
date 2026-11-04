@@ -11,7 +11,7 @@ from .fixed35_mab import grade_mab_trial
 from .normalized_scores import normalize_trial_scores
 from .storage import atomic_json, file_digest
 
-VERSION='fixed35-score-20261104-v40'
+VERSION='fixed35-score-20261104-v42'
 
 
 def raw_display(metric):
@@ -240,7 +240,10 @@ def single_report(root:Path,output:Path|None=None,official_outcomes:Path|None=No
             row['dispatch_component']=behavior;row['derived_behavior_checkpoints']=checkpoint_rows(behavior)
             row['native_reward']=behavior['original_reward']
         if source_outcome is not None:
-            from .pytest_source_gold import checkpoint_rows
+            if source_outcome.get('adapter_kind')=='kubernetes-source-v1':
+                from .kubernetes_source import checkpoint_rows
+            else:
+                from .pytest_source_gold import checkpoint_rows
             row['attached_original_source_outcome']=source_outcome
             row.setdefault('derived_behavior_checkpoints',[]).extend(checkpoint_rows(source_outcome))
             previous=(row.get('behavior_metrics')or{}).get('native_metrics')

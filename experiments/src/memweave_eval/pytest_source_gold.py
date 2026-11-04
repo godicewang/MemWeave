@@ -246,6 +246,9 @@ def attached_source_outcome(trial,contract,*,fixture_control=False):
     gold=json.loads(path.read_text())
     if gold.get('case_id')!=contract.get('case_id'):
         raise ValueError('attached original source outcome belongs to a different case')
+    if gold.get('adapter_kind')=='kubernetes-source-v1':
+        from .kubernetes_source import grade_trial as kubernetes_trial
+        return kubernetes_trial(trial,gold,fixture_control=fixture_control)
     return grade_trial(trial,gold,fixture_control=fixture_control)
 
 

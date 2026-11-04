@@ -4,6 +4,8 @@
 
 [整包能力与长例资格门禁](experiments/FIXED35_PACKAGE_ACCEPTANCE_2026-11-04.md)将24组真实观测及五个千调用成功案例独立接入整包报告；采集通过不再被误称为完整实验交付，历史输出和逐题适用性保持不变。
 
+[Kubernetes原题业务结果](experiments/KUBERNETES_SOURCE_OUTCOME_2026-11-04.md)将受保护cargo区段多重集合、原始parser计数、阈值与奖励交叉核验后接入现有报表，单元测试／mock及过程保全不代替原题业务分。
+
 2026-11-04新增[TB-04会话窗口原题业务判定](experiments/SESSION_WINDOW_SOURCE_GOLD_2026-11-04.md)，复用原七项测试及独立pass／fail／missing控制；这是应用业务组件，不能冒充MemWeave窗口、过程只读保护或正式模型分数。
 
 同轮[LONG-05源题参数身份审计](experiments/RUBY_SOURCE_EVIDENCE_2026-11-04.md)分列265个折叠CTRF函数行与2298个原参数样本，并接入六组原业务判定；[v32最终进展与缺口](experiments/FIXED35_STATUS_V32_2026-11-04.md)保留正式0/35及两张真实成绩表尚未交付的事实。
