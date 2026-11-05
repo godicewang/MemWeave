@@ -1,5 +1,7 @@
 # TB-01 修复后的真实并发双跑（记忆链路 v2.1）
 
+交付解释终版为`delivery-v2/`；已封存的`delivery-v1/`完整保留。v2仅补充共享负载限制和解释，不改变任何原始轨迹、分数或账本。
+
 最终有效run：`20261105T171750Z-828ddcd2ef`。工程相对分 **44.4472/100**（相等为50）；有限行为分：原生 **100.0000/100**，插件 **83.3333/100**。工程与行为不合成。
 原题结果另列：原生 **4/5**，插件 **5/5**；reward分别为 **0.0 / 1.0**。局部行为高分不等于原题通过，不把失败任务的低费或短时称为等质量节省。
 
@@ -137,7 +139,7 @@ v2.1接受自动State、适当工具读回，以及已落地笔记在真实assis
 
 首次全量实验测试曾因沙箱回环监听EPERM失败；经正常工具审批执行本地假服务后完整通过，保留最初环境失败日志，没有修改安全设置。所有最终检查均针对2090ede的执行文件；之后只增加报告和封存元数据。未运行发布验收、Pi1.3全矩阵或其他题目，本次也不授权发布。生产`src/`、Rule、预算、窗口及包内容未被这轮改动。
 
-本地原始证据：`/Users/godice/.local/share/memweave-experiments/runs/20261105T171750Z-828ddcd2ef`；最终机器摘要/逐项说明/宽表/比较表在`delivery-v1/`。自动报告入口仍为既有memweave-eval，离线复算应写新目录：
+本地原始证据：`/Users/godice/.local/share/memweave-experiments/runs/20261105T171750Z-828ddcd2ef`；最终机器摘要/逐项说明/宽表/比较表在`delivery-v2/`，完整免费控制、测试及独立审计附件仍在不可变的`delivery-v1/`。自动报告入口仍为既有memweave-eval，离线复算应写新目录：
 
 ```sh
 PYTHONPATH=experiments/src experiments/.venv/bin/memweave-eval primary-review \
