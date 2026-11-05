@@ -234,7 +234,20 @@
       "new_paid_requests": 0,
       "action": "existing CLI run TB-01 native/plugin with canary and paid calls",
       "target": "api.deepseek.com; complete Pi/MemWeave/public-task/agent-generated context",
-      "reason": "Automatic approval did not accept existing consent as explicit authorization of the complete possibly nonpublic package/code context and destination. Read-only scope audit was completed before one retry; retry also rejected. No workaround or further retry."
+      "reason": "Automatic approval did not accept existing consent as explicit authorization of the complete possibly nonpublic package/code context and destination. Read-only scope audit was completed before one retry; retry also rejected. No workaround or further retry.",
+      "resolution": {
+        "materially_new_data_authorization": true,
+        "retry_under_this_new_authorization_used": false,
+        "pending_action": "time window must allow full execution before retry"
+      }
+    },
+    "time_recheck": {
+      "at": "2026-11-05T09:45:07.058812+00:00",
+      "frozen_cutoff_utc": "2026-11-05T11:25:00+00:00",
+      "remaining_seconds": 5992.941188097,
+      "minimum_before_paid_admission_seconds": 7500,
+      "result": "blocked_by_existing_time_guard",
+      "no_new_paid_calls": true
     }
   },
   "pricing": {
@@ -251,7 +264,7 @@
     "basis": "peak reference estimate including all completion tokens; not account bill"
   },
   "blocking": [
-    "automatic_approval_full_payload_deepseek_egress_denied"
+    "insufficient_remaining_authorized_time_for_full_actor_verifier_and_finalization"
   ],
   "security_protocol": {
     "version": "credential-isolated-broker.v1",
@@ -273,5 +286,23 @@
   "admission_input_ceiling": 1048576,
   "memory_protocol": "tb01-capsule.v1",
   "public_protocol_sha256": "071dccc33640f42c9dcd9353e097da55352e745c2517374257f61fa93f7c6ee4",
-  "state_reducer_sha256": "029993b5e6f3d1ab0887850d8e052522f070211143b5880d256e2196af1b01e5"
+  "state_reducer_sha256": "029993b5e6f3d1ab0887850d8e052522f070211143b5880d256e2196af1b01e5",
+  "provider_data_authorization": {
+    "status": "explicit_user_consent_received",
+    "source": "latest trusted parent delegation 01a1a803-7efc-723e-b9fe-23caaa5c9035",
+    "destination": "api.deepseek.com",
+    "purpose": "TB-01 native/plugin real inference and evaluation, including canary and complete paired run",
+    "scope": [
+      "Pi and MemWeave prompts",
+      "possibly nonpublic project/package code or context",
+      "public benchmark inputs",
+      "current run generated code, tool outputs and State capsules"
+    ],
+    "exclude": [
+      "provider credentials in model context",
+      "unrelated host Session history",
+      "hidden evaluator gold"
+    ],
+    "future_similar_deepseek_egress": "user preauthorized within the described purpose and data scope; platform checks still apply"
+  }
 }
