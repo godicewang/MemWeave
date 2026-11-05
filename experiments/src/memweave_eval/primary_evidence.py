@@ -102,7 +102,7 @@ def _transport(events,status):
             aggregate_cache(usages))
 
 
-def collect_arm(trial:Path,test_names,*,authority=None,arm=None,episode=None):
+def collect_arm(trial:Path,test_names,*,authority=None,arm=None,episode=None,tool_contract=False):
     trial=Path(trial);agent=trial/'agent';events,ps=_events(agent/'pi.txt',pi=True);transport,ts=_events(agent/'request-trace.jsonl')
     service,cost,counts,cache=_transport(transport,ts)
     result={};ctrf={};derived={};issues=[]
@@ -134,9 +134,22 @@ def collect_arm(trial:Path,test_names,*,authority=None,arm=None,episode=None):
             counts['authority']='credential_isolated_broker'
         else:
             for metric in (service,cost):metric.update(observed_raw=metric['raw'],raw=None,status='missing',reason='actor/authority/terminal reconciliation failed')
-    return {'metrics':{'common_tool_rate':_tools(events,ps),'service_complete_rate':service,'model_cost_usd':cost,
+    result={'metrics':{'common_tool_rate':_tools(events,ps),'service_complete_rate':service,'model_cost_usd':cost,
         'actor_wall_seconds':_metric(seconds,'observed'if seconds is not None else'missing')},
         'transport':counts,'transport_integrity':integrity,'cache':cache,'assertions':ctrf_assertions({'results':{'tests':tests}},test_names),'parse_issues':issues,
         'original_business_result':{'rewards':(result.get('verifier_result')or{}).get('rewards'),'exception':result.get('exception_info')},
         'sources':{str(p.relative_to(trial)):file_digest(p)for p in [trial/'result.json',trial/'verifier/ctrf.json',trial/'verifier/derived-ctrf.json',agent/'pi.txt',agent/'request-trace.jsonl']if p.is_file()},
         'interpretation':'Business test assertions are bounded task behavior, not proof of valuable State or model adoption.'}
+    if tool_contract:
+        from .tool_outcomes import tool_contract_metric
+        session_events=[];session_status=ps
+        session_paths=sorted((agent/'pi/sessions').glob('*.jsonl'))
+        if not session_paths:session_status='missing'
+        for path in session_paths:
+            values,state=_events(path)
+            if state!='observed':session_status=state
+            session_events.extend(values or[])
+        outcomes=tool_contract_metric(events,session_status,sessions=session_events)
+        result['metrics']['tool_contract_complete_rate']=outcomes['metric']
+        result['tool_outcomes']=outcomes
+    return result

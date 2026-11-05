@@ -111,10 +111,14 @@ def score_run(root,lock,rows):
     for row in rows:
         source=row.get('score_source')
         principal=(row['task_id']+':'+row['variant_id'])if (lock.get('config',{}).get('evaluation')or{}).get('per_task_arm_caps')else row['variant_id']
-        arm=collect_arm(contained(root,source).parent,names,authority=authority,arm=principal,episode=lock['run_id'])if source else {'metrics':{},'assertions':{}}
-        if source and contract.get('memory_protocol')=='tb01-capsule.v1':
-            from .tb01_capsules import collect_capsules
-            capsule=collect_capsules(contained(root,source).parent,row['variant_id'],expected_reducer_sha256=contract.get('state_reducer_sha256'))
+        options={'tool_contract':True}if contract.get('memory_protocol')=='tb01-capsule.v2'else{}
+        arm=collect_arm(contained(root,source).parent,names,authority=authority,arm=principal,episode=lock['run_id'],**options)if source else {'metrics':{},'assertions':{}}
+        if source and contract.get('memory_protocol')in('tb01-capsule.v1','tb01-capsule.v2'):
+            if contract['memory_protocol']=='tb01-capsule.v2':
+                from .tb01_flow_v2 import collect_flow_v2 as collector
+            else:
+                from .tb01_capsules import collect_capsules as collector
+            capsule=collector(contained(root,source).parent,row['variant_id'],expected_reducer_sha256=contract.get('state_reducer_sha256'))
             arm['capsule_evidence']=capsule;arm['assertions'].update(capsule['assertions'])
             arm['sources'].update(capsule.get('recovery_sources',{}))
             if not capsule['complete']:arm['parse_issues'].append('capsule_source_chain_incomplete')
@@ -130,6 +134,17 @@ def score_run(root,lock,rows):
     result['raw_arms']=arms;result['contract_sha256']=file_digest(path)
     result['provenance']={'run_id':lock['run_id'],'primary_default':True,'guidance':contract.get('guidance'),'pricing':lock.get('pricing'),
         'experiment_kind':lock.get('experiment_kind','unspecified'),'is_model_performance_result':lock.get('experiment_kind')=='primary_default_paired'}
+    if contract.get('memory_protocol')=='tb01-capsule.v2':
+        accepted=all(a['capsule_evidence']['complete']and a['transport_integrity']['status']=='observed'
+            and all(v in('pass','fail')for v in a['capsule_evidence']['assertions'].values())for a in arms.values())
+        result['measurement_acceptance']={
+            'status':'complete'if accepted else'blocked_missing_evidence',
+            'delivery_is_required_even_at_weight_zero':True,
+            'meaning':'Collection/definition gate only; not original task success, mental adoption or causal benefit'}
+        if not accepted:
+            for category in result['behavior'].values():
+                category['total'].update(score=None,status='missing',
+                    reason='required v2 collection gate incomplete, including zero-weight delivery; conditional score is not acceptance')
     return result
 
 
@@ -196,7 +211,8 @@ def review_primary_run(root,output):
     if output.exists():raise ValueError('primary review requires a new output directory')
     if json.loads((root/'run.json').read_text()).get('complete')is not True:
         raise ValueError('primary run must be terminal before offline review')
-    if json.loads((root/'primary-case.json').read_text()).get('memory_protocol')!='tb01-capsule.v1':
+    protocol=json.loads((root/'primary-case.json').read_text()).get('memory_protocol')
+    if protocol not in('tb01-capsule.v1','tb01-capsule.v2'):
         raise ValueError('this read-identity review requires the frozen TB01 capsule protocol')
     originals=[p for p in (root/'reports').rglob('*')if p.is_file()]
     sources=originals+[root/n for n in ('experiment.lock.json','evidence-index.json','primary-case.json','run.json')]
@@ -204,10 +220,10 @@ def review_primary_run(root,output):
     lock=json.loads((root/'experiment.lock.json').read_text())
     rows=json.loads((root/'reports/results.json').read_text())['trials']
     result=score_run(root,lock,rows)
-    result['provenance'].update(review_version='tb01-state-read-json.v2',
+    result['provenance'].update(review_version='tb01-memory-flow.v2'if protocol=='tb01-capsule.v2'else'tb01-state-read-json.v2',
         review_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=Path(__file__).resolve().parents[3],text=True).strip(),
         reviewed_at=datetime.now(UTC).isoformat(),
-        repair_scope='JSON State-read identity recovered only by exact original wire-message hash; frozen definitions unchanged')
+        repair_scope='Frozen v2 capture/delivery/business definitions replayed independently; no model calls'if protocol=='tb01-capsule.v2'else'JSON State-read identity recovered only by exact original wire-message hash; frozen definitions unchanged')
     if any(file_digest(root/p)!=digest for p,digest in before.items()):
         raise ValueError('frozen review source changed while scoring')
     output.mkdir(parents=True,exist_ok=False)

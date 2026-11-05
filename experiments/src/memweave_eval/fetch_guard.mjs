@@ -23,8 +23,20 @@ export function capsuleValues(body) {
   return values;
 }
 
+function currentStateValues(body) {
+  const rendered=body.replace(/^\[[^\]\r\n]+\]\r?\n(?:\r?\n)?/,'');
+  if(rendered.startsWith('# Symbolic State'))return rendered.split('\n')
+    .filter(line=>/^[FD]\d+\s+\{/.test(line)).flatMap(capsuleValues);
+  try {
+    const parsed=JSON.parse(body.slice(body.indexOf('{')).replace(/\n+\[TRUNCATED\]$/,''));
+    if(Array.isArray(parsed.items))return parsed.items.filter(item=>/^[FD]\d+$/.test(item.id??'')&&item.archived!==true)
+      .flatMap(item=>capsuleValues(item.content??''));
+  }catch {}
+  return capsuleValues(body);
+}
+
 function capsuleNote(config) {
-  if(config.memory_protocol!=='tb01-capsule.v1')return undefined;
+  if(!['tb01-capsule.v1','tb01-capsule.v2'].includes(config.memory_protocol))return undefined;
   const file='/app/evalbench/memory_capsules.jsonl';
   let body;
   try {
@@ -86,7 +98,7 @@ export function requestSummary(payload, originalInstruction) {
     state_blocks:states.map(m => ({sha256:hash(contentText(m.content)),
       task_id:contentText(m.content).match(/task_id: (\S+)/)?.[1] ?? null,
       version:Number(contentText(m.content).match(/state_version: (\d+)/)?.[1]) || null})),
-    ...(config.memory_protocol==='tb01-capsule.v1'?{capsule_deliveries:messages.filter(m=>m.role==='tool').map(m=>{
+    ...(['tb01-capsule.v1','tb01-capsule.v2'].includes(config.memory_protocol)?{capsule_deliveries:messages.filter(m=>m.role==='tool').map(m=>{
       const body=contentText(m.content);let metadata={};
       try {metadata=JSON.parse(body.slice(body.indexOf('{')).replace(/\n+\[TRUNCATED\]$/,''));}catch{}
       if(typeof metadata.task_id!=='string'||!metadata.task_id||
@@ -98,10 +110,18 @@ export function requestSummary(payload, originalInstruction) {
         metadata=match&&Number.isSafeInteger(Number(match[2]))&&Number(match[2])>0
           ?{task_id:match[1],state_version:Number(match[2])}:{};
       }
-      return {tool_call_id:m.tool_call_id,values:capsuleValues(body),
+      return {tool_call_id:m.tool_call_id,values:config.memory_protocol==='tb01-capsule.v2'?currentStateValues(body):capsuleValues(body),
+        ...(config.memory_protocol==='tb01-capsule.v2'?{message_sha256:hash(JSON.stringify(m))}:{}),
         task_id:typeof metadata.task_id==='string'?metadata.task_id:null,
         state_version:Number.isSafeInteger(metadata.state_version)&&metadata.state_version>0?metadata.state_version:null};
     }).filter(m=>m.values.length)}:{}),
+    ...(config.memory_protocol==='tb01-capsule.v2'?{memory_state_deliveries:states.filter(m=>m.role!=='tool').map(m=>{
+      const body=contentText(m.content);
+      const values=body.split('\n').filter(line=>/^[FD]\d+\s+\{/.test(line)).flatMap(capsuleValues);
+      return {task_id:body.match(/^task_id: (\S+)$/m)?.[1]??null,
+        state_version:Number(body.match(/^state_version: (\d+)$/m)?.[1])||null,
+        body_sha256:hash(body),message_sha256:hash(JSON.stringify(m)),values};
+    })}:{}),
     rendered_budget_snapshots:states.map(m=>renderedBudget(contentText(m.content))),
     state_constraint_bits:Object.fromEntries(Object.entries(config.state_constraints??{}).map(([key,pattern])=>{
       const body=states.map(m=>contentText(m.content)).join('\n');
@@ -126,7 +146,7 @@ export function workspaceSummary(root='/app/interpreter') {
   }
   let cargo=null;
   try { cargo=fs.readFileSync(path.join(root,'Cargo.toml'),'utf8'); } catch {}
-  return {files, cargo,...(config.memory_protocol==='tb01-capsule.v1'?{memory_capsules:capsuleNote(config)}:{})};
+  return {files, cargo,...(['tb01-capsule.v1','tb01-capsule.v2'].includes(config.memory_protocol)?{memory_capsules:capsuleNote(config)}:{})};
 }
 
 export function installGuard({ledger,trace,deadline,variant,quotaScript,credentialFile,fetchImpl=globalThis.fetch}) {

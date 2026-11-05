@@ -1,6 +1,6 @@
 # MemWeave 公开基线实验
 
-第一题逐题重建的最新[修复后真实双跑与复审](../docs/experiments/TB01_REPAIRED_ACCEPTANCE_RESULT_2026-11-05.md)采用 `cases/TB-01/1.4.1/` 实现修订和 `tb01-capsule-relative-v1` 科学口径；内部保留case_version1.4.0的标签差异、完整契约hash及真实结果在报告逐项披露。工程相对分与有限行为协议分分别满分100，不合成；保留原始reward。真实凭据在Actor外的可信服务，最终采集与外部账本/终态对账。旧[默认配置设计](../docs/experiments/TB01_PRIMARY_DEFAULT_DESIGN.md)、契约及结果保留；未获对应预算和时间授权的`run`仍拒绝付费。
+第一题逐项审计后的新[记忆链路v2设计](../docs/experiments/TB01_MEMORY_FLOW_V2_DESIGN.md)使用 `cases/TB-01/1.5.0/`、`tb01-memory-flow-v2`，及时正确保存/实际交付/业务行为分开，自动State交付可满足，交付只作0权重诊断及强制采集门禁；付费需当前免费控制证明、实现hash和累计预算授权。工程相对分与行为分分别满分100、不合成，原始reward保留。旧[1.4.1真实结果](../docs/experiments/TB01_REPAIRED_ACCEPTANCE_RESULT_2026-11-05.md)及显式回读协议历史分不改写，不冒充通用记忆价值。真实凭据在Actor外的可信服务，采集与账本/终态对账；未获对应预算和时间授权的`run`拒绝付费。
 
 SWE-Marathon新增P0计算与独立程序案例的v2离线入口、原运行额外输入和上下文差异见[版本化补充报告](../docs/experiments/METRICS_V2_REPORT_2026-11-01.md)。使用`report --metrics-version 2 --output NEW_DIRECTORY`，不会覆盖原v1成绩；新案例可由现有`score-cases`命令验证。
 

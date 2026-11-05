@@ -278,11 +278,12 @@ def main():
                 return 200,'text/event-stream',hang()
             # A task-create is requested only when that tool is available and not yet used.
             called={t.get('function',{}).get('name')for m in payload['messages']for t in m.get('tool_calls',[])}
-            if any('Derived evaluation protocol TB01-capsule.v1'in str(m.get('content',''))for m in payload['messages']):
+            if any(any(p in str(m.get('content',''))for p in ('Derived evaluation protocol TB01-capsule.v1','Derived evaluation protocol TB01-capsule.v2'))for m in payload['messages']):
                 from .tb01_capsules import GOLD, NOTE
                 values=[dict(v)for v in GOLD.values()]
                 if any('TB01CAPSULE_NEGATIVE'in str(m.get('content',''))for m in payload['messages']):values[0]['by']='id'
                 has_state=any(t.get('function',{}).get('name')=='state_append'for t in payload.get('tools',[]))
+                auto_only=has_state and any('Derived evaluation protocol TB01-capsule.v2'in str(m.get('content',''))for m in payload['messages'])
                 reads=sum(t.get('function',{}).get('name')==('state_read'if has_state else'read')for m in payload['messages']for t in m.get('tool_calls',[]))
                 tool=None;arguments={}
                 if has_state and 'task_create'not in called:
@@ -290,7 +291,7 @@ def main():
                 elif ('state_append'if has_state else'write')not in called:
                     tool='state_append'if has_state else'write'
                     arguments={'items':[{'type':'fact','content':json.dumps(v,separators=(',',':')),'evidence':{'U1':'original requirements'}}for v in values]}if has_state else{'path':NOTE,'content':'\n'.join(json.dumps(v,separators=(',',':'))for v in values)+'\n'}
-                elif reads==0 or 'bash'in called and reads==1:
+                elif not auto_only and(reads==0 or 'bash'in called and reads==1):
                     tool='state_read'if has_state else'read'
                     if has_state:
                         import re
