@@ -90,16 +90,19 @@ def collect_capsules(trial,variant,*,expected_reducer_sha256=None):
     for identity,(i,_)in tool_starts.items():
         if identity not in tool_ends or tool_ends[identity][0]<=i:invalid.append('tool_order')
     if not starts or not ends:return {'complete':False,'reason':'agent_boundary_missing','assertions':{}}
-    initial=starts[0][1]['workspace'].get('files',{})
+    def workspace(e):return e.get('workspace')if isinstance(e.get('workspace'),dict)else{}
+    initial=workspace(starts[0][1]).get('files',{})
+    if not isinstance(initial,dict):initial={}
     if set(initial)!=set(FILES)or any(not isinstance(initial.get(f),str)for f in FILES):invalid.append('initial_python_hashes_missing')
     for e in trace:
         if e.get('event')=='request_ready'and not isinstance(e.get('capsule_deliveries'),list):invalid.append('capsule_request_projection_missing')
     versions=set()
     for _,e in boundaries:
         b=e.get('state_boundary',{})
+        if not isinstance(b,dict):invalid.append('state_boundary_error');continue
         if 'expected_task_id'not in b or b.get('boundary_error'):invalid.append('state_boundary_error')
         if b.get('expected_task_id')is not None:
-            if type(b.get('expected_version_at_prepare'))is not int or not isinstance(b.get('expected_journal_sha256'),str):invalid.append('state_boundary_error')
+            if not isinstance(b.get('expected_task_id'),str)or type(b.get('expected_version_at_prepare'))is not int or not isinstance(b.get('expected_journal_sha256'),str):invalid.append('state_boundary_error')
             else:versions.add((b['expected_task_id'],b.get('expected_version_at_prepare')))
     journals={};replayed={}
     if variant=='pi-memweave':
@@ -107,14 +110,16 @@ def collect_capsules(trial,variant,*,expected_reducer_sha256=None):
         if expected_reducer_sha256 is not None and hashlib.sha256(reducer.read_bytes()).hexdigest()!=expected_reducer_sha256:
             return {'complete':False,'reason':'frozen_product_reducer_changed','assertions':{}}
         try:journals=_journals(agent/'memory.tar.gz');replayed=_replay_prefixes(journals,versions)
-        except (ValueError,OSError,subprocess.SubprocessError):invalid.append('state_replay_invalid')
+        except (ValueError,OSError,tarfile.TarError,subprocess.SubprocessError):invalid.append('state_replay_invalid')
     def entries(e):
         if variant=='pi-native':
-            note=e.get('workspace',{}).get('memory_capsules')
+            note=workspace(e).get('memory_capsules')
             if not isinstance(note,dict)or note.get('status')not in ('present','absent','invalid'):return None
             if not isinstance(note.get('values'),list)or note['status']=='present'and(not isinstance(note.get('sha256'),str)or len(note['sha256'])!=64):return None
             return [{'value':v,'archived':False}for v in note['values']] if note.get('status')!='invalid'else[]
-        b=e.get('state_boundary',{});task=b.get('expected_task_id');v=b.get('expected_version_at_prepare')
+        b=e.get('state_boundary',{})
+        if not isinstance(b,dict):return None
+        task=b.get('expected_task_id');v=b.get('expected_version_at_prepare')
         if task is None:return []
         lines=journals.get(task);values=replayed.get((task,v))
         if values is None or hashlib.sha256(b''.join(lines[:v])).hexdigest()!=b.get('expected_journal_sha256'):return None
@@ -128,7 +133,8 @@ def collect_capsules(trial,variant,*,expected_reducer_sha256=None):
     edits={k:[]for k in GOLD};all_edits=[]
     for identity,(i,before)in tool_starts.items():
         if identity not in tool_ends:continue
-        j,after=tool_ends[identity];bf=before.get('workspace',{}).get('files',{});af=after.get('workspace',{}).get('files',{})
+        j,after=tool_ends[identity];bf=workspace(before).get('files',{});af=workspace(after).get('files',{})
+        if not isinstance(bf,dict)or not isinstance(af,dict):invalid.append('workspace_fields_missing');continue
         if set(initial)-set(bf)or set(initial)-set(af):invalid.append('workspace_fields_missing')
         changed=[f for f in initial if bf.get(f)!=af.get(f)]
         if changed:all_edits.append((i,j))
@@ -143,10 +149,12 @@ def collect_capsules(trial,variant,*,expected_reducer_sha256=None):
                 name=row.get('name');value={'passed':'pass','failed':'fail'}.get(row.get('status'),'missing')
                 if name in probes:probes[name]='invalid'
                 else:probes[name]=value
-        except (ValueError,KeyError,TypeError):pass
+        except (ValueError,KeyError,TypeError,AttributeError):pass
     def read_visible(key,low,high):
         for i,start in tool_starts.values():
-            identity=start.get('call_id');j,end=tool_ends[identity]
+            identity=start.get('call_id')
+            if identity not in tool_ends:continue
+            j,end=tool_ends[identity]
             if not low<i<j<high or end.get('tool_is_error')is not False:continue
             if start.get('tool_name')!=('state_read'if variant=='pi-memweave'else'read'):continue
             if variant=='pi-native'and start.get('tool_path')!=NOTE:continue
@@ -156,6 +164,7 @@ def collect_capsules(trial,variant,*,expected_reducer_sha256=None):
                     if delivery.get('tool_call_id')!=identity:continue
                     if variant=='pi-memweave':
                         b=end.get('state_boundary',{})
+                        if not isinstance(b,dict):continue
                         if delivery.get('task_id')!=b.get('expected_task_id')or delivery.get('state_version')!=b.get('expected_version_at_prepare'):continue
                     observed=[{'value':v,'archived':False}for v in delivery.get('values',[])]
                     if all(v=='pass'for v in truth(observed,key).values()):return True
@@ -168,7 +177,7 @@ def collect_capsules(trial,variant,*,expected_reducer_sha256=None):
         # Read starts strictly after a boundary that independently confirms correct persistence.
         saved=[i for i,e in boundaries if all(v=='pass'for v in truth(entries(e),key).values())]
         recalled=bool(first and any(read_visible(key,i,first[0])for i in saved if i<first[0]))
-        final_read=bool(all_edits and read_visible(key,max(j for _,j in all_edits),ends[0][0]))
+        final_read=bool(all_edits and all(v=='pass'for v in t.values())and read_visible(key,max(j for _,j in all_edits),ends[0][0]))
         for field,value in t.items():assertions[f'capsule:{key}:truth:{field}']=value if complete else'missing'
         for field,value in [('saved_before_edit',timely),('explicit_recall',recalled)]:assertions[f'capsule:{key}:timely:{field}']=('pass'if value else'fail')if complete else'missing'
         for field,value in [('prior_capture_and_recall',timely and recalled),('final_review',final_read)]:assertions[f'capsule:{key}:use:{field}']=('pass'if value else'fail')if complete else'missing'

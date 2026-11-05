@@ -184,7 +184,7 @@
   ],
   "scope": "明确派生的有提示、有限结构化记忆协议；native普通笔记与plugin State共同机会；不是自然自由文本、长程驱逐或因果收益；产品默认不变",
   "initialized_product_mode": "隔离home中通过Pi正式资源装载器执行包内completeSetup/loadDefaultRule/disableGlobalCompaction，保持原生默认压缩；不写采样/N/B覆盖",
-  "formal_run_allowed": true,
+  "formal_run_allowed": false,
   "budget_authorization": {
     "maximum_usd": 5.0,
     "maximum_run_seconds": 11100,
@@ -220,12 +220,21 @@
     "source_controls_sha256": "c1a0a3293e620470a3374d067898bb15ecfa3470451e96d06e32dfa866f1582b",
     "real_cli_controls_sha256": "fab08fc6c4706e3b210a090b8d17db19abe93cc468761d1cf8d11267e50c6c21",
     "experiment_regression": {
-      "passed": 452,
-      "log": "/tmp/tb01-capsule-frozen-tests.log"
+      "passed": 457,
+      "log": "/tmp/tb01-capsule-final-seal-tests.log"
     },
     "product_check": {
       "passed": 276,
       "log": "/tmp/tb01-capsule-product-check.log"
+    },
+    "automatic_approval": {
+      "status": "denied",
+      "attempts": 2,
+      "process_created": false,
+      "new_paid_requests": 0,
+      "action": "existing CLI run TB-01 native/plugin with canary and paid calls",
+      "target": "api.deepseek.com; complete Pi/MemWeave/public-task/agent-generated context",
+      "reason": "Automatic approval did not accept existing consent as explicit authorization of the complete possibly nonpublic package/code context and destination. Read-only scope audit was completed before one retry; retry also rejected. No workaround or further retry."
     }
   },
   "pricing": {
@@ -241,7 +250,9 @@
     },
     "basis": "peak reference estimate including all completion tokens; not account bill"
   },
-  "blocking": [],
+  "blocking": [
+    "automatic_approval_full_payload_deepseek_egress_denied"
+  ],
   "security_protocol": {
     "version": "credential-isolated-broker.v1",
     "provider_key_in_actor": false,

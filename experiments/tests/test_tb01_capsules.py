@@ -124,3 +124,20 @@ def test_production_report_consumes_capsule_oracle_and_preserves_independent_tot
     out=tmp_path/'reports';out.mkdir();write_primary_artifacts(out,result)
     assert 'tb01.capsule.truth'in(out/'primary-scores.csv').read_text()
     assert 'combined_total'not in result
+
+
+@pytest.mark.parametrize('variant',['pi-native','pi-memweave'])
+@pytest.mark.parametrize('field',['workspace','state_boundary'])
+def test_null_boundary_field_is_missing_evidence_never_a_score(tmp_path,variant,field):
+    trace,save=fixture(tmp_path,variant);trace[0][field]=None;save()
+    result=collect_capsules(tmp_path,variant)
+    assert not result['complete']
+    assert all(v=='missing'for k,v in result['assertions'].items()if ':use:probe'not in k)
+
+
+def test_goal_json_does_not_become_a_fact_capsule(tmp_path):
+    from memweave_eval.tb01_capsules import _replay_prefixes
+    row={'op':'update_goal','op_id':'g','time':'t','goal':json.dumps(GOLD['row']),'evidence':{}}
+    result=_replay_prefixes({'t':[(json.dumps(row)+'\n').encode()]},{('t',1)})
+    assert result[('t',1)]==[]
+    assert all(v=='fail'for v in truth([], 'row').values())
