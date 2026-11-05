@@ -88,7 +88,16 @@ export function requestSummary(payload, originalInstruction) {
       version:Number(contentText(m.content).match(/state_version: (\d+)/)?.[1]) || null})),
     ...(config.memory_protocol==='tb01-capsule.v1'?{capsule_deliveries:messages.filter(m=>m.role==='tool').map(m=>{
       const body=contentText(m.content);let metadata={};
-      try {metadata=JSON.parse(body.slice(body.indexOf('{')));}catch{}
+      try {metadata=JSON.parse(body.slice(body.indexOf('{')).replace(/\n+\[TRUNCATED\]$/,''));}catch{}
+      if(typeof metadata.task_id!=='string'||!metadata.task_id||
+          !Number.isSafeInteger(metadata.state_version)||metadata.state_version<=0){
+        // Current state_read is rendered Markdown; historical F/D reads are JSON.
+        // Accept only the actual State header, never matching lines inside facts.
+        const rendered=body.replace(/^\[[^\]\r\n]+\]\r?\n(?:\r?\n)?/,'');
+        const match=rendered.match(/^# Symbolic State\r?\n\r?\ntask_id: (\S+)\r?\nstate_version: (\d+)(?:\r?\n|$)/);
+        metadata=match&&Number.isSafeInteger(Number(match[2]))&&Number(match[2])>0
+          ?{task_id:match[1],state_version:Number(match[2])}:{};
+      }
       return {tool_call_id:m.tool_call_id,values:capsuleValues(body),
         task_id:typeof metadata.task_id==='string'?metadata.task_id:null,
         state_version:Number.isSafeInteger(metadata.state_version)&&metadata.state_version>0?metadata.state_version:null};

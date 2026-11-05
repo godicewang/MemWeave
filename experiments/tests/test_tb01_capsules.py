@@ -172,16 +172,35 @@ def test_real_json_read_metadata_recovery_requires_exact_transmitted_message(tmp
         assert not result['complete']and 'missing'in result['assertions'].values()
 
 
-def test_request_summary_parses_real_json_state_read_after_reference_header(tmp_path):
+@pytest.mark.parametrize('format',['json','json-truncated','rendered'])
+def test_request_summary_parses_real_state_read_formats_after_reference_header(tmp_path,format):
     import subprocess
 
     module=(Path(__file__).parents[1]/'src/memweave_eval/fetch_guard.mjs').as_uri()
-    body='[T1]\n\n'+json.dumps({'task_id':'task_one','state_version':4,
-        'items':[{'content':json.dumps(GOLD['row'])}]})
+    body='[T1]\n\n'+(json.dumps({'task_id':'task_one','state_version':4,
+        'items':[{'content':json.dumps(GOLD['row'])}]})if format.startswith('json')else
+        '# Symbolic State\n\ntask_id: task_one\nstate_version: 4\n\n## Facts\nF1 '+json.dumps(GOLD['row']))
+    if format=='json-truncated':body+='\n\n[TRUNCATED]'
     script='import {requestSummary} from '+json.dumps(module)+';process.env.MEMWEAVE_EVAL_WORKSPACE=JSON.stringify({memory_protocol:"tb01-capsule.v1"});console.log(JSON.stringify(requestSummary('+json.dumps({'messages':[{'role':'tool','tool_call_id':'read1','content':body}]})+',null)));'
     result=subprocess.run(['node','--input-type=module','-e',script],capture_output=True,text=True,check=True)
     delivery=json.loads(result.stdout)['capsule_deliveries'][0]
     assert delivery['task_id']=='task_one'and delivery['state_version']==4
+
+
+@pytest.mark.parametrize('prefix',[
+    'ordinary output\ntask_id: task_one\nstate_version: 4\n',
+    '# Symbolic State\n\ntask_id: task_one\nstate_version: bad\n',
+    '# Symbolic State\n\ntask_id: task_one\nstate_version: 9007199254740992\n',
+])
+def test_request_summary_does_not_infer_identity_from_non_state_or_invalid_header(prefix):
+    import subprocess
+
+    module=(Path(__file__).parents[1]/'src/memweave_eval/fetch_guard.mjs').as_uri()
+    body=prefix+json.dumps(GOLD['row'])
+    script='import {requestSummary} from '+json.dumps(module)+';process.env.MEMWEAVE_EVAL_WORKSPACE=JSON.stringify({memory_protocol:"tb01-capsule.v1"});console.log(JSON.stringify(requestSummary('+json.dumps({'messages':[{'role':'tool','tool_call_id':'read1','content':body}]})+',null)));'
+    result=subprocess.run(['node','--input-type=module','-e',script],capture_output=True,text=True,check=True)
+    delivery=json.loads(result.stdout)['capsule_deliveries'][0]
+    assert delivery['task_id']is None and delivery['state_version']is None
 
 
 def test_offline_review_requires_new_directory_and_keeps_frozen_reports(tmp_path,monkeypatch):

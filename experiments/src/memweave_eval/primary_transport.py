@@ -298,6 +298,8 @@ def main():
                         task=next((m[1]for m in candidates if m),None)
                         if task is None:raise ValueError('fixture task binding missing')
                         arguments={'task_id':task}
+                        if any('TB01CAPSULE_HISTORY'in str(m.get('content',''))for m in payload['messages']):
+                            arguments['event_ids']=['F1','F2','F3']
                     else:arguments={'path':NOTE}
                 elif 'bash'not in called:
                     tool='bash';arguments={'command':"for p in evaluate scheduler scoring generation byte_stops; do printf '\\n# offline capsule fixture edit\\n' >> /app/evalbench/$p.py; done"}
