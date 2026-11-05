@@ -84,3 +84,15 @@ def test_transport_retry_is_bounded_and_outside_access_fails_immediately(tmp_pat
         assert env.calls == expected
         record = json.loads((tmp_path / "network-probe.json").read_text())
         assert not record["passed"] and len(record["attempts"]) == expected
+
+
+def test_allowed_public_endpoint_transient_timeout_retries_without_changing_target(tmp_path):
+    class Environment:
+        calls=0
+        async def exec(self,**kwargs):
+            self.calls+=1
+            assert 'https://example.com' in kwargs['command']
+            return SimpleNamespace(return_code=0,stdout=json.dumps({'model':{'ok':True,'status':401,'error':None},
+                'outside':{'ok':self.calls>1,'status':200 if self.calls>1 else None,'error':None if self.calls>1 else'CONNECT_TIMEOUT'}}))
+    env=Environment();asyncio.run(check_network(env,'/fixed/node',tmp_path,general_internet_allowed=True))
+    assert env.calls==2 and json.loads((tmp_path/'network-probe.json').read_text())['passed']

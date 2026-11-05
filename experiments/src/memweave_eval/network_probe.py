@@ -56,12 +56,14 @@ async def check_network(environment, node: str, logs: Path, *, general_internet_
         attempts.append(record)
         checks = record.get("checks", {})
         model, outside = checks.get("model", {}), checks.get("outside", {})
-        if (record["passed"] or model.get("ok") is not False
-                or model.get("error") not in {
-                    "ECONNRESET", "ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN",
-                    "ETIMEDOUT", "ENETUNREACH", "EHOSTUNREACH",
-                    "CONNECT_TIMEOUT", "TOTAL_TIMEOUT",
-                } or outside.get("ok") is not general_internet_allowed):
+        transient={"ECONNRESET", "ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN",
+                   "ETIMEDOUT", "ENETUNREACH", "EHOSTUNREACH", "CONNECT_TIMEOUT", "TOTAL_TIMEOUT"}
+        model_retry=model.get('ok')is False and model.get('error')in transient
+        outside_retry=general_internet_allowed and outside.get('ok')is False and outside.get('error')in transient
+        # An unexpectedly reachable forbidden endpoint is a policy violation,
+        # never a transient failure to hide with retries.
+        forbidden_access=not general_internet_allowed and outside.get('ok')is True
+        if record["passed"]or forbidden_access or not(model_retry or outside_retry):
             break
     final = dict(attempts[-1], attempts=attempts)
     atomic_json(logs / "network-probe.json", final)
