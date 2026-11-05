@@ -16,8 +16,8 @@ globalThis.fetch=installGuard({ledger,trace,deadline:Date.now()/1000+120,variant
   fetchImpl:async (url,init)=>{
     if(new URL(typeof url==='string'||url instanceof URL?url:url.url).hostname!=='api.deepseek.com')throw Error('Unexpected probe endpoint');
     if((init?.method??'GET').toUpperCase()==='GET')return Response.json({data:[{
-      id:'deepseek-flash',name:'DeepSeek V4.1 Flash',context_length:1000000,
-      context_window:1000000,max_input_tokens:1000000,max_output_tokens:384000}]});
+      id:'deepseek-flash',name:'DeepSeek V4.1 Flash',context_length:1048576,
+      context_window:1048576,max_input_tokens:1048576,max_output_tokens:384000}]});
     bodies.push(JSON.parse(init.body));
     if(bodies.length>3)throw Error('Unexpected additional mock request');
     const tool=enabled && bodies.length===1;

@@ -779,7 +779,7 @@ def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
                 ledger=json.loads((control/'quota.json').read_text())
                 remaining=min(spec.evaluation.arm_budget_usd-sum(r['charge_usd'] for r in ledger['requests'].values()
                     if r.get('arm')==arm) for arm in arms)
-                if remaining<=(.7608 if spec.evaluation.primary_default else .32):
+                if remaining<=(.7753728 if spec.evaluation.primary_default else .32):
                     raise ValueError('insufficient equal remaining arm budget')
                 spec=spec.model_copy(update={'evaluation':spec.evaluation.model_copy(update={
                     'episode_budget_usd':min(remaining,spec.evaluation.episode_budget_usd or remaining)})})

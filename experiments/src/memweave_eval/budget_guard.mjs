@@ -13,7 +13,7 @@ export function change(input,operation,now=Date.now()/1000) {
     const output=operation.max_output;
     if(!Number.isInteger(output)||output<1||output>384000)throw Error('Unbounded output');
     if(requests[id]||now>=ledger.deadline)throw Error('Duplicate request or deadline');
-    const reserve=.3+output*1.2/1e6, all=Object.values(requests);
+    const reserve=1048576*.3/1e6+output*1.2/1e6, all=Object.values(requests);
     if(sum(all)+reserve>ledger.maximum_usd)throw Error('Global budget');
     const arm=operation.arm, episode=operation.episode;
     const own=all.filter(v=>v.arm===arm), current=own.filter(v=>v.episode===episode);
@@ -23,7 +23,7 @@ export function change(input,operation,now=Date.now()/1000) {
     requests[id]={status:'reserved',max_output:output,charge_usd:reserve,admitted_at:now,arm,episode};
   } else if(operation.action==='settle') {
     const record=requests[id], i=operation.input,o=operation.output,c=operation.cache_input??0;
-    if(!record||![i,o,c].every(Number.isInteger)||i<0||i>1000000||o<0||o>record.max_output||c<0||c>i)throw Error('Usage outside reservation');
+    if(!record||![i,o,c].every(Number.isInteger)||i<0||i>1048576||o<0||o>record.max_output||c<0||c>i)throw Error('Usage outside reservation');
     if(record.status==='settled') {
       if(record.input!==i||record.output!==o||(record.cache_input??0)!==c)throw Error('Conflicting usage');
     } else Object.assign(record,{status:'settled',input:i,output:o,cache_input:c,

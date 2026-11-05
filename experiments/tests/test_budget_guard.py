@@ -20,7 +20,7 @@ def test_shared_admission_reserves_inflight_and_unknown(tmp_path):
         results = list(pool.map(reserve, range(2)))
     assert sum(r is not None for r in results) == 1
     ledger = json.loads(path.read_text())
-    assert ledger["exposure_usd"] == pytest.approx(0.7608)
+    assert ledger["exposure_usd"] == pytest.approx(0.7753728)
     identity = next(iter(ledger["requests"]))
     change(path, {"action": "settle", "id": identity, "input": 10000, "output": 1000}, now=1001)
     assert json.loads(path.read_text())["exposure_usd"] == pytest.approx(0.0042)
@@ -39,7 +39,7 @@ def test_replay_deadline_and_invalid_usage_fail_closed(tmp_path):
         change(path, dict(op, id="b"), now=2000)
     with pytest.raises(ValueError):
         change(path, {"action": "settle", "id": "a", "input": -1, "output": 0}, now=1001)
-    assert json.loads(path.read_text())["exposure_usd"] == pytest.approx(0.3012)
+    assert json.loads(path.read_text())["exposure_usd"] == pytest.approx(0.3157728)
     settle = {"action": "settle", "id": "a", "input": 10, "output": 2}
     change(path, settle, now=1001)
     before = path.read_bytes()
@@ -52,7 +52,7 @@ def test_usage_cannot_refund_after_inconsistent_bill(tmp_path):
     initialize(path, 29.0, 2000)
     change(path, {"action": "reserve", "id": "a", "max_output": 1000}, now=1000)
     with pytest.raises(ValueError):
-        change(path, {"action": "settle", "id": "a", "input": 1000001, "output": 1}, now=1001)
+        change(path, {"action": "settle", "id": "a", "input": 1048577, "output": 1}, now=1001)
     assert json.loads(path.read_text())["requests"]["a"]["status"] == "reserved"
 
 

@@ -179,5 +179,6 @@
     "reason": "Symmetric fresh pair after two unlocated SSLEOF errors; latest user total3h cutoff unchanged. 90-minute Actor cap leaves final verifier/report time."
   },
   "attempt_selection": "First transport-complete pair under fixed repairs; predecessor retained invalid_infra, not best-of-N. No model solution is edited or copied.",
-  "transport_protocol": "credential-isolated-broker-tls-preconnect-v2"
+  "transport_protocol": "credential-isolated-broker-tls-preconnect-v2",
+  "admission_input_ceiling": 1048576
 }

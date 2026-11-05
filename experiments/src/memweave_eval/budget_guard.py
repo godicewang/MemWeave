@@ -15,7 +15,7 @@ import tempfile
 import time
 from pathlib import Path
 
-INPUT_LIMIT = 1_000_000
+INPUT_LIMIT = 1_048_576
 OUTPUT_LIMIT = 384_000
 INPUT_USD = 0.3 / 1_000_000
 OUTPUT_USD = 1.2 / 1_000_000

@@ -74,12 +74,13 @@
       "all_completion": 1.2
     },
     "pre_admission_cache_assumption": "all input cache miss",
-    "provider_max_context": 1000000,
+    "provider_max_context": 1048576,
     "provider_max_output": 384000,
-    "conservative_max_request_usd": 0.7608,
+    "conservative_max_request_usd": 0.7753728,
     "server_search_fetch_enabled": false,
     "account_bill_verified": false,
-    "new_budget_still_required": true
+    "new_budget_still_required": true,
+    "capacity_source": "Actual first paid Pi request State budget, source run20261105T023131Z-d33c8c0030: model_context_tokens1048576; published1M is not assumed exact decimal"
   },
   "scoring_contract": "scoring.json",
   "execution_policy": {

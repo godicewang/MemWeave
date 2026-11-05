@@ -49,7 +49,7 @@ console.log(calls);
     data = json.loads(ledger.read_text())
     assert len(data["requests"]) == 2
     assert sorted(r["status"] for r in data["requests"].values()) == ["reserved", "settled"]
-    assert data["exposure_usd"] == pytest.approx((123 * 0.3 + 45 * 1.2) / 1_000_000 + 0.3012)
+    assert data["exposure_usd"] == pytest.approx((123 * 0.3 + 45 * 1.2) / 1_000_000 + 0.3157728)
     trace = (tmp_path / "trace.jsonl").read_text()
     assert "秘密" not in trace
     assert trace.count('"event":"http_attempt"') == 2

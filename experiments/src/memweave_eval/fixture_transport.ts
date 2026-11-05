@@ -41,7 +41,7 @@ export default function fixture(pi:any) {
       event:'mock_dispatch_invoked',timestamp:new Date().toISOString(),pid:process.pid,title:process.title})+'\n');
     if(new Headers(init?.headers).get('authorization')!=='Bearer fixture-only')throw Error('Guard credential broker missing');
     if((init?.method??'GET').toUpperCase()==='GET')return deliver(JSON.stringify({data:[{
-      id:'deepseek-flash',name:'DeepSeek V4.1 Flash',context_window:1000000,max_output_tokens:384000}]}),'application/json',init);
+      id:'deepseek-flash',name:'DeepSeek V4.1 Flash',context_window:1048576,max_output_tokens:384000}]}),'application/json',init);
     calls++;
     if(process.env.MEMWEAVE_EVAL_HANG_FIXTURE==='1')return new Promise(()=>setInterval(()=>{},1000));
     const create=process.env.MEMWEAVE_EVAL_VARIANT==='pi-memweave' && calls===1;

@@ -268,7 +268,7 @@ def main():
         counts={}
         def upstream(method,path,body,headers):
             if headers.get('Authorization')!='Bearer '+authority.secret:raise ValueError('fixture authorization')
-            if method=='GET':return 200,'application/json',[_encoded({'data':[{'id':'deepseek-flash','name':'DeepSeek V4.1 Flash','context_window':1000000,'max_output_tokens':384000}]})]
+            if method=='GET':return 200,'application/json',[_encoded({'data':[{'id':'deepseek-flash','name':'DeepSeek V4.1 Flash','context_window':1048576,'max_output_tokens':384000}]})]
             payload=json.loads(body);identity=threading.get_ident();counts[identity]=counts.get(identity,0)+1
             if any('HANG-TRANSPORT-FIXTURE'in str(m.get('content',''))for m in payload['messages']):
                 def hang():
