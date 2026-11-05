@@ -262,6 +262,7 @@ def validate_primary_inputs(spec,suite,subset):
     if not spec.evaluation.primary_contract:
         raise ValueError('primary_default requires an approved frozen primary_contract before running')
     contract=validate_contract(json.loads(spec.evaluation.primary_contract.read_text()))
+    require_primary_design_ready(contract)
     if spec.model.id!='deepseek-flash':raise ValueError('primary authority pricing and endpoint are frozen for deepseek-flash')
     price=contract.get('pricing',{})
     if (price.get('currency')!='USD' or price.get('requested_model_id')!='deepseek-flash'
@@ -274,6 +275,19 @@ def validate_primary_inputs(spec,suite,subset):
     if not spec.execution.paired_concurrent or spec.execution.concurrency!=2:
         raise ValueError('primary_default requires concurrent native/plugin arms')
     primary_actor_seconds(spec)
+
+
+def require_primary_design_ready(contract):
+    """Admission-only hold; keep immutable historical score/report versions usable.
+
+    TB01's v1.3 review found a construct gap, not a low model score. This hold
+    must be removed in a reviewed implementation with State oracle/collector
+    and actual CLI controls. A new version label or boolean cannot clear it.
+    """
+    if contract.get('case_id')=='TB-01' or contract.get('task_name')=='batched-eval-parity':
+        raise ValueError('TB-01 design hold: State truth, timely capture and downstream '
+                         'action oracle/real-CLI collection are not implemented; '
+                         'business verifier outcomes cannot authorize a new complete memory evaluation')
 
 
 def primary_actor_seconds(spec):

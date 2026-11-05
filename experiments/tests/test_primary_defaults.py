@@ -91,3 +91,40 @@ def test_symmetric_task_time_adaptation_requires_case_versioned_explicit_authori
         with pytest.raises(ValueError,match='symmetric time'):primary_actor_seconds(spec)
     p.write_text(json.dumps(contract|{'budget_authorization':{}}))
     with pytest.raises(ValueError,match='symmetric time'):primary_actor_seconds(spec)
+
+
+def test_tb01_paid_design_hold_is_distinct_from_historical_report_recalculation():
+    import json
+    from pathlib import Path
+
+    from memweave_eval.primary_report import validate_contract
+    from memweave_eval.spec import require_primary_design_ready
+
+    historical=json.loads((Path(__file__).parents[1]/'cases/TB-01/1.3.3/scoring.json').read_text())
+    # Historical formulas remain readable, even though their construct is incomplete.
+    validate_contract(historical)
+    with pytest.raises(ValueError,match='State truth.*timely.*downstream'):
+        require_primary_design_ready(historical)
+    # A metadata flag is not evidence that an implementation/real CLI test exists.
+    asserted=historical|{'design_ready':True,'collector_ready':True,'controls_passed':True,
+        'behavior_adapter':'unimplemented-state-adapter','case_version':'1.4.0'}
+    with pytest.raises(ValueError,match='TB-01 design hold'):
+        require_primary_design_ready(asserted)
+    with pytest.raises(ValueError,match='TB-01 design hold'):
+        require_primary_design_ready(asserted|{'case_id':'renamed-label'})
+
+
+def test_real_run_entry_blocks_incomplete_design_before_credential_access(tmp_path,monkeypatch):
+    import json
+    from pathlib import Path
+    from types import SimpleNamespace as NS
+
+    from memweave_eval import runner
+
+    historical=Path(__file__).parents[1]/'cases/TB-01/1.3.3/scoring.json'
+    p=tmp_path/'contract.json';p.write_text(json.dumps(json.loads(historical.read_text())))
+    spec=NS(evaluation=NS(primary_default=True,primary_contract=p))
+    def forbidden():raise AssertionError('credential access before design admission')
+    monkeypatch.setattr(runner,'auth_file',forbidden)
+    with pytest.raises(ValueError,match='TB-01 design hold'):
+        runner.run_experiment(spec,None,None)

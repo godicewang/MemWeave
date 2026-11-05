@@ -15,7 +15,7 @@ from .storage import atomic_json, file_digest
 
 class TrustedBroker:
     def __init__(self,root,control,run_id,image,env):
-        self.root=Path(root);self.control=Path(control);self.run_id=run_id;self.image=image;self.env=env;self.process=None;self.container_id=None
+        self.root=Path(root);self.control=Path(control);self.run_id=run_id;self.image=image;self.env=env;self.process=None;self.container_id=None;self._stop_result=None
     def docker(self,args,*,timeout=20):
         return subprocess.run(['docker',*args],env=self.env,text=True,capture_output=True,timeout=timeout,check=False)
     def start(self,credential,principals,*,fixture=False):
@@ -58,6 +58,7 @@ class TrustedBroker:
             'provider_secret_in_arguments':credential in json.dumps(d['Config'].get('Cmd')),'port':ready['port']},immutable=True)
         return self
     def stop(self):
+        if self._stop_result is not None:return dict(self._stop_result)
         result={'stopped':False,'terminal_available':False}
         (self.control/'STOP_REQUESTED').touch()
         try:
@@ -83,4 +84,5 @@ class TrustedBroker:
         finally:
             if hasattr(self,'stdout'):self.stdout.close()
             atomic_json(self.root/'controller-end.json',result,immutable=True)
+            self._stop_result=dict(result)
         return result

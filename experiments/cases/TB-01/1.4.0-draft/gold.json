@@ -1,0 +1,30 @@
+{
+  "schema_version": "primary-runtime-config.v1",
+  "tasks": {
+    "batched-eval-parity": {
+      "workspace": {
+        "root": "/app",
+        "files": [
+          "evalbench/__init__.py",
+          "evalbench/byte_stops.py",
+          "evalbench/evaluate.py",
+          "evalbench/generation.py",
+          "evalbench/io_utils.py",
+          "evalbench/metrics.py",
+          "evalbench/model.py",
+          "evalbench/packing.py",
+          "evalbench/prefix_cache.py",
+          "evalbench/reference.py",
+          "evalbench/rendering.py",
+          "evalbench/scheduler.py",
+          "evalbench/schema.py",
+          "evalbench/scoring.py",
+          "evalbench/spans.py",
+          "evalbench/tokenizer.py",
+          "evalbench/trace.py"
+        ]
+      }
+    }
+  },
+  "purpose": "evaluator-only workspace path mapping; no new Actor input or product override"
+}

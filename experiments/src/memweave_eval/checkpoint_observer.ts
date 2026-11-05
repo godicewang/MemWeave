@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import {createHash} from 'node:crypto';
 import {workspaceSummary} from './fetch_guard.mjs';
-import {attachBoundaries} from './request_boundary.ts';
+import {attachBoundaries,stateJournalBoundary} from './request_boundary.ts';
 import {attachGuard,guardReady} from './guard_bootstrap.mjs';
 
 export default function observe(pi: any) {
@@ -19,10 +19,10 @@ export default function observe(pi: any) {
       }
     });
   }
-  function record(phase: string, call_id?: string) {
+  function record(phase: string, ctx:any, call_id?: string) {
     fs.appendFileSync(trace!,JSON.stringify({event:'workspace_checkpoint',phase,call_id,
       timestamp:new Date().toISOString(),variant:process.env.MEMWEAVE_EVAL_VARIANT,
-      workspace:workspaceSummary()})+'\n');
+      workspace:workspaceSummary(),state_boundary:stateJournalBoundary(ctx,'atomic_journal_at_'+phase)})+'\n');
   }
   if(process.env.MEMWEAVE_EVAL_SEALED==='1'){
     const policy=process.env.MEMWEAVE_EVAL_POLICY_FILE;
@@ -37,7 +37,8 @@ export default function observe(pi: any) {
     }
     });
   }
-  pi.on('agent_start',()=>record('agent_start'));
+  pi.on('agent_start',(_event:any,ctx:any)=>record('agent_start',ctx));
+  pi.on('tool_execution_start',(event:any,ctx:any)=>record('tool_start',ctx,event.toolCallId));
   let returns=0,sent=false;
   const after=Number(process.env.MEMWEAVE_EVAL_PROGRESS_AFTER ?? 80);
   pi.on('message_end',(event: any)=>{
@@ -51,8 +52,8 @@ export default function observe(pi: any) {
       pi.sendUserMessage('请简短汇报进度，然后继续完成刚才的任务。',{deliverAs:'steer'});
     }
   });
-  pi.on('tool_execution_end',(event:any)=>{
-    record('tool_end',event.toolCallId);
+  pi.on('tool_execution_end',(event:any,ctx:any)=>{
+    record('tool_end',ctx,event.toolCallId);
     if(!['memory_read','state_read'].includes(event.toolName))return;
     const text=(event.result?.content??[]).filter((p:any)=>p.type==='text').map((p:any)=>p.text).join('\n');
     let value:any;try{value=JSON.parse(text);}catch{}
@@ -64,5 +65,5 @@ export default function observe(pi: any) {
       ranges:event.result?.details?.memweave_read?.ranges??null,
       expected_projection_source:'not_independently_resolved',timestamp:new Date().toISOString()})+'\n');
   });
-  pi.on('agent_end',()=>record('agent_end'));
+  pi.on('agent_end',(_event:any,ctx:any)=>record('agent_end',ctx));
 }

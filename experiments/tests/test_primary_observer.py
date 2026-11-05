@@ -37,3 +37,57 @@ assert.deepEqual(requestSummary({messages:[]}).rendered_budget_snapshots,[]);
 assert.equal(requestSummary({messages:[{content:'# Symbolic State\\nunknown'}]}).rendered_budget_snapshots[0],null);
 '''.replace('__MODULE__',json.dumps(module.as_uri()))
     subprocess.run(['node','--input-type=module','-e',code],check=True,timeout=15,capture_output=True,text=True)
+
+
+def test_tool_boundaries_capture_real_python_files_and_committed_state_without_bodies(tmp_path):
+    import os
+
+    observer=Path(__file__).parents[1]/'src/memweave_eval/checkpoint_observer.ts'
+    workspace=tmp_path/'app';workspace.mkdir();(workspace/'scoring.py').write_text('before')
+    journal=tmp_path/'.pi/memory/project/tasks/task_one/state.json'
+    journal.parent.mkdir(parents=True)
+    journal.write_text('{"op":"update_goal","goal":"private body"}\n')
+    trace=tmp_path/'events.jsonl'
+    code='''
+import fs from 'node:fs';
+process.env.MEMWEAVE_EVAL_TRACE=__TRACE__;
+process.env.MEMWEAVE_EVAL_PROGRESS_AFTER='0';
+process.env.MEMWEAVE_EVAL_WORKSPACE=JSON.stringify({root:__WORKSPACE__,files:['scoring.py']});
+delete process.env.MEMWEAVE_EVAL_LEDGER;
+const {default:observe}=await import(__MODULE__);
+const handlers={};const ctx={sessionManager:{getBranch:()=>[{type:'custom',customType:'memweave.scope.v1',data:{task_id:'task_one'}}]}};
+observe({on:(n,f)=>{(handlers[n]??=[]).push(f)},sendUserMessage:()=>{throw Error('unexpected steer')}});
+for(const f of handlers.agent_start)f({},ctx);
+for(const f of handlers.tool_execution_start)f({toolCallId:'call_one'},ctx);
+fs.writeFileSync(__SOURCE__,'after');
+fs.appendFileSync(__JOURNAL__,'{"op":"append_fact","fact":"private fact body"}\\n');
+for(const f of handlers.tool_execution_end)f({toolCallId:'call_one',toolName:'write'},ctx);
+for(const f of handlers.agent_end)f({},ctx);
+console.log(fs.readFileSync(__TRACE__,'utf8'));
+'''
+    for key,value in [('__TRACE__',str(trace)),('__WORKSPACE__',str(workspace)),('__MODULE__',observer.as_uri()),
+                      ('__SOURCE__',str(workspace/'scoring.py')),('__JOURNAL__',str(journal))]:code=code.replace(key,json.dumps(value))
+    r=subprocess.run(['node','--input-type=module','-e',code],check=True,capture_output=True,text=True,timeout=15,env={**os.environ,'HOME':str(tmp_path)})
+    rows=[json.loads(line)for line in r.stdout.splitlines()if line.strip()]
+    assert [r['phase']for r in rows]==['agent_start','tool_start','tool_end','agent_end']
+    assert rows[1]['call_id']==rows[2]['call_id']=='call_one'
+    assert rows[1]['workspace']['files']['scoring.py']!=rows[2]['workspace']['files']['scoring.py']
+    assert [r['state_boundary']['expected_version_at_prepare']for r in rows]==[1,1,2,2]
+    assert rows[1]['state_boundary']['expected_journal_sha256']!=rows[2]['state_boundary']['expected_journal_sha256']
+    assert 'private body'not in r.stdout and 'private fact body'not in r.stdout
+
+
+@pytest.mark.parametrize('kind',['missing','ambiguous','truncated'])
+def test_state_boundary_unavailable_never_fabricates_an_empty_state(tmp_path,kind):
+    import os
+
+    module=Path(__file__).parents[1]/'src/memweave_eval/request_boundary.ts'
+    if kind!='missing':
+        p=tmp_path/'.pi/memory/a/tasks/task_one/state.json';p.parent.mkdir(parents=True)
+        p.write_text('{}'if kind=='truncated'else'{}\n')
+        if kind=='ambiguous':
+            p=tmp_path/'.pi/memory/b/tasks/task_one/state.json';p.parent.mkdir(parents=True);p.write_text('{}\n')
+    code='const {stateJournalBoundary}=await import(__MODULE__); console.log(JSON.stringify(stateJournalBoundary({sessionManager:{getBranch:()=>[{type:"custom",customType:"memweave.scope.v1",data:{task_id:"task_one"}}]}})));'.replace('__MODULE__',json.dumps(module.as_uri()))
+    r=subprocess.run(['node','--input-type=module','-e',code],check=True,capture_output=True,text=True,timeout=15,env={**os.environ,'HOME':str(tmp_path)})
+    value=json.loads(r.stdout);assert value['boundary_error']=='authoritative_journal_unavailable'
+    assert 'expected_version_at_prepare'not in value and 'expected_journal_sha256'not in value

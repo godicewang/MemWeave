@@ -11,6 +11,7 @@ SOURCE_HASHES={
  'test_eval_parity.py':'be20c405ee0c0d8dd88d07a952db25c886300f09a327936e7f95d63c127f0cad',
  'oracle_eval.py':'22280202dcdd5c21ef03c02bed1afde36e4e46f99c14d3e1bc451600a1e1d82b',
 }
+SOURCE_INSTRUCTION_SHA256='5da93cdf030a3d4a10bcb463fe313c8b317d99568dae74c52ebb493ab63308dc'
 DERIVED_ID='derived_semantics_test.py::test_repeat_fixture_matches_independent_oracle'
 DERIVED_TEST='''"""Derived correctness check; original five tests and reward are separate."""
 import test_eval_parity as original
@@ -56,6 +57,8 @@ def control_evidence_ok(trial:Path,passed:bool):
 
 def prepare_tb01_case(source:Path,destination:Path):
     source=Path(source);destination=Path(destination)
+    if file_digest(source/'instruction.md')!=SOURCE_INSTRUCTION_SHA256:
+        raise ValueError('TB01 original instruction changed')
     for name,expected in SOURCE_HASHES.items():
         if file_digest(source/'tests'/name)!=expected:raise ValueError('TB01 original verifier changed')
     if destination.exists():raise ValueError('new versioned task directory required')
@@ -68,6 +71,30 @@ def prepare_tb01_case(source:Path,destination:Path):
         'changes':['root-only /tests before untrusted artifact execution','additional repeat-fixture independent oracle check'],
         'derived_assertion_id':DERIVED_ID,'official_leaderboard_claim':False}
     return manifest
+
+
+def align_primary_time_instruction(task:Path):
+    """A new prepared copy must disclose the same cap that Harbor will enforce."""
+    import hashlib
+    import re
+    import tomllib
+
+    task=Path(task)
+    seconds=tomllib.loads((task/'task.toml').read_text()).get('agent',{}).get('timeout_sec')
+    if type(seconds)is not int or not 0<seconds<=28800:
+        raise ValueError('invalid effective actor timer')
+    path=task/'instruction.md';before=path.read_bytes();text=before.decode('utf-8')
+    pattern=r'You have (\d+) seconds to complete this task\.'
+    if re.findall(pattern,text)!=['28800']:
+        raise ValueError('unique original source time declaration required')
+    after=re.sub(pattern,f'You have {seconds} seconds to complete this task.',text).encode('utf-8')
+    # Keep every unrelated byte unchanged. Source/raw task is never written.
+    path.write_bytes(after)
+    return {'version':'tb01-visible-timer.v1','source_actor_seconds':28800,'actor_seconds':seconds,
+        'source_instruction_sha256':hashlib.sha256(before).hexdigest(),
+        'effective_instruction_sha256':hashlib.sha256(after).hexdigest(),
+        'model_visible_task_changed':before!=after,
+        'only_change':f'original time declaration 28800 -> {seconds} seconds'}
 
 
 def build_secure_verifier(task:Path,base_reference:str,log:Path,env:dict,*,timeout=300):
@@ -105,14 +132,15 @@ def secure_prepared_task(root,record,env,deadline):
 
     source=contained(root,record['runtime_path']);task=root/'runtime-tasks-secure'/source.name
     task.parent.mkdir(parents=True,exist_ok=True);adapter=prepare_tb01_case(source,task)
+    timer=align_primary_time_instruction(task)
     image=build_secure_verifier(task,record['images']['verifier']['reference'],root/'preparation'/source.name/'secure-build.log',env,
         timeout=min(300,max(1,deadline-time.monotonic())))
     path=root/'preparation'/source.name/'secure-manifest.json'
     manifest={'upstream_preparation_manifest':record['manifest_path'],'upstream_preparation_sha256':record['manifest_sha256'],
-              'adapter':adapter,'secure_verifier':image,'runtime_path':task.relative_to(root).as_posix(),'runtime_sha256':task_digest(task)}
+              'adapter':adapter,'time_instruction':timer,'secure_verifier':image,'runtime_path':task.relative_to(root).as_posix(),'runtime_sha256':task_digest(task)}
     atomic_json(path,manifest,immutable=True)
     return {**record,'runtime_path':manifest['runtime_path'],'runtime_sha256':manifest['runtime_sha256'],
         'manifest_path':path.relative_to(root).as_posix(),'manifest_sha256':file_digest(path),
         'images':{**record['images'],'verifier':image['secure_image']},'verifier_adapter':adapter,
         'protocol_equivalent':False,'declared_adaptation':{**record.get('declared_adaptation',{}),
-            'verifier_security_and_additional_assertion':'tb01-default-secure.v1'}}
+            'verifier_security_and_additional_assertion':'tb01-default-secure.v1','time_instruction':timer}}
