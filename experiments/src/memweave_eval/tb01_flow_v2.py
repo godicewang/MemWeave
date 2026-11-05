@@ -149,11 +149,12 @@ def collect_flow_v2(trial, variant, *, expected_reducer_sha256=None, context_cha
                     continue
                 kind, identity = d.get('source_kind'), d.get('tool_call_id')
                 matches = [m for m in q.get('messages', []) if m.get('sha256') == d.get('message_sha256') and (
-                    kind == 'write_context' and m.get('role') == 'assistant' and identity in m.get('tool_calls', []) or
+                    kind in ('write_context', 'tool_arguments_context') and m.get('role') == 'assistant' and identity in m.get('tool_calls', []) or
+                    kind == 'assistant_context' and m.get('role') == 'assistant' and identity is None or
                     kind == 'tool_result' and m.get('role') == 'tool' and m.get('tool_call_id') == identity)]
                 observed = d.get('values')
                 known = {json.dumps(v, sort_keys=True, separators=(',', ':')) for v in (note or {}).get('values', [])}
-                if (not matches or not isinstance(identity, str) or not identity
+                if (not matches or (kind != 'assistant_context' and (not isinstance(identity, str) or not identity))
                         or (note or {}).get('status') != 'present'
                         or not isinstance(d.get('note_sha256'), str) or len(d['note_sha256']) != 64
                         or not isinstance(d.get('message_sha256'), str) or len(d['message_sha256']) != 64

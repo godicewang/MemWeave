@@ -1,5 +1,5 @@
 schema_version: 1
-experiment_id: tb01-memory-flow-context-20261105-v1
+experiment_id: tb01-memory-flow-context-20261105-v2
 suite: ../suites/terminal-bench-4.yaml
 subset: ../subsets/tb01-primary.yaml
 subject:
@@ -37,7 +37,7 @@ evaluation:
   deadline_utc: '2026-11-05T20:03:00Z'
   admission_budget_usd: 2.5
   arm_budget_usd: 1.25
-  budget_id: tb01-memory-flow-context-20261105-v1
+  budget_id: tb01-memory-flow-context-20261105-v2
   output_tokens: 384000
   progress_after_returns: 0
   finalization_reserve_seconds: 1500

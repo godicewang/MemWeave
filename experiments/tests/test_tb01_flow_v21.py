@@ -19,16 +19,17 @@ def fixture(tmp_path, kind='write_context'):
         note = copy.deepcopy(previous['workspace']['memory_capsules'])
         e['workspace'] = {'memory_capsules': note}
         e['capsule_deliveries'] = []
-        e['messages'] = [{'role': 'assistant' if kind == 'write_context' else 'tool',
-            'tool_calls': ['capture'] if kind == 'write_context' else [], 'tool_call_id': 'capture' if kind != 'write_context' else None,
+        e['messages'] = [{'role': 'tool' if kind == 'tool_result' else 'assistant',
+            'tool_calls': ['capture'] if kind in ('write_context', 'tool_arguments_context') else [],
+            'tool_call_id': 'capture' if kind == 'tool_result' else None,
             'sha256': 'c'*64}]
-        e['note_context_deliveries'] = [{'source_kind': kind, 'tool_call_id': 'capture',
+        e['note_context_deliveries'] = [{'source_kind': kind, 'tool_call_id': None if kind == 'assistant_context' else 'capture',
             'message_sha256': 'c'*64, 'note_sha256': note['sha256'], 'values': note['values']}]
     save()
     return trace, save
 
 
-@pytest.mark.parametrize('kind', ['write_context', 'tool_result'])
+@pytest.mark.parametrize('kind', ['write_context', 'tool_result', 'tool_arguments_context', 'assistant_context'])
 def test_existing_record_available_without_read_name(tmp_path, kind):
     fixture(tmp_path, kind)
     result = collect_flow_context(tmp_path, 'pi-native')
@@ -91,3 +92,15 @@ def test_actual_binding_gate_is_operation_rejection_not_failed_shell():
     result = tool_contract_metric(events, 'observed')
     assert result['metric']['raw'] == 1
     assert result['calls'][0]['outcome_category'] == 'tool_operation_rejected'
+
+
+def test_actual_bash_arguments_and_assistant_copy_are_also_visible_context(tmp_path):
+    module = (Path(__file__).parents[1]/'src/memweave_eval/fetch_guard.mjs').as_uri()
+    note = tmp_path/'note.jsonl'
+    body = '{"k":"row","by":"non_support_position","support":false,"ids":"repeat","s":"TB01"}\n'
+    note.write_text(body)
+    script = ('import {noteContextDeliveries} from '+json.dumps(module)+';const body='+json.dumps(body)+';'
+        'console.log(JSON.stringify(noteContextDeliveries([{role:"assistant",content:body},'
+        '{role:"assistant",tool_calls:[{id:"bash-save",function:{name:"bash",arguments:JSON.stringify({command:"cat > /app/evalbench/memory_capsules.jsonl <<EOF\\n"+body+"EOF"})}}]}],'+json.dumps(str(note))+')));')
+    p = subprocess.run(['node', '--input-type=module', '-e', script], capture_output=True, text=True, check=True)
+    assert {x['source_kind'] for x in json.loads(p.stdout)} == {'assistant_context', 'tool_arguments_context'}

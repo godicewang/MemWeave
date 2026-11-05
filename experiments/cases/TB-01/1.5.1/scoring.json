@@ -290,8 +290,8 @@
       "task_search_resume"
     ],
     "free_controls": {
-      "path": "/Users/godice/.local/share/memweave-experiments/tb01-flow-context-cli-controls-20261105-v1/accepted-current.json",
-      "sha256": "f4a4de5992e22bfd0fb06a99ae09b764df2affb9c797bfe46592d5d6f9720a48"
+      "path": "/Users/godice/.local/share/memweave-experiments/tb01-flow-context-cli-controls-20261105-v2/accepted-current.json",
+      "sha256": "cdf33c8a848de4df5e9e19312a629e71c09adfc1c2dc1979a2ed78f9eebb41d5"
     },
     "free_control_counts": {
       "positive_per_arm": 21,

@@ -60,11 +60,13 @@ export function noteContextDeliveries(messages,file='/app/evalbench/memory_capsu
   for(const m of messages) {
     const candidates=[];
     if(m.role==='tool')candidates.push({source_kind:'tool_result',tool_call_id:m.tool_call_id,text:contentText(m.content)});
+    if(m.role==='assistant'&&contentText(m.content))candidates.push({source_kind:'assistant_context',tool_call_id:null,text:contentText(m.content)});
     if(m.role==='assistant')for(const call of m.tool_calls??[]) {
       try {
         const args=typeof call.function?.arguments==='string'?JSON.parse(call.function.arguments):call.function?.arguments;
-        if(call.function?.name==='write'&&args?.path==='/app/evalbench/memory_capsules.jsonl'&&typeof args.content==='string')
-          candidates.push({source_kind:'write_context',tool_call_id:call.id,text:args.content});
+        if(args&&typeof args==='object')
+          candidates.push({source_kind:call.function?.name==='write'?'write_context':'tool_arguments_context',
+            tool_call_id:call.id,text:Object.values(args).filter(v=>typeof v==='string').join('\n')});
       }catch {}
     }
     for(const candidate of candidates) {
