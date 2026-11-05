@@ -45,7 +45,7 @@ def tool_contract_metric(events, status, *, sessions=None):
             category = 'tool_interface_contract_error'
         elif end['isError'] is False:
             category = 'success'
-        elif start['toolName'] != 'bash':
+        elif start['toolName'] != 'bash' or text.startswith('TASK_BINDING_REQUIRED:'):
             category = 'tool_operation_rejected'
         elif code == 127:
             category = 'environment_missing_dependency'
@@ -87,4 +87,4 @@ def tool_contract_metric(events, status, *, sessions=None):
     return {'metric': {'raw': s/n if state == 'observed' else None, 'status': state,
             'support': {'s': s, 'f': f, 'u': u, 'n': n},
             'reason': 'Interface receipt shape/identity only; business command failures remain separate, not intrinsic tool reliability'},
-            'calls': rows, 'classification_version': 'tool-outcomes.v1', 'source_issue': source_issue}
+            'calls': rows, 'classification_version': 'tool-outcomes.v1.1', 'source_issue': source_issue}

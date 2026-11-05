@@ -2,6 +2,8 @@
 
 第一题逐项审计后的新[记忆链路v2设计](../docs/experiments/TB01_MEMORY_FLOW_V2_DESIGN.md)使用 `cases/TB-01/1.5.0/`、`tb01-memory-flow-v2`，及时正确保存/实际交付/业务行为分开，自动State交付可满足，交付只作0权重诊断及强制采集门禁；付费需当前免费控制证明、实现hash和累计预算授权。工程相对分与行为分分别满分100、不合成，原始reward保留。旧[1.4.1真实结果](../docs/experiments/TB01_REPAIRED_ACCEPTANCE_RESULT_2026-11-05.md)及显式回读协议历史分不改写，不冒充通用记忆价值。真实凭据在Actor外的可信服务，采集与账本/终态对账；未获对应预算和时间授权的`run`拒绝付费。
 
+后续[交付来源v2.1](../docs/experiments/TB01_MEMORY_CONTEXT_V21_DESIGN.md)使用 `cases/TB-01/1.5.1/` 与 `configs/tb01-memory-flow-context-20261105.yaml`，增加实际上下文中的已落地write内容和普通工具结果取证；保留v2冻结结果，新的验证输出另存。
+
 SWE-Marathon新增P0计算与独立程序案例的v2离线入口、原运行额外输入和上下文差异见[版本化补充报告](../docs/experiments/METRICS_V2_REPORT_2026-11-01.md)。使用`report --metrics-version 2 --output NEW_DIRECTORY`，不会覆盖原v1成绩；新案例可由现有`score-cases`命令验证。
 
 在官方任务环境中实际重跑原生 Pi 和 Pi + MemWeave，保存原件，离线生成 JSON、CSV 和 Markdown 对照。只接入 Terminal-Bench 4.0 与 SWE-bench Pro V2，不包含自进化。行为边界见 [实现设计](../docs/experiments/IMPLEMENTATION_DESIGN.md)，实际通过范围见 [验收记录](../docs/experiments/VALIDATION.md)。

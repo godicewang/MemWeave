@@ -285,17 +285,18 @@ def require_primary_design_ready(contract):
     and actual CLI controls. A new version label or boolean cannot clear it.
     """
     if contract.get('case_id')=='TB-01' or contract.get('task_name')=='batched-eval-parity':
-        if contract.get('memory_protocol')=='tb01-capsule.v2':
+        if contract.get('memory_protocol')in('tb01-capsule.v2','tb01-capsule.v2.1'):
             import hashlib
 
-            from .tb01_flow_v2 import PUBLIC_PROTOCOL, assertion_ids
+            from .tb01_flow_v2 import CONTEXT_PUBLIC_PROTOCOL, PUBLIC_PROTOCOL, assertion_ids
+            context=contract['memory_protocol']=='tb01-capsule.v2.1'
             actual={a for m in contract.get('behavior',[])for o in m.get('opportunities',[])for a in o.get('required_assertions',[])}
             weights={m.get('id'):m.get('weight')for m in contract.get('behavior',[])}
-            if (actual==assertion_ids()and contract.get('case_version')=='1.5.0'
-                    and contract.get('scoring_version')=='tb01-memory-flow-v2'
+            if (actual==assertion_ids()and contract.get('case_version')==('1.5.1'if context else'1.5.0')
+                    and contract.get('scoring_version')==('tb01-memory-flow-v2.1'if context else'tb01-memory-flow-v2')
                     and weights=={'tb01.v2.capture':.5,'tb01.v2.delivery':0.,'tb01.v2.constraint_behavior':.5}
                     and contract.get('state_reducer_sha256')==hashlib.sha256((REPOSITORY/'src/state/model.ts').read_bytes()).hexdigest()
-                    and contract.get('public_protocol_sha256')==hashlib.sha256(PUBLIC_PROTOCOL.encode()).hexdigest()):return
+                    and contract.get('public_protocol_sha256')==hashlib.sha256((CONTEXT_PUBLIC_PROTOCOL if context else PUBLIC_PROTOCOL).encode()).hexdigest()):return
         if contract.get('memory_protocol')=='tb01-capsule.v1':
             import hashlib
 
@@ -337,7 +338,7 @@ def require_primary_authorization(spec,*,now=None):
     from datetime import datetime
 
     c=json.loads(spec.evaluation.primary_contract.read_text());a=c.get('budget_authorization')
-    if c.get('memory_protocol')=='tb01-capsule.v2':
+    if c.get('memory_protocol')in('tb01-capsule.v2','tb01-capsule.v2.1'):
         from .storage import file_digest
         proof=(c.get('review')or{}).get('free_controls')or{}
         p=Path(proof.get('path','/missing-tb01-v2-free-control-proof'))

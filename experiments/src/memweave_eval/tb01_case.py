@@ -51,7 +51,7 @@ def control_evidence_ok(trial:Path,passed:bool,protocol=None):
         ready=json.loads((trial/'verifier/isolation-ready.json').read_text())
         derived=json.loads((trial/'verifier/derived-ctrf.json').read_text())
     except (OSError,ValueError):return False
-    if protocol in('tb01-capsule.v1','tb01-capsule.v2'):
+    if protocol in('tb01-capsule.v1','tb01-capsule.v2','tb01-capsule.v2.1'):
         from .tb01_capsule_actions import NAMES
         checks=ctrf_assertions(derived,NAMES)
         if any(v not in ('pass','fail')for v in checks.values())or passed and any(v!='pass'for v in checks.values()):return False
@@ -68,8 +68,8 @@ def prepare_tb01_case(source:Path,destination:Path,protocol=None):
     if destination.exists():raise ValueError('new versioned task directory required')
     shutil.copytree(source,destination)
     tests=destination/'tests';(tests/'test.sh').rename(tests/'test.original.sh');(tests/'test.sh').write_text(WRAPPER);(tests/'derived_semantics_test.py').write_text(DERIVED_TEST)
-    if protocol in('tb01-capsule.v1','tb01-capsule.v2'):
-        if protocol=='tb01-capsule.v2':
+    if protocol in('tb01-capsule.v1','tb01-capsule.v2','tb01-capsule.v2.1'):
+        if protocol in('tb01-capsule.v2','tb01-capsule.v2.1'):
             from .tb01_actions_v2 import TEST_SOURCE
         else:
             from .tb01_capsule_actions import TEST_SOURCE
@@ -81,8 +81,8 @@ def prepare_tb01_case(source:Path,destination:Path,protocol=None):
         'original_five_tests_unchanged':True,'original_reward_file_unchanged':True,
         'changes':['root-only /tests before untrusted artifact execution','additional repeat-fixture independent oracle check'],
         'derived_assertion_id':DERIVED_ID,'official_leaderboard_claim':False}
-    if protocol in('tb01-capsule.v1','tb01-capsule.v2'):
-        manifest['case_version']='tb01-default-secure-capsule.v2'if protocol=='tb01-capsule.v2'else'tb01-default-secure-capsule.v1';manifest['memory_protocol']=protocol
+    if protocol in('tb01-capsule.v1','tb01-capsule.v2','tb01-capsule.v2.1'):
+        manifest['case_version']='tb01-default-secure-capsule.v2.1'if protocol=='tb01-capsule.v2.1'else'tb01-default-secure-capsule.v2'if protocol=='tb01-capsule.v2'else'tb01-default-secure-capsule.v1';manifest['memory_protocol']=protocol
         manifest['runtime_changes']['tb01_capsule_actions.py']=file_digest(tests/'tb01_capsule_actions.py')
         manifest['changes'].append('six evaluator-only finite-proposition action probes')
     return manifest
@@ -148,8 +148,10 @@ def secure_prepared_task(root,record,env,deadline,*,protocol=None):
     source=contained(root,record['runtime_path']);task=root/'runtime-tasks-secure'/source.name
     task.parent.mkdir(parents=True,exist_ok=True);adapter=prepare_tb01_case(source,task,protocol)
     timer=align_primary_time_instruction(task)
-    if protocol in('tb01-capsule.v1','tb01-capsule.v2'):
-        if protocol=='tb01-capsule.v2':
+    if protocol in('tb01-capsule.v1','tb01-capsule.v2','tb01-capsule.v2.1'):
+        if protocol=='tb01-capsule.v2.1':
+            from .tb01_flow_v2 import CONTEXT_PUBLIC_PROTOCOL as PUBLIC_PROTOCOL
+        elif protocol=='tb01-capsule.v2':
             from .tb01_flow_v2 import PUBLIC_PROTOCOL
         else:
             from .tb01_capsules import PUBLIC_PROTOCOL

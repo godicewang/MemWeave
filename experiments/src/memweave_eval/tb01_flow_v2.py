@@ -30,6 +30,10 @@ PUBLIC_PROTOCOL = V1_PUBLIC_PROTOCOL.replace('TB01-capsule.v1', 'TB01-capsule.v2
     'Before first editing evaluate.py/scheduler.py (row), evaluate.py/scoring.py (pmi), or generation.py/byte_stops.py (stop), explicitly consult the saved current capsules: state_read if State is available, otherwise the read tool on the note file. Consult them again after your final source changes and before your final response. Merely saying you checked does not substitute for a read.',
     'Persist the correct current capsules before first editing evaluate.py/scheduler.py (row), evaluate.py/scoring.py (pmi), or generation.py/byte_stops.py (stop). At those decisions and when preparing your final response, the current capsules should be available through your memory interface: automatic current State injection is sufficient; otherwise use an ordinary read of the note or a dedicated State read as appropriate. No extra read is required when the correct current content is already present. This protocol checks persistence, actual memory-channel delivery and business behavior separately; no step substitutes for implementing the complete task.',
 )
+CONTEXT_PROTOCOL = 'tb01-capsule.v2.1'
+CONTEXT_PUBLIC_PROTOCOL = PUBLIC_PROTOCOL.replace('TB01-capsule.v2', 'TB01-capsule.v2.1').replace(
+    'No extra read is required when the correct current content is already present.',
+    'No extra read is required when the correct current content is already present. A committed note whose write content remains in the actual conversation, or whose content is returned by an ordinary tool such as bash, can also provide that availability; using a tool named read is not itself a success condition.')
 
 
 def assertion_ids():
@@ -104,7 +108,7 @@ def _read_projection_issues(agent, requests, starts, variant):
     return issues
 
 
-def collect_flow_v2(trial, variant, *, expected_reducer_sha256=None):
+def collect_flow_v2(trial, variant, *, expected_reducer_sha256=None, context_channels=False):
     trial = Path(trial)
     validated = collect_capsules(trial, variant, expected_reducer_sha256=expected_reducer_sha256)
     trace = _read_jsonl(trial/'agent/request-trace.jsonl')
@@ -134,6 +138,32 @@ def collect_flow_v2(trial, variant, *, expected_reducer_sha256=None):
     read_issues = _read_projection_issues(trial/'agent', requests, starts, variant) if projection_complete else []
     issues.extend(read_issues)
     projection_complete = projection_complete and not read_issues
+    if context_channels:
+        for _, q in requests:
+            values = q.get('note_context_deliveries')
+            note = (q.get('workspace') or {}).get('memory_capsules')
+            valid = isinstance(values, list) and isinstance(note, dict) and isinstance(note.get('values'), list)
+            for d in values if isinstance(values, list) else []:
+                if not isinstance(d, dict):
+                    valid = False
+                    continue
+                kind, identity = d.get('source_kind'), d.get('tool_call_id')
+                matches = [m for m in q.get('messages', []) if m.get('sha256') == d.get('message_sha256') and (
+                    kind == 'write_context' and m.get('role') == 'assistant' and identity in m.get('tool_calls', []) or
+                    kind == 'tool_result' and m.get('role') == 'tool' and m.get('tool_call_id') == identity)]
+                observed = d.get('values')
+                known = {json.dumps(v, sort_keys=True, separators=(',', ':')) for v in (note or {}).get('values', [])}
+                if (not matches or not isinstance(identity, str) or not identity
+                        or (note or {}).get('status') != 'present'
+                        or not isinstance(d.get('note_sha256'), str) or len(d['note_sha256']) != 64
+                        or not isinstance(d.get('message_sha256'), str) or len(d['message_sha256']) != 64
+                        or d.get('note_sha256') != (note or {}).get('sha256')
+                        or not isinstance(observed, list) or not observed
+                        or any(json.dumps(v, sort_keys=True, separators=(',', ':')) not in known for v in observed)):
+                    valid = False
+            if not valid:
+                issues.append('flow_note_context_projection_unproven')
+                projection_complete = False
     base_complete = validated.get('complete') is True and len(ends) == 1
     try:
         journals = _journals(trial/'agent/memory.tar.gz') if variant == 'pi-memweave' else {}
@@ -219,6 +249,11 @@ def collect_flow_v2(trial, variant, *, expected_reducer_sha256=None):
                     and d['state_version'] <= q['expected_version_at_prepare'])
             if eligible and valid_values(d.get('values'), key):
                 evidence.append({'channel': 'tool_read', 'call_id': identity})
+        if context_channels and variant == 'pi-native':
+            for d in q.get('note_context_deliveries', []):
+                if valid_values(d.get('values'), key):
+                    evidence.append({'channel': d['source_kind'], 'call_id': d['tool_call_id'],
+                        'message_sha256': d['message_sha256'], 'note_sha256': d['note_sha256']})
         return bool(evidence), evidence
 
     probe_status = {}
@@ -250,8 +285,12 @@ def collect_flow_v2(trial, variant, *, expected_reducer_sha256=None):
         details[key] = {'first_dependency_trace_position': first,
             'capture_deadline': 'first_dependency_edit' if first is not None else 'episode_end_no_edit',
             'capture_truth': capture, 'deliveries': actions}
-    return {'protocol': PROTOCOL, 'complete': base_complete and projection_complete,
+    return {'protocol': CONTEXT_PROTOCOL if context_channels else PROTOCOL, 'complete': base_complete and projection_complete,
         'issues': sorted(set(issues)), 'assertions': assertions, 'opportunities': details,
         'delivery_recoveries': validated.get('delivery_recoveries', []),
         'interpretation': 'Three independently scored components, no explicit-read requirement or repeated gate; '
                           'bounded source constraints, mechanical delivery and final business predicates; no causal adoption claim.'}
+
+
+def collect_flow_context(trial, variant, *, expected_reducer_sha256=None):
+    return collect_flow_v2(trial, variant, expected_reducer_sha256=expected_reducer_sha256, context_channels=True)
