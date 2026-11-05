@@ -141,3 +141,75 @@ def test_goal_json_does_not_become_a_fact_capsule(tmp_path):
     result=_replay_prefixes({'t':[(json.dumps(row)+'\n').encode()]},{('t',1)})
     assert result[('t',1)]==[]
     assert all(v=='fail'for v in truth([], 'row').values())
+
+
+@pytest.mark.parametrize('mutation',[None,'wrong_hash','missing_session','wrong_values','duplicate_result'])
+def test_real_json_read_metadata_recovery_requires_exact_transmitted_message(tmp_path,mutation):
+    trace,save=fixture(tmp_path,'pi-memweave');session=[]
+    for index,identity in enumerate(('initial-read','final-read'),1):
+        payload={'task_id':'task_one','state_version':4,'items':[
+            {'content':json.dumps(v,separators=(',',':'))}for v in GOLD.values()]}
+        text=json.dumps(payload,separators=(',',':'));entry_id=f'entry{index}';ref=f'T{index}'
+        result={'type':'message','id':entry_id,'message':{'role':'toolResult','toolName':'state_read',
+            'toolCallId':identity,'isError':False,'content':[{'type':'text','text':text}]}}
+        session.extend([result,{'type':'custom','customType':'memweave.references.v1',
+            'data':{'task_id':'task_one','bindings':[{'entry_id':entry_id,'ref':ref}]}}])
+        message={'role':'tool','content':f'[{ref}]\n\n'+text,'tool_call_id':identity}
+        digest=hashlib.sha256(json.dumps(message,separators=(',',':')).encode()).hexdigest()
+        request=next(e for e in trace if e.get('event')=='request_ready'and e['capsule_deliveries'][0]['tool_call_id']==identity)
+        request['messages']=[{'role':'tool','tool_call_id':identity,'sha256':digest if mutation!='wrong_hash'else'0'*64}]
+        request['prepared_messages']=copy.deepcopy(request['messages'])
+        request['capsule_deliveries'][0].update(task_id=None,state_version=None)
+        if mutation=='wrong_values':request['capsule_deliveries'][0]['values']=[]
+    directory=tmp_path/'agent/pi/sessions';directory.mkdir(parents=True)
+    if mutation=='duplicate_result':session.append(copy.deepcopy(session[0]))
+    if mutation!='missing_session':(directory/'session.jsonl').write_text(''.join(json.dumps(e)+'\n'for e in session))
+    save();result=collect_capsules(tmp_path,'pi-memweave')
+    if mutation is None:
+        assert result['complete']and set(result['assertions'].values())=={'pass'}
+        assert len(result['delivery_recoveries'])==2 and result['recovery_sources']
+    else:
+        assert not result['complete']and 'missing'in result['assertions'].values()
+
+
+def test_request_summary_parses_real_json_state_read_after_reference_header(tmp_path):
+    import subprocess
+
+    module=(Path(__file__).parents[1]/'src/memweave_eval/fetch_guard.mjs').as_uri()
+    body='[T1]\n\n'+json.dumps({'task_id':'task_one','state_version':4,
+        'items':[{'content':json.dumps(GOLD['row'])}]})
+    script='import {requestSummary} from '+json.dumps(module)+';process.env.MEMWEAVE_EVAL_WORKSPACE=JSON.stringify({memory_protocol:"tb01-capsule.v1"});console.log(JSON.stringify(requestSummary('+json.dumps({'messages':[{'role':'tool','tool_call_id':'read1','content':body}]})+',null)));'
+    result=subprocess.run(['node','--input-type=module','-e',script],capture_output=True,text=True,check=True)
+    delivery=json.loads(result.stdout)['capsule_deliveries'][0]
+    assert delivery['task_id']=='task_one'and delivery['state_version']==4
+
+
+def test_offline_review_requires_new_directory_and_keeps_frozen_reports(tmp_path,monkeypatch):
+    import memweave_eval.primary_report as report
+
+    (tmp_path/'reports').mkdir();(tmp_path/'reports/results.json').write_text('{"trials":[]}')
+    (tmp_path/'reports/primary-report.md').write_text('frozen original')
+    (tmp_path/'run.json').write_text('{"complete":true}')
+    (tmp_path/'experiment.lock.json').write_text('{}')
+    (tmp_path/'evidence-index.json').write_text('{}')
+    (tmp_path/'primary-case.json').write_text('{"memory_protocol":"tb01-capsule.v1"}')
+    monkeypatch.setattr(report,'score_run',lambda *args:{'provenance':{},'engineering':{},'behavior':{}})
+    monkeypatch.setattr(report,'write_primary_artifacts',lambda output,result:(output/'primary-scores.json').write_text(json.dumps(result)))
+    output=tmp_path/'reviews/state-read-json-v2'
+    result=report.review_primary_run(tmp_path,output)
+    assert result['provenance']['review_version']=='tb01-state-read-json.v2'
+    assert (tmp_path/'reports/primary-report.md').read_text()=='frozen original'
+    assert (output/'review-provenance.json').is_file()
+    with pytest.raises(ValueError,match='new'):
+        report.review_primary_run(tmp_path,output)
+    with pytest.raises(ValueError,match='reviews'):
+        report.review_primary_run(tmp_path,tmp_path/'reports/overwritten')
+
+
+@pytest.mark.parametrize('value',[None,[None]])
+def test_null_or_malformed_delivery_is_missing_not_crash(tmp_path,value):
+    trace,save=fixture(tmp_path,'pi-memweave')
+    for e in trace:
+        if e.get('event')=='request_ready':e['capsule_deliveries']=value
+    save();result=collect_capsules(tmp_path,'pi-memweave')
+    assert not result['complete']and 'capsule_request_projection_missing'in result['issues']

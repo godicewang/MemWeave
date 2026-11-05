@@ -87,8 +87,11 @@ export function requestSummary(payload, originalInstruction) {
       task_id:contentText(m.content).match(/task_id: (\S+)/)?.[1] ?? null,
       version:Number(contentText(m.content).match(/state_version: (\d+)/)?.[1]) || null})),
     ...(config.memory_protocol==='tb01-capsule.v1'?{capsule_deliveries:messages.filter(m=>m.role==='tool').map(m=>{
-      const body=contentText(m.content);return {tool_call_id:m.tool_call_id,values:capsuleValues(body),
-        task_id:body.match(/task_id: (\S+)/)?.[1]??null,state_version:Number(body.match(/state_version: (\d+)/)?.[1])||null};
+      const body=contentText(m.content);let metadata={};
+      try {metadata=JSON.parse(body.slice(body.indexOf('{')));}catch{}
+      return {tool_call_id:m.tool_call_id,values:capsuleValues(body),
+        task_id:typeof metadata.task_id==='string'?metadata.task_id:null,
+        state_version:Number.isSafeInteger(metadata.state_version)&&metadata.state_version>0?metadata.state_version:null};
     }).filter(m=>m.values.length)}:{}),
     rendered_budget_snapshots:states.map(m=>renderedBudget(contentText(m.content))),
     state_constraint_bits:Object.fromEntries(Object.entries(config.state_constraints??{}).map(([key,pattern])=>{

@@ -73,6 +73,70 @@ def _replay_prefixes(journals,versions):
     return dict(zip(keys,json.loads(r.stdout),strict=True))
 
 
+def _recover_json_reads(agent,trace,read_ids):
+    """Repair legacy null summaries only with original Session + exact wire hash.
+
+    Pi 1.4 serializes text blocks joined by newline; the product inserts a
+    reference head block which already ends in newline. No actor data is edited.
+    """
+    results={};refs={};sources={}
+    for path in sorted((agent/'pi/sessions').glob('*.jsonl')):
+        events=_read_jsonl(path)
+        if events is None:continue
+        sources[str(path.relative_to(agent.parent))]=hashlib.sha256(path.read_bytes()).hexdigest()
+        for entry in events:
+            m=entry.get('message',{})
+            if isinstance(m,dict)and isinstance(m.get('toolCallId'),str)and m.get('role')=='toolResult'and m.get('toolName')=='state_read':
+                results.setdefault(m.get('toolCallId'),[]).append((entry.get('id'),m))
+            if entry.get('type')=='custom'and entry.get('customType')=='memweave.references.v1':
+                data=entry.get('data',{})
+                if not isinstance(data,dict)or not isinstance(data.get('bindings'),list):continue
+                for binding in data['bindings']:
+                    if isinstance(binding,dict)and all(isinstance(binding.get(k),str)for k in ('entry_id','ref'))and isinstance(data.get('task_id'),str):
+                        refs.setdefault(binding['entry_id'],set()).add((binding['ref'],data['task_id']))
+    missing=set();valid=set();proofs={}
+    for request in trace:
+        if request.get('event')!='request_ready':continue
+        deliveries=request.get('capsule_deliveries')
+        for delivery in deliveries if isinstance(deliveries,list)else[]:
+            if not isinstance(delivery,dict):continue
+            identity=delivery.get('tool_call_id')
+            if identity not in read_ids:continue
+            if delivery.get('task_id')is not None and delivery.get('state_version')is not None:
+                valid.add(identity);continue  # Never replace an explicit wrong version.
+            missing.add(identity);rows=results.get(identity,[])
+            if len(rows)!=1:continue
+            entry_id,message=rows[0]
+            if message.get('isError')is not False:continue
+            try:
+                body='\n'.join(c['text']for c in message['content']if c['type']=='text')
+                payload=json.loads(body);task=payload['task_id'];version=payload['state_version']
+                if not isinstance(task,str)or not task or type(version)is not int or version<=0:continue
+                values=[json.loads(item['content'])for item in payload['items']]
+                values=[v for v in values if isinstance(v,dict)and v.get('k')in GOLD]
+                if values!=delivery.get('values'):continue
+            except (ValueError,KeyError,TypeError):continue
+            heads=['']
+            bindings=refs.get(entry_id,set())
+            if len(bindings)==1:
+                ref,source_task=next(iter(bindings))
+                if isinstance(ref,str)and isinstance(source_task,str):
+                    heads+=['['+ref+']\n\n','['+source_task+':'+ref+']\n\n']
+            hashes={m.get('sha256')for m in request.get('messages',[])
+                    if m.get('role')=='tool'and m.get('tool_call_id')==identity}
+            for head in heads:
+                wire={'role':'tool','content':head+body,'tool_call_id':identity}
+                digest=hashlib.sha256(json.dumps(wire,ensure_ascii=False,separators=(',',':')).encode()).hexdigest()
+                if hashes!={digest}:continue
+                prepared=request.get('prepared_messages')
+                if prepared is not None and {m.get('sha256')for m in prepared if m.get('role')=='tool'and m.get('tool_call_id')==identity}!={digest}:continue
+                delivery.update(task_id=task,state_version=version)
+                valid.add(identity);proofs[(identity,digest)]={'tool_call_id':identity,'message_sha256':digest,
+                    'session_entry_id':entry_id,'task_id':task,'state_version':version}
+                break
+    return list(proofs.values()),sources if proofs else{},sorted(missing-valid)
+
+
 def collect_capsules(trial,variant,*,expected_reducer_sha256=None):
     trial=Path(trial);agent=trial/'agent';trace=_read_jsonl(agent/'request-trace.jsonl');pi=_read_jsonl(agent/'pi.txt',pi=True)
     if trace is None or pi is None:return {'complete':False,'reason':'raw_trace_or_pi_json_missing','assertions':{}}
@@ -89,13 +153,20 @@ def collect_capsules(trial,variant,*,expected_reducer_sha256=None):
     if len(starts)!=1 or len(ends)!=1 or set(expected)!=set(tool_starts)or set(tool_starts)!=set(tool_ends):invalid.append('start_end_or_tool_boundary_missing')
     for identity,(i,_)in tool_starts.items():
         if identity not in tool_ends or tool_ends[identity][0]<=i:invalid.append('tool_order')
+    recoveries=[];recovery_sources={}
+    if variant=='pi-memweave':
+        read_ids={identity for identity,(_,e)in tool_starts.items()if e.get('tool_name')=='state_read'}
+        recoveries,recovery_sources,missing_reads=_recover_json_reads(agent,trace,read_ids)
+        if missing_reads:invalid.append('capsule_read_metadata_unrecoverable')
     if not starts or not ends:return {'complete':False,'reason':'agent_boundary_missing','assertions':{}}
     def workspace(e):return e.get('workspace')if isinstance(e.get('workspace'),dict)else{}
     initial=workspace(starts[0][1]).get('files',{})
     if not isinstance(initial,dict):initial={}
     if set(initial)!=set(FILES)or any(not isinstance(initial.get(f),str)for f in FILES):invalid.append('initial_python_hashes_missing')
     for e in trace:
-        if e.get('event')=='request_ready'and not isinstance(e.get('capsule_deliveries'),list):invalid.append('capsule_request_projection_missing')
+        if e.get('event')=='request_ready'and (not isinstance(e.get('capsule_deliveries'),list)or
+                any(not isinstance(d,dict)for d in e['capsule_deliveries'])):
+            invalid.append('capsule_request_projection_missing');e['capsule_deliveries']=[]
     versions=set()
     for _,e in boundaries:
         b=e.get('state_boundary',{})
@@ -184,4 +255,5 @@ def collect_capsules(trial,variant,*,expected_reducer_sha256=None):
         for n in (1,2):assertions[f'capsule:{key}:use:probe{n}']=probes.get(f'tb01_capsule_actions.py::test_{key}_{n}','missing')
         details[key]={'first_dependency_trace_position':first[0]if first else None,'recorded_before_edit':timely,'explicit_recall_delivered':recalled,'final_review_delivered':final_read,'final_truth':t}
     return {'protocol':PROTOCOL,'complete':complete,'issues':sorted(set(invalid)),'assertions':assertions,'opportunities':details,
+        'decoder_version':'tb01-state-read-json.v2','delivery_recoveries':recoveries,'recovery_sources':recovery_sources,
         'interpretation':'Prompted finite propositions plus explicit read/delivery/action compliance; not free-text generalization, mental reading or causal benefit.'}

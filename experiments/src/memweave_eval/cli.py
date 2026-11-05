@@ -28,11 +28,19 @@ def main(argv=None) -> int:
     scores=sub.add_parser('score-report',help='Write versioned raw/0–100 scores to a new directory, without model requests')
     scores.add_argument('source',type=Path)
     scores.add_argument('--output',type=Path,required=True)
+    review=sub.add_parser('primary-review',help='Re-evaluate frozen primary evidence into a new review directory; no model calls')
+    review.add_argument('run_dir',type=Path)
+    review.add_argument('--output',type=Path,required=True)
     cases=sub.add_parser('score-cases',help='Score frozen offline cases with deterministic predicates')
     cases.add_argument('gold',type=Path)
     cases.add_argument('evidence',type=Path)
     args = parser.parse_args(argv)
     try:
+        if args.command=='primary-review':
+            from .primary_report import review_primary_run
+            result=review_primary_run(args.run_dir,args.output)
+            print(json.dumps({'output':str(args.output),'provenance':result['provenance']},ensure_ascii=False,indent=2))
+            return 0
         if args.command=='score-report':
             from .score_report import generate_score_report
             print(json.dumps(generate_score_report(args.source,args.output),ensure_ascii=False,indent=2))

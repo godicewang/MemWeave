@@ -116,6 +116,7 @@ def score_run(root,lock,rows):
             from .tb01_capsules import collect_capsules
             capsule=collect_capsules(contained(root,source).parent,row['variant_id'],expected_reducer_sha256=contract.get('state_reducer_sha256'))
             arm['capsule_evidence']=capsule;arm['assertions'].update(capsule['assertions'])
+            arm['sources'].update(capsule.get('recovery_sources',{}))
             if not capsule['complete']:arm['parse_issues'].append('capsule_source_chain_incomplete')
             memory=contained(root,source).parent/'agent/memory.tar.gz'
             if row['variant_id']=='pi-memweave'and memory.is_file():arm['sources']['agent/memory.tar.gz']=file_digest(memory)
@@ -178,3 +179,40 @@ def write_primary_artifacts(output,result):
     for name,m in totals.items():lines.append(f"| {name} | {cell(m['score'])} | {m['evidence_coverage']:.1%} | {cell(m['conditional_score'])} |")
     (output/'primary-report.md').write_text('\n'.join(lines)+'\n')
     return lines
+
+
+def review_primary_run(root,output):
+    """Explicit offline re-evaluation; preserve the frozen run's original reports."""
+    import json
+    import subprocess
+    from datetime import UTC, datetime
+    from pathlib import Path
+
+    from .storage import atomic_json, file_digest
+
+    root=Path(root).resolve();output=Path(output).resolve()
+    if not output.is_relative_to(root/'reviews'):
+        raise ValueError('primary review must use the run reviews directory')
+    if output.exists():raise ValueError('primary review requires a new output directory')
+    if json.loads((root/'run.json').read_text()).get('complete')is not True:
+        raise ValueError('primary run must be terminal before offline review')
+    if json.loads((root/'primary-case.json').read_text()).get('memory_protocol')!='tb01-capsule.v1':
+        raise ValueError('this read-identity review requires the frozen TB01 capsule protocol')
+    originals=[p for p in (root/'reports').rglob('*')if p.is_file()]
+    sources=originals+[root/n for n in ('experiment.lock.json','evidence-index.json','primary-case.json','run.json')]
+    before={str(p.relative_to(root)):file_digest(p)for p in sources}
+    lock=json.loads((root/'experiment.lock.json').read_text())
+    rows=json.loads((root/'reports/results.json').read_text())['trials']
+    result=score_run(root,lock,rows)
+    result['provenance'].update(review_version='tb01-state-read-json.v2',
+        review_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=Path(__file__).resolve().parents[3],text=True).strip(),
+        reviewed_at=datetime.now(UTC).isoformat(),
+        repair_scope='JSON State-read identity recovered only by exact original wire-message hash; frozen definitions unchanged')
+    if any(file_digest(root/p)!=digest for p,digest in before.items()):
+        raise ValueError('frozen review source changed while scoring')
+    output.mkdir(parents=True,exist_ok=False)
+    write_primary_artifacts(output,result)
+    atomic_json(output/'review-provenance.json',{'schema_version':'primary-offline-review.v1',
+        'provenance':result['provenance'],'preserved_sources':before,
+        'definition_changes':False,'actor_changes':False,'new_model_calls':0},immutable=True)
+    return result
