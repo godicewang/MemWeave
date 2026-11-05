@@ -1,6 +1,6 @@
 # MemWeave 公开基线实验
 
-第一题逐题重建采用新的[TB-01默认配置设计与验收](../docs/experiments/TB01_PRIMARY_DEFAULT_DESIGN.md)及 `cases/TB-01/1.3.1/` 冻结评分契约。工程相对分与高价值行为分分别满分100，不合成；保留原始reward。真实凭据在Actor外的可信服务，最终采集与外部账本/终态对账。当前只有免费验收；没有新预算与时间授权时，`run`拒绝付费。历史协议及旧结果保留。
+第一题逐题重建的最新[修复后真实双跑与复审](../docs/experiments/TB01_REPAIRED_ACCEPTANCE_RESULT_2026-11-05.md)采用 `cases/TB-01/1.4.1/` 实现修订和 `tb01-capsule-relative-v1` 科学口径；内部保留case_version1.4.0的标签差异、完整契约hash及真实结果在报告逐项披露。工程相对分与有限行为协议分分别满分100，不合成；保留原始reward。真实凭据在Actor外的可信服务，最终采集与外部账本/终态对账。旧[默认配置设计](../docs/experiments/TB01_PRIMARY_DEFAULT_DESIGN.md)、契约及结果保留；未获对应预算和时间授权的`run`仍拒绝付费。
 
 SWE-Marathon新增P0计算与独立程序案例的v2离线入口、原运行额外输入和上下文差异见[版本化补充报告](../docs/experiments/METRICS_V2_REPORT_2026-11-01.md)。使用`report --metrics-version 2 --output NEW_DIRECTORY`，不会覆盖原v1成绩；新案例可由现有`score-cases`命令验证。
 

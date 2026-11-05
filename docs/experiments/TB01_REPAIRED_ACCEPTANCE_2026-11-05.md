@@ -30,3 +30,7 @@
 `tb01-capsule-cli-controls-20261105-v3`未发真实请求，native正负例有效，但plugin的21个断言缺元数据，停止付费准入。核对State规范§state_read/§17和实际工具后确认：不传event_ids合法返回当前State Markdown；传ID返回历史JSON。此前只修JSON却移除了现行Markdown分支，属于评估观察器兼容缺陷，不是产品表现失败。修正为同时识别严格State头和JSON根元数据，仅提取实际tool结果，不接受任意正文中的伪task_id/version；两种格式都须通过真实CLI控制、匹配实际journal边界。科学判据与Actor可见内容不变，v3失败保留，修复后再免费控制与真实双跑。
 
 最终免费门禁：v4当前Markdown模式两臂正例各27pass、负例各21pass/6fail；v5-history真实历史JSON模式plugin正例27pass、负例21pass/6fail，均missing0且delivery_recoveries=0。没有把这些fixture分当模型分。最终478项实验回归、44项胶囊专项、Ruff通过。产品resources/typecheck及276项在Node24.22.1通过；早期沙箱回环监听失败及冷缓存依赖安装等待保留，后用测试自带MEMWEAVE_TEST_NPM_CACHE和本地缓存离线解析通过，不改变系统Node或网络设置。正式容器Node仍24.22.0、Pi1.4.0。全部免费，旧三份真实账本hash不变。
+
+## 结果回填（不改事前协议）
+
+修复后新真实配对`20261105T125602Z-79c701dca6`已经完成，详见[最终复审](TB01_REPAIRED_ACCEPTANCE_RESULT_2026-11-05.md)。E49.2311；N/P行为100/40；N/P原题3/5、1/5，reward均0。95请求全部结算，新费0.349144038美元；旧未知预留继续保留。没有事后改权重、谓词、模型产物或选择最好历史结果。内部case_version仍1.4.0而acceptance implementation_version及目录为1.4.1的元数据差异已作显式勘误，冻结字节不修改。正权重采集完整，通用未加权Window/引用诊断和未触发的长期能力范围仍单列，不包装为全部能力验收。
