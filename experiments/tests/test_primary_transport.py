@@ -1,5 +1,6 @@
 import http.client
 import json
+import ssl
 import threading
 import time
 
@@ -82,4 +83,63 @@ def test_two_terminal_unknowns_stop_new_dispatch_without_releasing_reservations(
         assert request(s,'/v1/chat/completions',body)[0]==429 and len(calls)==2
         assert (tmp_path/'STOP_REQUESTED').is_file()
         assert all(r['status']=='reserved'for r in json.loads((tmp_path/'quota.json').read_text())['requests'].values())
+    finally:s.shutdown();s.server_close();t.join(5);a.finalize()
+
+
+def test_only_tls_handshake_is_retried_before_exactly_one_http_request(tmp_path,monkeypatch):
+    a,s,t,_calls,_key=fixture(tmp_path);connections=[];sent=[]
+    class Connection:
+        def __init__(self,*args,**kwargs):connections.append(self);self.sock=self
+        def connect(self):
+            if len(connections)<3:raise ssl.SSLEOFError('fixture handshake only')
+        def settimeout(self,_timeout):pass
+        def request(self,*args):sent.append(args)
+        def getresponse(self):return self
+        def getheader(self,*_args):return 'text/event-stream'
+        @property
+        def status(self):return 200
+        def read1(self,_size):return b''
+        def close(self):pass
+    monkeypatch.setattr(http.client,'HTTPSConnection',Connection);monkeypatch.setattr(a.stopping,'wait',lambda _seconds:False)
+    try:
+        a.local.request_id='fixture';status,_,chunks=a._real_upstream('POST','/chat/completions',b'{}',{})
+        assert list(chunks)==[]and status==200 and len(connections)==3 and len(sent)==1
+        events=[json.loads(x)for x in(tmp_path/'transport-audit.jsonl').read_text().splitlines()]
+        assert [e['http_content_sent']for e in events if e['event']=='tls_handshake_error']==[False,False]
+    finally:s.shutdown();s.server_close();t.join(5);a.finalize()
+
+
+def test_error_after_http_send_is_never_automatically_retried(tmp_path,monkeypatch):
+    import pytest
+
+    a,s,t,_calls,_key=fixture(tmp_path);connections=[];sent=[]
+    class Connection:
+        def __init__(self,*args,**kwargs):connections.append(self);self.sock=self
+        def connect(self):pass
+        def settimeout(self,_timeout):pass
+        def request(self,*args):sent.append(args)
+        def getresponse(self):raise ssl.SSLEOFError('fixture after HTTP send')
+        def close(self):pass
+    monkeypatch.setattr(http.client,'HTTPSConnection',Connection)
+    try:
+        a.local.request_id='fixture'
+        with pytest.raises(ssl.SSLEOFError):a._real_upstream('POST','/chat/completions',b'{}',{})
+        assert len(connections)==len(sent)==1
+        last=json.loads((tmp_path/'transport-audit.jsonl').read_text().splitlines()[-1]);assert last['stage']=='response_headers'
+    finally:s.shutdown();s.server_close();t.join(5);a.finalize()
+
+
+def test_stop_during_handshake_prevents_http_content_dispatch(tmp_path,monkeypatch):
+    import pytest
+
+    a,s,t,_calls,_key=fixture(tmp_path);sent=[]
+    class Connection:
+        def __init__(self,*args,**kwargs):pass
+        def connect(self):(tmp_path/'STOP_REQUESTED').touch()
+        def request(self,*args):sent.append(args)
+        def close(self):pass
+    monkeypatch.setattr(http.client,'HTTPSConnection',Connection)
+    try:
+        with pytest.raises(TimeoutError):a._real_upstream('POST','/chat/completions',b'{}',{})
+        assert sent==[]
     finally:s.shutdown();s.server_close();t.join(5);a.finalize()

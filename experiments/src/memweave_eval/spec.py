@@ -309,8 +309,21 @@ def require_primary_authorization(spec,*,now=None):
         deadline=datetime.fromisoformat(spec.evaluation.deadline_utc).timestamp()
     except (ValueError,KeyError,TypeError):raise ValueError('explicit authorized UTC window required')from None
     maximum=a.get('maximum_usd')
+    prior=0.;prior_arms={}
+    for entry in a.get('prior_attempts',[]):
+        from .storage import file_digest
+        p=Path(entry['quota_path']);proof=Path(entry['stop_proof'])
+        if (file_digest(p)!=entry['quota_sha256']or file_digest(proof)!=entry['stop_proof_sha256']
+                or not(p.parent/'STOP_REQUESTED').is_file()or json.loads(proof.read_text()).get('stopped')is not True):
+            raise ValueError('prior attempt stop/ledger proof changed; do not restart or reset costs')
+        old=json.loads(p.read_text());prior+=sum(r['charge_usd']for r in old['requests'].values())
+        for r in old['requests'].values():prior_arms[r.get('arm')]=prior_arms.get(r.get('arm'),0.)+r['charge_usd']
+    if prior_arms:
+        cap=a.get('cumulative_arm_limit_usd')
+        if type(cap)not in(int,float)or not 0<cap<float('inf')or any(cost+spec.evaluation.arm_budget_usd>cap for cost in prior_arms.values()):
+            raise ValueError('cumulative arm caps must include all prior unknown and settled charges')
     if (type(maximum)not in(int,float)or not 0<maximum< float('inf')or not a.get('evidence_reference')
             or end<=start or not start<=(time.time()if now is None else now)<end
-            or deadline>end or spec.evaluation.admission_budget_usd>maximum
-            or spec.limits.max_cost_usd>maximum):
+            or deadline>end or prior+spec.evaluation.admission_budget_usd>maximum
+            or prior+spec.limits.max_cost_usd>maximum):
         raise ValueError('primary config exceeds or lacks the recorded budget/window authorization')

@@ -12,6 +12,7 @@ import http.client
 import json
 import re
 import signal
+import ssl
 import subprocess
 import sys
 import threading
@@ -51,6 +52,7 @@ class Authority:
         self.root=Path(root);self.ledger=self.root/'quota.json';self.secret=credential;self.capabilities=capabilities
         self.lock=threading.RLock();self.stopping=threading.Event();self.active=0;self.sequence=0;self.head='0'*64
         self.admitted={};self.http=set();self.ended=set();self.closed=False;self.uncertain=set();self.unknown_limit=unknown_limit
+        self.local=threading.local()
         self.lease=(self.root/'authority.lock').open('a');fcntl.flock(self.lease,fcntl.LOCK_EX|fcntl.LOCK_NB)
         if require_vm and sys.platform!='linux':raise ValueError('authority must run in trusted Linux container')
         if not isinstance(credential,str)or not credential:raise ValueError('credential required')
@@ -73,16 +75,37 @@ class Authority:
         return {**found,**({'episode_budget':policy['episode_budget']}if 'episode_budget'in policy else{})}
 
     def _real_upstream(self,method,path,body,headers):
-        remaining=json.loads(self.ledger.read_text())['deadline']-time.time()
-        if remaining<=0:raise TimeoutError('authority deadline')
-        connection=http.client.HTTPSConnection('api.deepseek.com',timeout=remaining)
-        connection.request(method,path,body,headers);response=connection.getresponse()
+        identity=getattr(self.local,'request_id',None)if method=='POST'else None
+        stage='tls_connect';connection=None
+        def diagnostic(event,**fields):
+            if identity:self.log({'event':event,'request_id':identity,'stage':stage,**fields})
+        try:
+            for attempt in range(1,4):
+                remaining=json.loads(self.ledger.read_text())['deadline']-time.time()
+                if remaining<=0 or self.stopping.is_set()or(self.root/'STOP_REQUESTED').exists():raise TimeoutError('authority deadline or stop')
+                connection=http.client.HTTPSConnection('api.deepseek.com',timeout=min(10,remaining))
+                try:connection.connect();break
+                except (ssl.SSLEOFError,ConnectionResetError,TimeoutError)as error:
+                    connection.close();diagnostic('tls_handshake_error',attempt=attempt,error_class=type(error).__name__,http_content_sent=False)
+                    if attempt==3 or self.stopping.wait(.25*attempt):raise
+            remaining=json.loads(self.ledger.read_text())['deadline']-time.time()
+            if remaining<=0 or self.stopping.is_set()or(self.root/'STOP_REQUESTED').exists():raise TimeoutError('authority deadline or stop')
+            connection.sock.settimeout(remaining)
+            stage='request_send';connection.request(method,path,body,headers)
+            stage='response_headers';response=connection.getresponse()
+        except (OSError,TimeoutError)as error:
+            diagnostic('upstream_stage_error',error_class=type(error).__name__)
+            if connection:connection.close()
+            raise
         def chunks():
             try:
                 while not self.stopping.is_set():
                     data=response.read1(65536)
                     if not data:break
                     yield data
+            except (OSError,TimeoutError)as error:
+                if identity:self.log({'event':'upstream_stage_error','request_id':identity,'stage':'stream_read','error_class':type(error).__name__})
+                raise
             finally:response.close();connection.close()
         return response.status,response.getheader('Content-Type','application/octet-stream'),chunks()
 
@@ -112,6 +135,7 @@ class Authority:
     def stream(self,identity,principal,body):
         self.log({'event':'http_attempt','request_id':identity,'arm':principal['arm'],'episode':principal['episode']})
         with self.lock:self.http.add(identity)
+        self.local.request_id=identity
         return self.upstream('POST','/chat/completions',body,{'Authorization':'Bearer '+self.secret,'Content-Type':'application/json','Accept-Encoding':'identity'})
 
     def finish(self,identity,usage,done,model=None):
