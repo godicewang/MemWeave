@@ -40,7 +40,7 @@ exit 0
 '''
 
 
-def control_evidence_ok(trial:Path,passed:bool):
+def control_evidence_ok(trial:Path,passed:bool,protocol=None):
     """A cached upstream verifier image must never masquerade as the adapter."""
     import json
 
@@ -51,11 +51,15 @@ def control_evidence_ok(trial:Path,passed:bool):
         ready=json.loads((trial/'verifier/isolation-ready.json').read_text())
         derived=json.loads((trial/'verifier/derived-ctrf.json').read_text())
     except (OSError,ValueError):return False
+    if protocol=='tb01-capsule.v1':
+        from .tb01_capsule_actions import NAMES
+        checks=ctrf_assertions(derived,NAMES)
+        if any(v not in ('pass','fail')for v in checks.values())or passed and any(v!='pass'for v in checks.values()):return False
     return (isinstance(ready,dict)and ready.get('isolation_ready')is True
             and ctrf_assertions(derived,[DERIVED_ID])['test:'+DERIVED_ID]==('pass'if passed else'fail'))
 
 
-def prepare_tb01_case(source:Path,destination:Path):
+def prepare_tb01_case(source:Path,destination:Path,protocol=None):
     source=Path(source);destination=Path(destination)
     if file_digest(source/'instruction.md')!=SOURCE_INSTRUCTION_SHA256:
         raise ValueError('TB01 original instruction changed')
@@ -64,12 +68,20 @@ def prepare_tb01_case(source:Path,destination:Path):
     if destination.exists():raise ValueError('new versioned task directory required')
     shutil.copytree(source,destination)
     tests=destination/'tests';(tests/'test.sh').rename(tests/'test.original.sh');(tests/'test.sh').write_text(WRAPPER);(tests/'derived_semantics_test.py').write_text(DERIVED_TEST)
+    if protocol=='tb01-capsule.v1':
+        from .tb01_capsule_actions import TEST_SOURCE
+        (tests/'tb01_capsule_actions.py').write_text(TEST_SOURCE)
+        (tests/'test.sh').write_text(WRAPPER.replace('/tests/derived_semantics_test.py -rA','/tests/derived_semantics_test.py /tests/tb01_capsule_actions.py -rA'))
     if file_digest(tests/'test.original.sh')!=SOURCE_HASHES['test.sh']:raise ValueError('upstream verifier script not preserved')
     manifest={'case_version':'tb01-default-secure.v1','source_verifier_sha256':SOURCE_HASHES,
         'runtime_changes':{n:file_digest(tests/n)for n in ('test.sh','test.original.sh','derived_semantics_test.py')},
         'original_five_tests_unchanged':True,'original_reward_file_unchanged':True,
         'changes':['root-only /tests before untrusted artifact execution','additional repeat-fixture independent oracle check'],
         'derived_assertion_id':DERIVED_ID,'official_leaderboard_claim':False}
+    if protocol=='tb01-capsule.v1':
+        manifest['case_version']='tb01-default-secure-capsule.v1';manifest['memory_protocol']=protocol
+        manifest['runtime_changes']['tb01_capsule_actions.py']=file_digest(tests/'tb01_capsule_actions.py')
+        manifest['changes'].append('six evaluator-only finite-proposition action probes')
     return manifest
 
 
@@ -110,7 +122,7 @@ def build_secure_verifier(task:Path,base_reference:str,log:Path,env:dict,*,timeo
     context=Path(task)/'tests'
     (context/'Dockerfile.original').write_bytes((context/'Dockerfile').read_bytes())
     (context/'Dockerfile').write_text('FROM '+base_reference+'\nCOPY . /tests/\nRUN chmod 700 /tests /logs/verifier\n')
-    identity=hashlib.sha256((base['id']+WRAPPER+DERIVED_TEST).encode()).hexdigest()
+    identity=hashlib.sha256((base['id']+(context/'test.sh').read_text()+DERIVED_TEST+((context/'tb01_capsule_actions.py').read_text()if (context/'tb01_capsule_actions.py').exists()else'')).encode()).hexdigest()
     reference='memweave-eval:tb01-secure-'+identity[:24]
     log.parent.mkdir(parents=True,exist_ok=True)
     with log.open('wb')as output:
@@ -124,15 +136,20 @@ def build_secure_verifier(task:Path,base_reference:str,log:Path,env:dict,*,timeo
             'adapter_version':'tb01-default-secure.v1','model_visible_task_changed':False,'original_tests_and_reward_preserved':True}
 
 
-def secure_prepared_task(root,record,env,deadline):
+def secure_prepared_task(root,record,env,deadline,*,protocol=None):
     import time
 
     from .storage import atomic_json, contained
     from .suites import task_digest
 
     source=contained(root,record['runtime_path']);task=root/'runtime-tasks-secure'/source.name
-    task.parent.mkdir(parents=True,exist_ok=True);adapter=prepare_tb01_case(source,task)
+    task.parent.mkdir(parents=True,exist_ok=True);adapter=prepare_tb01_case(source,task,protocol)
     timer=align_primary_time_instruction(task)
+    if protocol=='tb01-capsule.v1':
+        from .tb01_capsules import PUBLIC_PROTOCOL
+        instruction=task/'instruction.md';instruction.write_text(instruction.read_text()+PUBLIC_PROTOCOL)
+        timer['public_protocol']=protocol;timer['effective_instruction_sha256']=file_digest(instruction)
+        timer['time_declaration_change']=timer.pop('only_change');timer['additional_model_visible_changes']=[protocol]
     image=build_secure_verifier(task,record['images']['verifier']['reference'],root/'preparation'/source.name/'secure-build.log',env,
         timeout=min(300,max(1,deadline-time.monotonic())))
     path=root/'preparation'/source.name/'secure-manifest.json'

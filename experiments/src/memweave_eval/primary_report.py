@@ -112,6 +112,13 @@ def score_run(root,lock,rows):
         source=row.get('score_source')
         principal=(row['task_id']+':'+row['variant_id'])if (lock.get('config',{}).get('evaluation')or{}).get('per_task_arm_caps')else row['variant_id']
         arm=collect_arm(contained(root,source).parent,names,authority=authority,arm=principal,episode=lock['run_id'])if source else {'metrics':{},'assertions':{}}
+        if source and contract.get('memory_protocol')=='tb01-capsule.v1':
+            from .tb01_capsules import collect_capsules
+            capsule=collect_capsules(contained(root,source).parent,row['variant_id'],expected_reducer_sha256=contract.get('state_reducer_sha256'))
+            arm['capsule_evidence']=capsule;arm['assertions'].update(capsule['assertions'])
+            if not capsule['complete']:arm['parse_issues'].append('capsule_source_chain_incomplete')
+            memory=contained(root,source).parent/'agent/memory.tar.gz'
+            if row['variant_id']=='pi-memweave'and memory.is_file():arm['sources']['agent/memory.tar.gz']=file_digest(memory)
         if source:
             parent=contained(root,source).parent
             for name,digest in arm['sources'].items():

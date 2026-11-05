@@ -450,7 +450,8 @@ def admit_tb_tasks(spec, subset, candidates, task_root, root, state, env, deadli
                                                      spec.evaluation.agent_timeouts.get(task_id) if spec.evaluation else None))
                 if spec.evaluation and spec.evaluation.primary_default:
                     from .tb01_case import secure_prepared_task
-                    record=secure_prepared_task(root,record,env,deadline)
+                    contract=json.loads(spec.evaluation.primary_contract.read_text())
+                    record=secure_prepared_task(root,record,env,deadline,protocol=contract.get('memory_protocol'))
             except TaskPreparationError as exc:
                 attempt.update(status="preparation_failed", reason=str(exc))
                 atomic_json(root / "admission.json", admission)
@@ -504,7 +505,8 @@ def admit_tb_tasks(spec, subset, candidates, task_root, root, state, env, deadli
                 from .tb01_case import control_evidence_ok
                 for control in ('oracle','nop'):
                     item=trial_results(root/'harbor'/controls[control]).get(task_id)
-                    if (not item or not control_evidence_ok(item[0].parent,control=='oracle'))and control not in failed:
+                    protocol=json.loads(spec.evaluation.primary_contract.read_text()).get('memory_protocol')
+                    if (not item or not control_evidence_ok(item[0].parent,control=='oracle',protocol))and control not in failed:
                         failed.append(control)
             if failed:
                 attempt.update(status="control_failed", reason="official " + ", ".join(failed))

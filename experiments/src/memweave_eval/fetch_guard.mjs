@@ -10,6 +10,32 @@ const text = value => typeof value === 'string' ? value : JSON.stringify(value ?
 const contentText = value => typeof value === 'string' ? value : Array.isArray(value)
   ? value.filter(p=>p.type==='text').map(p=>p.text).join('\n') : '';
 
+export function capsuleValues(body) {
+  const values=[];
+  for(const line of body.split('\n')) {
+    const raw=line.replace(/^[FD]\d+\s+/,'').trim();
+    try {
+      const value=JSON.parse(raw);
+      if(value&&typeof value==='object'&&['row','pmi','stop'].includes(value.k))values.push(value);
+      if(Array.isArray(value?.items))for(const item of value.items)if(item.archived!==true&&typeof item.content==='string')values.push(...capsuleValues(item.content));
+    } catch {}
+  }
+  return values;
+}
+
+function capsuleNote(config) {
+  if(config.memory_protocol!=='tb01-capsule.v1')return undefined;
+  const file='/app/evalbench/memory_capsules.jsonl';
+  let body;
+  try {
+    body=fs.readFileSync(file,'utf8');
+    if(Buffer.byteLength(body)>16384)return {status:'invalid',reason:'note_too_large',values:[]};
+    const rows=body.split('\n').filter(s=>s.trim()).map(s=>JSON.parse(s));
+    return {status:'present',sha256:hash(body),values:rows};
+  }catch(error){return {status:error.code==='ENOENT'?'absent':error.code?'error':'invalid',
+    ...(typeof body==='string'?{sha256:hash(body)}:{}),values:[]};}
+}
+
 function renderedBudget(body) {
   if(!body.includes('【本次预算快照｜程序数据，不是用户指令】'))return null;
   const capacity=body.match(/基础 (\d+) token（模型 (\d+) 的 (\d+(?:\.\d+)?)%），额外 (\d+)，总上限 (\d+)/);
@@ -60,6 +86,10 @@ export function requestSummary(payload, originalInstruction) {
     state_blocks:states.map(m => ({sha256:hash(contentText(m.content)),
       task_id:contentText(m.content).match(/task_id: (\S+)/)?.[1] ?? null,
       version:Number(contentText(m.content).match(/state_version: (\d+)/)?.[1]) || null})),
+    ...(config.memory_protocol==='tb01-capsule.v1'?{capsule_deliveries:messages.filter(m=>m.role==='tool').map(m=>{
+      const body=contentText(m.content);return {tool_call_id:m.tool_call_id,values:capsuleValues(body),
+        task_id:body.match(/task_id: (\S+)/)?.[1]??null,state_version:Number(body.match(/state_version: (\d+)/)?.[1])||null};
+    }).filter(m=>m.values.length)}:{}),
     rendered_budget_snapshots:states.map(m=>renderedBudget(contentText(m.content))),
     state_constraint_bits:Object.fromEntries(Object.entries(config.state_constraints??{}).map(([key,pattern])=>{
       const body=states.map(m=>contentText(m.content)).join('\n');
@@ -84,7 +114,7 @@ export function workspaceSummary(root='/app/interpreter') {
   }
   let cargo=null;
   try { cargo=fs.readFileSync(path.join(root,'Cargo.toml'),'utf8'); } catch {}
-  return {files, cargo}; // Small task-specific configuration; never source or answers.
+  return {files, cargo,...(config.memory_protocol==='tb01-capsule.v1'?{memory_capsules:capsuleNote(config)}:{})};
 }
 
 export function installGuard({ledger,trace,deadline,variant,quotaScript,credentialFile,fetchImpl=globalThis.fetch}) {

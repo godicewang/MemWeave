@@ -285,6 +285,18 @@ def require_primary_design_ready(contract):
     and actual CLI controls. A new version label or boolean cannot clear it.
     """
     if contract.get('case_id')=='TB-01' or contract.get('task_name')=='batched-eval-parity':
+        if contract.get('memory_protocol')=='tb01-capsule.v1':
+            import hashlib
+
+            from .tb01_capsules import GOLD, PUBLIC_PROTOCOL
+            expected={f'capsule:{k}:{category}:{assertion}'for k in GOLD for category,assertions in {
+                'truth':['schema','values','no_conflict'],'timely':['saved_before_edit','explicit_recall'],
+                'use':['prior_capture_and_recall','final_review','probe1','probe2']}.items()for assertion in assertions}
+            actual={a for m in contract.get('behavior',[])for o in m.get('opportunities',[])for a in o.get('required_assertions',[])}
+            reducer=REPOSITORY/'src/state/model.ts'
+            if (actual==expected and contract.get('case_version')=='1.4.0'
+                    and contract.get('state_reducer_sha256')==hashlib.sha256(reducer.read_bytes()).hexdigest()
+                    and contract.get('public_protocol_sha256')==hashlib.sha256(PUBLIC_PROTOCOL.encode()).hexdigest()):return
         raise ValueError('TB-01 design hold: State truth, timely capture and downstream '
                          'action oracle/real-CLI collection are not implemented; '
                          'business verifier outcomes cannot authorize a new complete memory evaluation')

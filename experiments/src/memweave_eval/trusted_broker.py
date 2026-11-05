@@ -27,6 +27,7 @@ class TrustedBroker:
         self.root.mkdir(parents=True,exist_ok=False);self.control.mkdir(parents=True,exist_ok=True)
         code=self.root/'code/memweave_eval';code.mkdir(parents=True);(code/'__init__.py').write_text('')
         for name in ('primary_transport.py','budget_guard.py','storage.py','container_deadline.py'):shutil.copyfile(Path(__file__).with_name(name),code/name)
+        if fixture:shutil.copyfile(Path(__file__).with_name('tb01_capsules.py'),code/'tb01_capsules.py')
         capabilities={secrets.token_urlsafe(32):p for p in principals};self.clients={}
         self.stdout=(self.root/'service-console.log').open('wb');cid=self.root/'container.cid'
         args=['docker','run','--rm','--init','--interactive','--network','host','--cpus','.5','--memory','256m','--ulimit','core=0','--platform','linux/amd64',

@@ -278,6 +278,32 @@ def main():
                 return 200,'text/event-stream',hang()
             # A task-create is requested only when that tool is available and not yet used.
             called={t.get('function',{}).get('name')for m in payload['messages']for t in m.get('tool_calls',[])}
+            if any('Derived evaluation protocol TB01-capsule.v1'in str(m.get('content',''))for m in payload['messages']):
+                from .tb01_capsules import GOLD, NOTE
+                values=[dict(v)for v in GOLD.values()]
+                if any('TB01CAPSULE_NEGATIVE'in str(m.get('content',''))for m in payload['messages']):values[0]['by']='id'
+                has_state=any(t.get('function',{}).get('name')=='state_append'for t in payload.get('tools',[]))
+                reads=sum(t.get('function',{}).get('name')==('state_read'if has_state else'read')for m in payload['messages']for t in m.get('tool_calls',[]))
+                tool=None;arguments={}
+                if has_state and 'task_create'not in called:
+                    tool='task_create';arguments={'title':'capsule probe','goal':'Implement original parity task with saved constraints','project_name':'TB01','summary':'offline capsule control','keywords':['capsule']}
+                elif ('state_append'if has_state else'write')not in called:
+                    tool='state_append'if has_state else'write'
+                    arguments={'items':[{'type':'fact','content':json.dumps(v,separators=(',',':')),'evidence':{'U1':'original requirements'}}for v in values]}if has_state else{'path':NOTE,'content':'\n'.join(json.dumps(v,separators=(',',':'))for v in values)+'\n'}
+                elif reads==0 or 'bash'in called and reads==1:
+                    tool='state_read'if has_state else'read'
+                    if has_state:
+                        import re
+                        candidates=[re.search(r'"task_id"\s*:\s*"([^"]+)"',str(m.get('content','')))for m in payload['messages']if m.get('role')=='tool']
+                        task=next((m[1]for m in candidates if m),None)
+                        if task is None:raise ValueError('fixture task binding missing')
+                        arguments={'task_id':task}
+                    else:arguments={'path':NOTE}
+                elif 'bash'not in called:
+                    tool='bash';arguments={'command':"for p in evaluate scheduler scoring generation byte_stops; do printf '\\n# offline capsule fixture edit\\n' >> /app/evalbench/$p.py; done"}
+                delta={'role':'assistant','tool_calls':[{'index':0,'id':'capsule-'+str(len(payload['messages'])),'type':'function','function':{'name':tool,'arguments':json.dumps(arguments)}}]}if tool else{'role':'assistant','content':'Offline capsule control complete.'}
+                frames=[{'model':'deepseek-flash','choices':[{'index':0,'delta':delta,'finish_reason':None}]},{'choices':[{'index':0,'delta':{},'finish_reason':'tool_calls'if tool else'stop'}],'usage':{'prompt_tokens':100,'completion_tokens':2,'prompt_cache_hit_tokens':0}}]
+                return 200,'text/event-stream',[b''.join(b'data: '+_encoded(f)+b'\n\n'for f in frames)+b'data: [DONE]\n\n']
             create=any(t.get('function',{}).get('name')=='task_create'for t in payload.get('tools',[]))and 'task_create'not in called
             read=not create and 'read'not in called
             tool='task_create'if create else'read'if read else None

@@ -1,5 +1,6 @@
 // Common evaluation-only extension: observes public tool events, adds no tools/prompts.
 import fs from 'node:fs';
+import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {workspaceSummary} from './fetch_guard.mjs';
 import {attachBoundaries,stateJournalBoundary} from './request_boundary.ts';
@@ -19,10 +20,12 @@ export default function observe(pi: any) {
       }
     });
   }
-  function record(phase: string, ctx:any, call_id?: string) {
+  function record(phase: string, ctx:any, call_id?: string, tool?:any) {
     fs.appendFileSync(trace!,JSON.stringify({event:'workspace_checkpoint',phase,call_id,
       timestamp:new Date().toISOString(),variant:process.env.MEMWEAVE_EVAL_VARIANT,
-      workspace:workspaceSummary(),state_boundary:stateJournalBoundary(ctx,'atomic_journal_at_'+phase)})+'\n');
+      workspace:workspaceSummary(),state_boundary:stateJournalBoundary(ctx,'atomic_journal_at_'+phase),
+      tool_name:tool?.toolName,tool_path:tool?.args?.path?path.resolve('/app',tool.args.path):undefined,
+      tool_is_error:typeof tool?.isError==='boolean'?tool.isError:undefined})+'\n');
   }
   if(process.env.MEMWEAVE_EVAL_SEALED==='1'){
     const policy=process.env.MEMWEAVE_EVAL_POLICY_FILE;
@@ -38,7 +41,7 @@ export default function observe(pi: any) {
     });
   }
   pi.on('agent_start',(_event:any,ctx:any)=>record('agent_start',ctx));
-  pi.on('tool_execution_start',(event:any,ctx:any)=>record('tool_start',ctx,event.toolCallId));
+  pi.on('tool_execution_start',(event:any,ctx:any)=>record('tool_start',ctx,event.toolCallId,event));
   let returns=0,sent=false;
   const after=Number(process.env.MEMWEAVE_EVAL_PROGRESS_AFTER ?? 80);
   pi.on('message_end',(event: any)=>{
@@ -53,7 +56,7 @@ export default function observe(pi: any) {
     }
   });
   pi.on('tool_execution_end',(event:any,ctx:any)=>{
-    record('tool_end',ctx,event.toolCallId);
+    record('tool_end',ctx,event.toolCallId,event);
     if(!['memory_read','state_read'].includes(event.toolName))return;
     const text=(event.result?.content??[]).filter((p:any)=>p.type==='text').map((p:any)=>p.text).join('\n');
     let value:any;try{value=JSON.parse(text);}catch{}
