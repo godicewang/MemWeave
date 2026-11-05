@@ -96,3 +96,51 @@ def test_allowed_public_endpoint_transient_timeout_retries_without_changing_targ
                 'outside':{'ok':self.calls>1,'status':200 if self.calls>1 else None,'error':None if self.calls>1 else'CONNECT_TIMEOUT'}}))
     env=Environment();asyncio.run(check_network(env,'/fixed/node',tmp_path,general_internet_allowed=True))
     assert env.calls==2 and json.loads((tmp_path/'network-probe.json').read_text())['passed']
+
+
+TARGETS = ('https://example.com', 'https://registry.npmjs.org/-/ping',
+           'https://www.iana.org/domains/reserved')
+
+
+@pytest.mark.parametrize('allowed,reachable,passes', [
+    (True, 1, True), (True, None, False), (False, 1, False), (False, None, True),
+])
+def test_fixed_public_targets_preserve_each_result_and_policy(tmp_path, allowed, reachable, passes):
+    class Environment:
+        calls = 0
+
+        async def exec(self, **kwargs):
+            self.calls += 1
+            assert all(target in kwargs['command'] for target in TARGETS)
+            return SimpleNamespace(return_code=0, stdout=json.dumps({
+                'model': {'ok': True, 'status': 401, 'error': None},
+                'outside_targets': {url: {'ok': index == reachable,
+                                         'status': 200 if index == reachable else None,
+                                         'error': None if index == reachable else 'CONNECT_TIMEOUT'}
+                                    for index, url in enumerate(TARGETS)},
+            }))
+    env = Environment()
+    if passes:
+        asyncio.run(check_network(env, '/fixed/node', tmp_path, general_internet_allowed=allowed))
+    else:
+        with pytest.raises(RuntimeError, match='network'):
+            asyncio.run(check_network(env, '/fixed/node', tmp_path, general_internet_allowed=allowed))
+    record = json.loads((tmp_path / 'network-probe.json').read_text())
+    assert record['passed'] is passes
+    assert record['probe_version'] == 'fixed-public-targets-v2'
+    assert len(record['checks']['outside_targets']) == 3
+    assert record['checks']['outside_targets'][TARGETS[0]]['ok'] is False
+    if not allowed and reachable is not None:
+        assert env.calls == 1
+
+
+def test_incomplete_target_set_cannot_prove_blocked_network(tmp_path):
+    class Environment:
+        async def exec(self, **kwargs):
+            return SimpleNamespace(return_code=0, stdout=json.dumps({
+                'model': {'ok': True, 'status': 401, 'error': None},
+                'outside_targets': {TARGETS[0]: {'ok': False, 'status': None, 'error': 'CONNECT_TIMEOUT'}},
+            }))
+    with pytest.raises(RuntimeError, match='network'):
+        asyncio.run(check_network(Environment(), '/fixed/node', tmp_path))
+    assert not json.loads((tmp_path / 'network-probe.json').read_text())['passed']

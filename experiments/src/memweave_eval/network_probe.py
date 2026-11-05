@@ -31,9 +31,15 @@ function probe(url,connectMs,totalMs){return new Promise(resolve=>{
  request.on('socket',socket=>socket.once('secureConnect',()=>clearTimeout(connectTimer)));
 });}
 const model=await probe('https://api.deepseek.com/models',5000,10000);
-const outside=await probe('https://example.com',3000,5000);
-process.stdout.write(JSON.stringify({model,outside})+'\n');
+const targets=['https://example.com','https://registry.npmjs.org/-/ping',
+ 'https://www.iana.org/domains/reserved'];
+const outside_targets=Object.fromEntries(await Promise.all(
+ targets.map(async url=>[url,await probe(url,3000,5000)])));
+process.stdout.write(JSON.stringify({model,outside_targets})+'\n');
 """
+
+PUBLIC_TARGETS = frozenset(('https://example.com', 'https://registry.npmjs.org/-/ping',
+                            'https://www.iana.org/domains/reserved'))
 
 
 class Endpoint(StrictModel):
@@ -44,7 +50,8 @@ class Endpoint(StrictModel):
 
 class Checks(StrictModel):
     model: Endpoint
-    outside: Endpoint
+    outside: Endpoint | None = None
+    outside_targets: dict[str, Endpoint] | None = None
 
 
 async def check_network(environment, node: str, logs: Path, *, general_internet_allowed=False):
@@ -83,12 +90,31 @@ async def _check_once(environment, node: str, *, general_internet_allowed=False)
             record["execution_return_code"] = result.return_code
             raise ValueError("probe did not execute")
         checks = Checks.model_validate_json(result.stdout)
-        record["checks"] = checks.model_dump(mode="json")
+        if checks.outside_targets is not None:
+            if set(checks.outside_targets) != PUBLIC_TARGETS or checks.outside is not None:
+                raise ValueError('incomplete or ambiguous public target observations')
+            endpoints = list(checks.outside_targets.values())
+            reachable = next((endpoint for endpoint in endpoints if endpoint.ok), None)
+            outside = reachable or next((endpoint for endpoint in endpoints if endpoint.error in {
+                'ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'ETIMEDOUT',
+                'ENETUNREACH', 'EHOSTUNREACH', 'CONNECT_TIMEOUT', 'TOTAL_TIMEOUT',
+            }), endpoints[0])
+            record['probe_version'] = 'fixed-public-targets-v2'
+        elif checks.outside is not None:
+            # Read legacy fixture/adapter observations explicitly; new probes always
+            # report the full fixed set and never fall back after target failures.
+            outside = checks.outside
+            record['probe_version'] = 'legacy-single-target-v1'
+        else:
+            raise ValueError('missing public endpoint observations')
+        record["checks"] = checks.model_dump(mode="json", exclude_none=True)
+        record['checks']['outside'] = outside.model_dump(mode='json')
+        record['evidence_scope'] = 'fixed target reachability only; not universal internet policy proof'
         record["passed"] = bool(
-            checks.model.ok and checks.model.status in (200, 401) and checks.outside.ok is general_internet_allowed
+            checks.model.ok and checks.model.status in (200, 401) and outside.ok is general_internet_allowed
         )
         record["model_endpoint"] = "reachable" if checks.model.ok else "unreachable"
-        record["general_internet"] = "blocked" if not checks.outside.ok else "reachable"
+        record["general_internet"] = "blocked" if not outside.ok else "reachable"
     except Exception as exc:  # noqa: BLE001 -- record only a safe error category.
         record["probe_error_type"] = type(exc).__name__
     return record
