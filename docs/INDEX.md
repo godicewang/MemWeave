@@ -1,5 +1,7 @@
 # 技术知识库索引
 
+[TB-01评分方向与原件独立复核](experiments/TB01_SCORE_DIRECTION_AUDIT_2026-11-05.md)明确原生65/66、插件45/49及P−N方向；独立Session／usage／行为证据重算保持原分，仅加强自动报告臂标签。
+
 2026-11-05第一题最新有效配对见[TB-01最终双跑及State读回复审](experiments/TB01_CAPSULE_RESULT_2026-11-05.md)：原题结果、工程相对分、有限胶囊行为分、费用及保留旧报告的解析修复分别披露。[有界约束协议](experiments/TB01_CAPSULE_PROTOCOL_V1.md)记录事前设计和准入／审批／窗口演化；下方早期暂停记录保留为历史。
 
 2026-11-05第一题逐题重建的[双跑后复审](experiments/TB01_DESIGN_REVIEW_2026-11-05.md)和[限时真实结果／未完成验收](experiments/TB01_REVIEWED_RESULT_2026-11-05.md)分开记录原题失败、工程诊断与State构念缺口；时间题面及Python边界已免费修复，新付费准入暂停，不将采集通过冒充完整记忆验收。

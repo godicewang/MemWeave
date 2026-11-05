@@ -27,6 +27,37 @@ def test_pair_uses_one_kernel_and_keeps_two_independent_totals():
     row=result['engineering']['metrics']['e.rate'];assert row['raw_formula']=='successes / attempts'and row['weight']==1
 
 
+def test_case_direction_is_keyed_by_arm_and_exported_with_explicit_labels(tmp_path):
+    import csv
+    import json
+
+    from memweave_eval.primary_report import write_primary_artifacts
+
+    native,plugin=arm(),arm()
+    native['metrics']['common_tool_rate'].update(raw=65/66,support={'s':65,'f':1,'u':0,'n':66})
+    plugin['metrics']['common_tool_rate'].update(raw=45/49,support={'s':45,'f':4,'u':0,'n':49})
+    # Deliberately insert plugin first: dictionary insertion order must not swap arms.
+    result=score_pair(contract(),{'pi-memweave':plugin,'pi-native':native})
+    metric=result['engineering']['metrics']['e.rate']
+    assert metric['native_raw']==65/66 and metric['plugin_raw']==45/49
+    assert metric['score']==pytest.approx(46.67594310451453)and metric['score']<50
+    write_primary_artifacts(tmp_path,result)
+    with(tmp_path/'primary-scores.csv').open()as f:row=next(csv.DictReader(f))
+    assert float(row['native_raw'])==65/66 and float(row['plugin_raw'])==45/49
+    counts=json.loads(row['support']);assert counts['pi-native']['s']==65 and counts['pi-memweave']['s']==45
+    markdown=(tmp_path/'primary-report.md').read_text()
+    assert '原生 N=pi-native'in markdown and '插件 P=pi-memweave'in markdown
+
+
+def test_swapped_success_rate_arms_reverse_the_direction_but_not_silently():
+    from memweave_eval.primary_score import relative_score
+
+    correct=relative_score(65/66,45/49,mapping='rate_difference')
+    reversed_arms=relative_score(45/49,65/66,mapping='rate_difference')
+    assert correct['score']<50<reversed_arms['score']
+    assert correct['score']+reversed_arms['score']==pytest.approx(100)
+
+
 def test_missing_or_bad_assertion_blocks_total_without_erasing_denominator():
     b=arm();del b['assertions']['test:b']
     result=score_pair(contract(),{'pi-native':arm(),'pi-memweave':b})

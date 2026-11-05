@@ -167,7 +167,7 @@ def write_primary_artifacts(output,result):
     (output/'primary-scores.csv').write_text(stream.getvalue())
     def cell(v):return ('missing'if v is None else str(v)).replace('|','\\|').replace('\n',' ')
     lines=['','## 独立工程相对分与高价值行为分','',
-        '工程分是 plugin 相对 native 的配对分，相等为 50；行为分分别计算。两类不合成。任务原始奖励另列，业务断言不证明 State 已被采用。','',
+        '原生 N=pi-native；插件 P=pi-memweave。工程分表示插件相对原生的表现，相等为50；成功率用50+50×(P−N)，费用/耗时用100×N/(N+P)，率以0–1代入。行为分逐臂独立，两类不合成。任务原始奖励另列，业务断言不证明State已被采用。','',
         '| 指标 | 类别／臂 | 含义 | 原始公式 | native 原值 | plugin 原值 | s/f/u/n 或两臂分母 | 百分制公式 | 分数 | 权重 | 状态 |',
         '|---|---|---|---|---:|---:|---|---|---:|---:|---|']
     if not result.get('provenance',{}).get('is_model_performance_result',False):
