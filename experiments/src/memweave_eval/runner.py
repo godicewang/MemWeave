@@ -21,7 +21,14 @@ import yaml
 from .images import TaskPreparationError, prepare_task, verify_prepared_task
 from .report import generate_report
 from .runtime_cache import create_plan, snapshot
-from .spec import REPOSITORY, Experiment, Subset, Suite, validate_primary_inputs
+from .spec import (
+    REPOSITORY,
+    Experiment,
+    Subset,
+    Suite,
+    primary_actor_seconds,
+    validate_primary_inputs,
+)
 from .storage import atomic_json, check_private_evidence, evidence_index, file_digest
 from .suites import resolve_suite, select_tasks, task_digest
 
@@ -438,7 +445,9 @@ def admit_tb_tasks(spec, subset, candidates, task_root, root, state, env, deadli
                                       deadline, env, subset.model_dump(),frozen=frozen,
                                       resources=spec.evaluation.resources if spec.evaluation else None,
                                       sealed=bool(spec.evaluation and task_id in spec.evaluation.sealed_tasks),
-                                      agent_timeout=spec.evaluation.agent_timeouts.get(task_id) if spec.evaluation else None)
+                                      agent_timeout=(primary_actor_seconds(spec)
+                                                     if spec.evaluation and spec.evaluation.primary_default else
+                                                     spec.evaluation.agent_timeouts.get(task_id) if spec.evaluation else None))
                 if spec.evaluation and spec.evaluation.primary_default:
                     from .tb01_case import secure_prepared_task
                     record=secure_prepared_task(root,record,env,deadline)

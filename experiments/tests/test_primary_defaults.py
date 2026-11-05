@@ -73,3 +73,21 @@ def test_full_original_timeout_is_required_before_any_paid_authority_starts(tmp_
         require_primary_time([tmp_path],29000,31080,now=0)
     with pytest.raises(ValueError,match='original primary actor'):
         require_primary_time([tmp_path],30000,31079,now=0)
+
+
+def test_symmetric_task_time_adaptation_requires_case_versioned_explicit_authorization(tmp_path):
+    import json
+    from types import SimpleNamespace as NS
+
+    from memweave_eval.spec import primary_actor_seconds
+
+    p=tmp_path/'contract.json';spec=NS(evaluation=NS(primary_default=True,primary_contract=p),limits=NS(max_elapsed_seconds=10800))
+    p.write_text('{}');assert primary_actor_seconds(spec)is None
+    contract={'case_id':'TB-01','formal_run_allowed':True,'budget_authorization':{'maximum_run_seconds':10800,'evidence_reference':'unit fixture'},
+        'execution_policy':{'kind':'authorized_symmetric_time_adaptation','source_actor_seconds':28800,'actor_seconds':7200,'reason':'explicit user 3h cap'}}
+    p.write_text(json.dumps(contract));assert primary_actor_seconds(spec)==7200
+    for value in (0,28801,True):
+        p.write_text(json.dumps(contract|{'execution_policy':contract['execution_policy']|{'actor_seconds':value}}))
+        with pytest.raises(ValueError,match='symmetric time'):primary_actor_seconds(spec)
+    p.write_text(json.dumps(contract|{'budget_authorization':{}}))
+    with pytest.raises(ValueError,match='symmetric time'):primary_actor_seconds(spec)

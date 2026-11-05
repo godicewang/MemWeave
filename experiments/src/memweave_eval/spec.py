@@ -273,6 +273,23 @@ def validate_primary_inputs(spec,suite,subset):
         raise ValueError('primary_default admits exactly the reviewed first-case pair')
     if not spec.execution.paired_concurrent or spec.execution.concurrency!=2:
         raise ValueError('primary_default requires concurrent native/plugin arms')
+    primary_actor_seconds(spec)
+
+
+def primary_actor_seconds(spec):
+    """Only an explicit case-versioned authorization may shorten task time."""
+    if not spec.evaluation or not spec.evaluation.primary_default:return None
+    import json
+    c=json.loads(spec.evaluation.primary_contract.read_text());p=c.get('execution_policy')
+    if p is None:return None
+    a=c.get('budget_authorization')or{};seconds=p.get('actor_seconds')if isinstance(p,dict)else None
+    if (type(seconds)is not int or not 0<seconds<=28800 or p.get('source_actor_seconds')!=28800
+            or p.get('kind')!='authorized_symmetric_time_adaptation' or not p.get('reason')
+            or c.get('case_id')!='TB-01' or c.get('formal_run_allowed')is not True
+            or not a.get('evidence_reference')or type(a.get('maximum_run_seconds'))is not int
+            or seconds>a['maximum_run_seconds']or spec.limits.max_elapsed_seconds>a['maximum_run_seconds']):
+        raise ValueError('explicit case-versioned symmetric time authorization required')
+    return seconds
 
 
 def require_primary_authorization(spec,*,now=None):

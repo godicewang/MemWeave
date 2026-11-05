@@ -1,0 +1,6 @@
+count: 1
+seed: tb01-primary-default-v1
+max_cpus: 2
+max_memory_mb: 4096
+max_storage_mb: 10240
+task_ids: [batched-eval-parity]
