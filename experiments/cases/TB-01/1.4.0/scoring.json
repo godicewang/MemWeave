@@ -184,12 +184,12 @@
   ],
   "scope": "明确派生的有提示、有限结构化记忆协议；native普通笔记与plugin State共同机会；不是自然自由文本、长程驱逐或因果收益；产品默认不变",
   "initialized_product_mode": "隔离home中通过Pi正式资源装载器执行包内completeSetup/loadDefaultRule/disableGlobalCompaction，保持原生默认压缩；不写采样/N/B覆盖",
-  "formal_run_allowed": false,
+  "formal_run_allowed": true,
   "budget_authorization": {
     "maximum_usd": 5.0,
     "maximum_run_seconds": 11100,
-    "start_utc": "2026-11-05T08:22:29+00:00",
-    "deadline_utc": "2026-11-05T11:25:00+00:00",
+    "start_utc": "2026-11-05T09:50:15+00:00",
+    "deadline_utc": "2026-11-05T12:50:00+00:00",
     "evidence_reference": "parent01a1a803: user 愿意追加185分钟，请继续；之后预算由助手自行把控。Internal cumulative five-dollar policy retained, not a new monetary limit imposed by user.",
     "prior_attempts": [
       {
@@ -207,7 +207,8 @@
         "stop_proof_sha256": "5d0ecd6f988416655f12b091b01c83ce386c3eb8c35b6f9c971fc48956adfd0b"
       }
     ],
-    "cumulative_arm_limit_usd": 2.4
+    "cumulative_arm_limit_usd": 2.4,
+    "execution_window_basis": "Parent explicitly clarified user-approved additional185 minutes begins now for complete paired execution, separate from prior implementation/free work/approval wait. Chosen cutoff179m45s, not exceeding185m."
   },
   "case_version": "1.4.0",
   "review": {
@@ -238,7 +239,7 @@
       "resolution": {
         "materially_new_data_authorization": true,
         "retry_under_this_new_authorization_used": false,
-        "pending_action": "time window must allow full execution before retry"
+        "pending_action": "One retry permitted under specific user data authorization and fresh bounded execution window; not yet dispatched"
       }
     },
     "time_recheck": {
@@ -248,6 +249,14 @@
       "minimum_before_paid_admission_seconds": 7500,
       "result": "blocked_by_existing_time_guard",
       "no_new_paid_calls": true
+    },
+    "execution_window_reconfirmed": {
+      "start_utc": "2026-11-05T09:50:15+00:00",
+      "cutoff_utc": "2026-11-05T12:50:00+00:00",
+      "previous_work_window_separate": true,
+      "full_actor_seconds": 5400,
+      "finalization_reserve_seconds": 1500,
+      "new_data_authorized_retry_limit": 1
     }
   },
   "pricing": {
@@ -263,9 +272,7 @@
     },
     "basis": "peak reference estimate including all completion tokens; not account bill"
   },
-  "blocking": [
-    "insufficient_remaining_authorized_time_for_full_actor_verifier_and_finalization"
-  ],
+  "blocking": [],
   "security_protocol": {
     "version": "credential-isolated-broker.v1",
     "provider_key_in_actor": false,

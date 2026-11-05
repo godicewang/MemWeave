@@ -34,7 +34,7 @@ evaluation:
   primary_default: true
   primary_contract: ../cases/TB-01/1.4.0/scoring.json
   gold: ../cases/TB-01/1.4.0/gold.json
-  deadline_utc: '2026-11-05T11:25:00Z'
+  deadline_utc: '2026-11-05T12:50:00Z'
   admission_budget_usd: 2.8
   arm_budget_usd: 1.4
   budget_id: tb01-capsule-20261105-v1
