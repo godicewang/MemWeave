@@ -75,3 +75,29 @@ STATE 的评测时间还需区分 Harbor 的 disabled verifier 与真正位于 a
 MAB 的答案正确且 JSON 文件合法另列新 ID `F35.MAB.answer_schema_artifact`，无额外权重，不再冒称受保护文件。未包含同窗口无 State 与负对照的保全/时序检查另列 `F35.MAB.source_retention_action_consistency`，无额外权重，不再冒称 C1 baseline 比较。原始报告不覆盖；补充报告将旧槽位的设计冲突明确列出，不能把设计未实现当成采集故障或偷偷剔除。若原目标需要基线/负对照，新实验协议需事前冻结并公平重跑；现有原始数据只能离线重算真实已测内容。
 
 C5 的整体建立—更新检查点不能因 Actor 从未建立旧记录而移出分母：在完整边界证据确认旧记录缺失时，该完整流程记0；缺边界仍未知。另一个仅针对实际已有旧记录的原始“修改操作条件率”仍可报告零机会，但不再替代这个流程分。该区分不会声称模型执行过并不存在的修改。
+
+Switch 的12条免费实际CLI控制均通过程序路由/边界验收后，整包报告还发现 `S.common.process_validation` 虽已设计却未接线。修复取原始 verifier 的精确 F2P/P2P 列表、每项结果、graded 状态、源计数和正常测试退出码形成独立过程检查点；测试失败与测试未正常执行分开。不给“运行完就正确”的业务分，也不更改原始 reward、测试或 Actor 输入。可对已有完整控制工件离线补算；缺文件仍需修复，不改设计NA。
+
+### 35题候选 worktree 清理映射（2026-11-04）
+
+用户已要求移除上轮实现及测试；主工作区的 `experiments/src`、`experiments/tests` 已恢复至 `2f357d20efcb88c66a130449667fd28dd14c7470`。下表在候选移除前保留，不能当成移除成功回执。13个候选的8210份跟踪文件均与冻结Git对象一致，提交均可从保留的主分支历史到达；非忽略未跟踪文件为0。忽略项仅为620个具有对应跟踪源码的Python 3.12 `.pyc`，用户已授权一并移除；缓存不保证逐字节恢复，跟踪源码可按提交恢复。
+
+| 原路径 | 冻结提交 | 忽略缓存数 |
+|---|---|---:|
+| `/private/tmp/memweave-fixed35-candidate-2b7765a` | `2b7765a8db97bfbe92b1a59547b62d9e92ee005d` | 52 |
+| `/private/tmp/memweave-fixed35-candidate-655ee1e` | `655ee1e5d46bfcc4db9fd6f119e22ca6b0919b5f` | 46 |
+| `/private/tmp/memweave-fixed35-candidate-7742975` | `77429755a939124b2fb49799869a975cf65e8968` | 55 |
+| `/private/tmp/memweave-fixed35-candidate-7a16539` | `7a1653932bd02336c24bbeebd486b7f289a858c0` | 51 |
+| `/private/tmp/memweave-fixed35-candidate-ef6def1` | `ef6def13f9c59c9e23270c1b2208719d19863875` | 0 |
+| `/private/tmp/memweave-fixed35-candidate-v44` | `f694a460ee07d0ad39041757abd0b79496d093d3` | 57 |
+| `/private/tmp/memweave-fixed35-candidate-v45` | `0f0a9669f3619aee9fb1e1483de22899b27aec88` | 53 |
+| `/private/tmp/memweave-fixed35-candidate-v47` | `b6b38aeddcc70577a63ad8a2369b5c46b9feca80` | 53 |
+| `/private/tmp/memweave-fixed35-candidate-v48` | `daad9e595dfbd6ff7cfa098ec6e388b28c854442` | 49 |
+| `/private/tmp/memweave-fixed35-candidate-v49` | `eb1abcb3646f93ce7a0ee54fafff3451318b7dda` | 47 |
+| `/private/tmp/memweave-fixed35-candidate-v50` | `959289b363dec1bfa9d83754d5fba5305c1943cd` | 52 |
+| `/private/tmp/memweave-fixed35-candidate-v51` | `4db8fe5fbc40fdadde8cab4eb9119110abd1fc84` | 54 |
+| `/private/tmp/memweave-fixed35-candidate-v56` | `d9a9f928aa2b4a7ae1bdd06894119c8ebb42240f` | 51 |
+
+清理范围只包括以上候选及其缓存，保留主仓库、历史结论、账本、运行证据和其他目录。旧zstd worktree不在范围内。历史报告中的候选绝对路径可能失效；复算前需恢复相应冻结版本。
+
+执行回执：2026-11-04 15:44:44 UTC完成核验，13次 `git worktree remove` 均返回0，以上13个路径及Git登记均已不存在；未使用force或直接删除目录。原候选及620个可重建缓存清理前合计约255.43 MiB。所有冻结提交仍由主分支历史保留，728个去重跟踪blob对象全部可读；主工作区评测源码／测试仍与旧基线一致，产品目录无变更，三个fixed35账本hash未变。剩余worktree仅为主仓库及原zstd worktree；未提交、push、GC或运行实验。
