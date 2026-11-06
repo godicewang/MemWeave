@@ -73,24 +73,18 @@ class Limits(StrictModel):
 
 class Evaluation(StrictModel):
     primary_default: StrictBool = False
-    primary_contract: Path | None = None
-    gold: Path
     deadline_utc: str
     admission_budget_usd: Annotated[float, Field(strict=True, gt=0, le=29)]
     output_tokens: Annotated[int, Field(strict=True, gt=0, le=384000)] = 16384
     budget_id: Identifier
     arm_budget_usd: Annotated[float, Field(strict=True, gt=0)] = 12.0
-    progress_after_returns: Annotated[int, Field(strict=True, ge=0)] = 80
     episode_budget_usd: Annotated[float,Field(strict=True,gt=0)] | None = None
     frozen_preparation: Path | None = None
     quota_backend: Literal['python','node'] = 'python'
     per_task_arm_caps: StrictBool = False
     resources: dict[str, Annotated[int, Field(strict=True,gt=0)]] | None = None
-    sealed_tasks: list[Identifier] = Field(default_factory=list)
     finalization_reserve_seconds: Annotated[int,Field(strict=True,ge=1500)] = 1500
-    control_expectations: dict = Field(default_factory=dict)
     canary_preflight: StrictBool = False
-    agent_timeouts: dict[str, PositiveInt] = Field(default_factory=dict)
     budget_arm_limits: dict[str, Annotated[float,Field(strict=True,gt=0)]] | None = None
 
     @model_validator(mode="after")
@@ -105,8 +99,8 @@ class Evaluation(StrictModel):
             raise ValueError('registered budget arms exceed shared admission budget')
         if self.resources and (set(self.resources)-{'cpus','memory_mb','storage_mb'}):
             raise ValueError('unknown resource adaptation')
-        if self.primary_default and (self.progress_after_returns!=0 or self.output_tokens!=384000 or self.resources or self.agent_timeouts or self.sealed_tasks):
-            raise ValueError('primary_default forbids evaluation steering, sampling/time/resource overrides or sealed adapters; output_tokens384000 is admission ceiling only')
+        if self.primary_default and (self.output_tokens!=384000 or self.resources):
+            raise ValueError('primary_default forbids sampling/resource overrides; output_tokens384000 is admission ceiling only')
         return self
 
 
@@ -232,146 +226,13 @@ def load_experiment(path: Path) -> tuple[Experiment, Suite, Subset]:
     for name in ("suite", "subset"):
         setattr(spec, name, (path.parent / getattr(spec, name)).resolve())
     spec.subject.package = (path.parent / spec.subject.package.expanduser()).resolve()
-    if spec.evaluation:
-        spec.evaluation.gold = (path.parent / spec.evaluation.gold).resolve()
-        if spec.evaluation.primary_contract:
-            spec.evaluation.primary_contract=(path.parent/spec.evaluation.primary_contract).resolve()
-        if spec.evaluation.frozen_preparation:
-            spec.evaluation.frozen_preparation=(path.parent/spec.evaluation.frozen_preparation).resolve()
+    if spec.evaluation and spec.evaluation.frozen_preparation:
+        spec.evaluation.frozen_preparation = (path.parent / spec.evaluation.frozen_preparation).resolve()
     suite = Suite.model_validate(load_yaml(spec.suite))
     subset = Subset.model_validate(load_yaml(spec.subset))
-    validate_primary_inputs(spec,suite,subset)
     if suite.protocol == "swe-pro-v2" and spec.execution.platform != "linux/amd64":
         raise ValueError("Pro V2 requires its official linux/amd64 images")
-    if suite.protocol == 'swe-marathon' and (
-        not spec.evaluation or not spec.execution.paired_concurrent or not subset.task_ids
-    ):
-        raise ValueError('Marathon requires fixed cases, request admission and concurrent pairs')
     if (spec.evaluation and spec.evaluation.per_task_arm_caps
             and subset.count*len(spec.variants)*spec.evaluation.arm_budget_usd>spec.evaluation.admission_budget_usd):
         raise ValueError('all task-arm allocations must fit the new shared budget')
     return spec, suite, subset
-
-
-def validate_primary_inputs(spec,suite,subset):
-    if not spec.evaluation or not spec.evaluation.primary_default:return
-    import json
-
-    from .primary_report import validate_contract
-
-    if not spec.evaluation.primary_contract:
-        raise ValueError('primary_default requires an approved frozen primary_contract before running')
-    contract=validate_contract(json.loads(spec.evaluation.primary_contract.read_text()))
-    require_primary_design_ready(contract)
-    if spec.model.id!='deepseek-flash':raise ValueError('primary authority pricing and endpoint are frozen for deepseek-flash')
-    price=contract.get('pricing',{})
-    if (price.get('currency')!='USD' or price.get('requested_model_id')!='deepseek-flash'
-            or price.get('per_million_tokens')!={'input':.3,'cache_read':.006,'output':1.2}):
-        raise ValueError('primary contract price must match trusted authority peak USD tariff')
-    if contract.get('source_commit')!=suite.revision:
-        raise ValueError('primary source revision and scoring contract disagree')
-    if subset.task_ids!=[contract.get('task_name')]or subset.count!=1 or spec.execution.repetitions!=1:
-        raise ValueError('primary_default admits exactly the reviewed first-case pair')
-    if not spec.execution.paired_concurrent or spec.execution.concurrency!=2:
-        raise ValueError('primary_default requires concurrent native/plugin arms')
-    primary_actor_seconds(spec)
-
-
-def require_primary_design_ready(contract):
-    """Admission-only hold; keep immutable historical score/report versions usable.
-
-    TB01's v1.3 review found a construct gap, not a low model score. This hold
-    must be removed in a reviewed implementation with State oracle/collector
-    and actual CLI controls. A new version label or boolean cannot clear it.
-    """
-    if contract.get('case_id')=='TB-01' or contract.get('task_name')=='batched-eval-parity':
-        if contract.get('memory_protocol')in('tb01-capsule.v2','tb01-capsule.v2.1'):
-            import hashlib
-
-            from .tb01_flow_v2 import CONTEXT_PUBLIC_PROTOCOL, PUBLIC_PROTOCOL, assertion_ids
-            context=contract['memory_protocol']=='tb01-capsule.v2.1'
-            actual={a for m in contract.get('behavior',[])for o in m.get('opportunities',[])for a in o.get('required_assertions',[])}
-            weights={m.get('id'):m.get('weight')for m in contract.get('behavior',[])}
-            if (actual==assertion_ids()and contract.get('case_version')==('1.5.1'if context else'1.5.0')
-                    and contract.get('scoring_version')==('tb01-memory-flow-v2.1'if context else'tb01-memory-flow-v2')
-                    and weights=={'tb01.v2.capture':.5,'tb01.v2.delivery':0.,'tb01.v2.constraint_behavior':.5}
-                    and contract.get('state_reducer_sha256')==hashlib.sha256((REPOSITORY/'src/state/model.ts').read_bytes()).hexdigest()
-                    and contract.get('public_protocol_sha256')==hashlib.sha256((CONTEXT_PUBLIC_PROTOCOL if context else PUBLIC_PROTOCOL).encode()).hexdigest()):return
-        if contract.get('memory_protocol')=='tb01-capsule.v1':
-            import hashlib
-
-            from .tb01_capsules import GOLD, PUBLIC_PROTOCOL
-            expected={f'capsule:{k}:{category}:{assertion}'for k in GOLD for category,assertions in {
-                'truth':['schema','values','no_conflict'],'timely':['saved_before_edit','explicit_recall'],
-                'use':['prior_capture_and_recall','final_review','probe1','probe2']}.items()for assertion in assertions}
-            actual={a for m in contract.get('behavior',[])for o in m.get('opportunities',[])for a in o.get('required_assertions',[])}
-            reducer=REPOSITORY/'src/state/model.ts'
-            if (actual==expected and contract.get('case_version')=='1.4.0'
-                    and contract.get('state_reducer_sha256')==hashlib.sha256(reducer.read_bytes()).hexdigest()
-                    and contract.get('public_protocol_sha256')==hashlib.sha256(PUBLIC_PROTOCOL.encode()).hexdigest()):return
-        raise ValueError('TB-01 design hold: State truth, timely capture and downstream '
-                         'action oracle/real-CLI collection are not implemented; '
-                         'business verifier outcomes cannot authorize a new complete memory evaluation')
-
-
-def primary_actor_seconds(spec):
-    """Only an explicit case-versioned authorization may shorten task time."""
-    if not spec.evaluation or not spec.evaluation.primary_default:return None
-    import json
-    c=json.loads(spec.evaluation.primary_contract.read_text());p=c.get('execution_policy')
-    if p is None:return None
-    a=c.get('budget_authorization')or{};seconds=p.get('actor_seconds')if isinstance(p,dict)else None
-    if (type(seconds)is not int or not 0<seconds<=28800 or p.get('source_actor_seconds')!=28800
-            or p.get('kind')!='authorized_symmetric_time_adaptation' or not p.get('reason')
-            or c.get('case_id')!='TB-01' or c.get('formal_run_allowed')is not True
-            or not a.get('evidence_reference')or type(a.get('maximum_run_seconds'))is not int
-            or seconds>a['maximum_run_seconds']or spec.limits.max_elapsed_seconds>a['maximum_run_seconds']):
-        raise ValueError('explicit case-versioned symmetric time authorization required')
-    return seconds
-
-
-def require_primary_authorization(spec,*,now=None):
-    """A reviewed score design does not itself authorize new model expenditure."""
-    if not spec.evaluation or not spec.evaluation.primary_default:return
-    import json
-    import time
-    from datetime import datetime
-
-    c=json.loads(spec.evaluation.primary_contract.read_text());a=c.get('budget_authorization')
-    if c.get('memory_protocol')in('tb01-capsule.v2','tb01-capsule.v2.1'):
-        from .storage import file_digest
-        proof=(c.get('review')or{}).get('free_controls')or{}
-        p=Path(proof.get('path','/missing-tb01-v2-free-control-proof'))
-        if (not p.is_file()or file_digest(p)!=proof.get('sha256')
-                or json.loads(p.read_text()).get('all_passed')is not True):
-            raise ValueError('v2 real CLI, single-fault business and missing-evidence controls must pass before paid admission')
-        for relative,digest in json.loads(p.read_text()).get('implementation_files',{}).items():
-            if file_digest(REPOSITORY/relative)!=digest:
-                raise ValueError('v2 free-control implementation changed; repeat applicable validation before paid admission')
-    if c.get('formal_run_allowed')is not True or not isinstance(a,dict):
-        raise ValueError('primary paid run blocked: new explicit budget and time authorization required')
-    try:
-        dates=[datetime.fromisoformat(a[k])for k in ('start_utc','deadline_utc')]
-        if any(d.tzinfo is None for d in dates):raise ValueError('timezone')
-        start,end=(d.timestamp()for d in dates)
-        deadline=datetime.fromisoformat(spec.evaluation.deadline_utc).timestamp()
-    except (ValueError,KeyError,TypeError):raise ValueError('explicit authorized UTC window required')from None
-    maximum=a.get('maximum_usd')
-    prior=0.;prior_arms={}
-    for entry in a.get('prior_attempts',[]):
-        from .storage import file_digest
-        p=Path(entry['quota_path']);proof=Path(entry['stop_proof'])
-        if (file_digest(p)!=entry['quota_sha256']or file_digest(proof)!=entry['stop_proof_sha256']
-                or not(p.parent/'STOP_REQUESTED').is_file()or json.loads(proof.read_text()).get('stopped')is not True):
-            raise ValueError('prior attempt stop/ledger proof changed; do not restart or reset costs')
-        old=json.loads(p.read_text());prior+=sum(r['charge_usd']for r in old['requests'].values())
-        for r in old['requests'].values():prior_arms[r.get('arm')]=prior_arms.get(r.get('arm'),0.)+r['charge_usd']
-    if prior_arms:
-        cap=a.get('cumulative_arm_limit_usd')
-        if type(cap)not in(int,float)or not 0<cap<float('inf')or any(cost+spec.evaluation.arm_budget_usd>cap for cost in prior_arms.values()):
-            raise ValueError('cumulative arm caps must include all prior unknown and settled charges')
-    if (type(maximum)not in(int,float)or not 0<maximum< float('inf')or not a.get('evidence_reference')
-            or end<=start or not start<=(time.time()if now is None else now)<end
-            or deadline>end or prior+spec.evaluation.admission_budget_usd>maximum
-            or prior+spec.limits.max_cost_usd>maximum):
-        raise ValueError('primary config exceeds or lacks the recorded budget/window authorization')

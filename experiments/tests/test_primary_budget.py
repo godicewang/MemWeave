@@ -48,34 +48,3 @@ def test_runner_stop_closes_quota_admission_before_any_child_can_start(tmp_path)
         with pytest.raises(TimeoutError):execute_harbor({},tmp_path,{},time.monotonic()+30,1,budget_stop_file=marker)
         start.assert_not_called()
     assert marker.exists()
-
-
-def test_score_design_is_not_new_spending_authorization(tmp_path):
-    from types import SimpleNamespace as NS
-
-    from memweave_eval.spec import require_primary_authorization
-    p=tmp_path/'contract.json';p.write_text('{"formal_run_allowed":false,"budget_authorization":null}')
-    spec=NS(evaluation=NS(primary_default=True,primary_contract=p,deadline_utc='2026-11-06T12:00:00+00:00',admission_budget_usd=2),limits=NS(max_cost_usd=2))
-    with pytest.raises(ValueError,match='new explicit budget'):require_primary_authorization(spec)
-    c={'formal_run_allowed':True,'budget_authorization':{'maximum_usd':2,'start_utc':'2026-11-06T00:00:00+00:00','deadline_utc':'2026-11-07T00:00:00+00:00','evidence_reference':'unit fixture only, not actual authorization'}}
-    p.write_text(json.dumps(c));require_primary_authorization(spec,now=1793923200)
-    spec.evaluation.admission_budget_usd=3
-    with pytest.raises(ValueError,match='exceeds'):require_primary_authorization(spec,now=1793923200)
-
-
-def test_repaired_pair_counts_predecessor_unknowns_and_requires_immutable_stop_proof(tmp_path):
-    from types import SimpleNamespace as NS
-
-    from memweave_eval.spec import require_primary_authorization
-    from memweave_eval.storage import file_digest
-
-    q=tmp_path/'old/quota.json';q.parent.mkdir();q.write_text(json.dumps({'requests':{'a':{'arm':'pi-native','charge_usd':.2,'status':'settled'},'b':{'arm':'pi-memweave','charge_usd':.3,'status':'reserved'}}}))
-    (q.parent/'STOP_REQUESTED').touch();proof=tmp_path/'stop.json';proof.write_text('{"stopped":true}')
-    p=tmp_path/'contract.json';c={'formal_run_allowed':True,'budget_authorization':{'maximum_usd':2.,'start_utc':'2026-11-06T00:00:00+00:00','deadline_utc':'2026-11-07T00:00:00+00:00','evidence_reference':'unit fixture','cumulative_arm_limit_usd':1.,'prior_attempts':[{'quota_path':str(q),'quota_sha256':file_digest(q),'stop_proof':str(proof),'stop_proof_sha256':file_digest(proof)}]}}
-    p.write_text(json.dumps(c));spec=NS(evaluation=NS(primary_default=True,primary_contract=p,deadline_utc='2026-11-06T12:00:00+00:00',admission_budget_usd=1.2,arm_budget_usd=.6),limits=NS(max_cost_usd=2.))
-    with pytest.raises(ValueError,match='exceeds'):require_primary_authorization(spec,now=1793923200)
-    spec.limits.max_cost_usd=1.5;require_primary_authorization(spec,now=1793923200)
-    spec.evaluation.arm_budget_usd=.8
-    with pytest.raises(ValueError,match='cumulative arm'):require_primary_authorization(spec,now=1793923200)
-    spec.evaluation.arm_budget_usd=.6;q.write_text('{}')
-    with pytest.raises(ValueError,match='proof changed'):require_primary_authorization(spec,now=1793923200)

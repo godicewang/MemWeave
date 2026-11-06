@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {nativeSession} from '../../tests/fixtures/native-session.ts';
-import {installGuard,protectedConstraint,requestSummary} from '../src/memweave_eval/fetch_guard.mjs';
+import {installGuard} from '../src/memweave_eval/fetch_guard.mjs';
 
 test('full native Pi requests, provider retry and native compaction share admission',async t=>{
   const h=await nativeSession(t,[],true,512,[],undefined,true);
@@ -49,38 +49,21 @@ test('full native Pi requests, provider retry and native compaction share admiss
   assert.equal(Object.values(quota.requests).filter((r: any)=>r.status==='settled').length,bodies.length-1);
 });
 
-test('request boundary distinguishes original source, State delivery and contradictory active entries',()=>{
-  const state='# Symbolic State\nF1 Do not modify spec.rs or main.rs';
-  assert.equal(protectedConstraint(state),true);
-  assert.equal(protectedConstraint(state+'\nF2 You may modify spec.rs or main.rs'),false);
-  assert.equal(protectedConstraint('F1 spec.rs and main.rs exist'),null);
-  const payload={messages:[{role:'user',content:'prefix ORIGINAL INSTRUCTION'},
-    {role:'user',content:[{type:'text',text:state}]}]};
-  assert.equal(requestSummary(payload,'ORIGINAL INSTRUCTION').original_instruction_visible,true);
-  assert.equal(requestSummary(payload,'ORIGINAL INSTRUCTION').state_protected_constraint,true);
-  payload.messages.shift();
-  assert.equal(requestSummary(payload,'ORIGINAL INSTRUCTION').original_instruction_visible,false);
-});
 
-test('common progress input uses public Pi steering exactly once and adds no memory tools',async t=>{
-  const previousTrace=process.env.MEMWEAVE_EVAL_TRACE,previousAfter=process.env.MEMWEAVE_EVAL_PROGRESS_AFTER;
-  const {mkdtempSync}=fs;
-  const root=mkdtempSync('/tmp/memweave-progress-fixture-');
-  process.env.MEMWEAVE_EVAL_TRACE=path.join(root,'trace.jsonl');
-  process.env.MEMWEAVE_EVAL_PROGRESS_AFTER='3';
+test('retired progress environment cannot steer an original task',async t=>{
+  const previous=process.env.MEMWEAVE_EVAL_PROGRESS_AFTER;
+  process.env.MEMWEAVE_EVAL_PROGRESS_AFTER='1';
   t.after(()=>{
-    if(previousTrace===undefined)delete process.env.MEMWEAVE_EVAL_TRACE;else process.env.MEMWEAVE_EVAL_TRACE=previousTrace;
-    if(previousAfter===undefined)delete process.env.MEMWEAVE_EVAL_PROGRESS_AFTER;else process.env.MEMWEAVE_EVAL_PROGRESS_AFTER=previousAfter;
-    fs.rmSync(root,{recursive:true,force:true});
+    if(previous===undefined)delete process.env.MEMWEAVE_EVAL_PROGRESS_AFTER;
+    else process.env.MEMWEAVE_EVAL_PROGRESS_AFTER=previous;
   });
   const observer=fileURLToPath(new URL('../src/memweave_eval/checkpoint_observer.ts',import.meta.url));
   const h=await nativeSession(t,[],false,512,[observer],undefined,true);
   const {fauxAssistantMessage}=await import('@earendil-works/pi-ai/providers/faux');
-  h.faux.setResponses(Array.from({length:6},()=>fauxAssistantMessage('Controlled continuation.')));
-  for(let i=0;i<3;i++)await h.session.prompt('Continue controlled task '+i);
-  const users=h.manager.getEntries().filter((e:any)=>e.type==='message' &&e.message.role==='user');
-  assert.equal(users.filter((e:any)=>JSON.stringify(e.message.content).includes('请简短汇报进度')).length,1);
-  const trace=fs.readFileSync(process.env.MEMWEAVE_EVAL_TRACE,'utf8');
-  assert.equal(trace.split('"event":"case_input"').length-1,1);
+  h.faux.setResponses([fauxAssistantMessage('Controlled response.')]);
+  await h.session.prompt('Original task input.');
+  const users=h.manager.getEntries().filter((e:any)=>e.type==='message'&&e.message.role==='user');
+  assert.equal(users.length,1);
+  assert.ok(!JSON.stringify(users).includes('请简短汇报进度'));
   assert.ok(!h.session.getActiveToolNames().includes('task_create'));
 });

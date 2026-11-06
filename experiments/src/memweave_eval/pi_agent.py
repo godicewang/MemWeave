@@ -6,7 +6,6 @@ import json
 import shlex
 import tempfile
 import time
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -38,12 +37,8 @@ class PiExperimentOptions(PiOptions):
     evaluation_quota_backend: Literal["python", "node"] = "python"
     evaluation_per_task_arms: bool = False
     # PiOptions is a Pydantic model; mutable field defaults are copied per instance.
-    evaluation_task_timeouts: dict[str,int] = {}  # noqa: RUF012
     evaluation_task_ids: list[str] = []  # noqa: RUF012
-    evaluation_task_configs: dict = {}  # noqa: RUF012
-    evaluation_sealed_tasks: list[str] = []  # noqa: RUF012
     evaluation_run_id: str | None = None
-    evaluation_progress_after_returns: int = 80
     smoke_barrier: str | None = None
     evaluation_canary: bool = False
     evaluation_request_limit: int | None = None
@@ -56,9 +51,8 @@ class PiExperimentOptions(PiOptions):
 
     @model_validator(mode="after")
     def primary_defaults(self):
-        if self.evaluation_primary_default and (self.thinking is not None or self.evaluation_progress_after_returns!=0 or self.evaluation_output_tokens!=384000
-                or self.evaluation_task_timeouts or any(not isinstance(c,dict)or set(c)-{'workspace'} for c in self.evaluation_task_configs.values())):
-            raise ValueError('primary_default forbids steering, sampling overrides, task time rewrites and product configuration overrides')
+        if self.evaluation_primary_default and (self.thinking is not None or self.evaluation_output_tokens!=384000):
+            raise ValueError('primary_default forbids sampling overrides')
         return self
 
 
@@ -172,8 +166,6 @@ class ExperimentPi(Pi):
         if self.options.evaluation_per_task_arms and len(matches)!=1:
             raise ValueError('Cannot identify trusted task-arm from Harbor trial directory')
         self._evaluation_task_id=matches[0] if len(matches)==1 else None
-        self._evaluation_task_config=self.options.evaluation_task_configs.get(self._evaluation_task_id,{})
-        self._evaluation_sealed=self._evaluation_task_id in self.options.evaluation_sealed_tasks
         if not self.options.runtime_plan or not self.options.runtime_plan_sha256:
             raise ValueError("a frozen software cache plan is required")
         plan_path = Path(self.options.runtime_plan)
@@ -313,7 +305,7 @@ class ExperimentPi(Pi):
         if self.options.evaluation_deadline:
             evaluator = self._asset_root + '/evaluation'
             await self.exec_as_agent(environment, f'mkdir -p {shlex.quote(evaluator)}')
-            for filename in ('fetch_guard.mjs', 'broker_client.mjs', 'guard_bootstrap.mjs', 'preload.mjs', 'budget_guard.py', 'container_deadline.py', 'budget_guard.mjs', 'container_deadline.mjs', 'sealed_runtime.mjs', 'sealed_bash_env.sh', 'request_boundary.ts', 'checkpoint_observer.ts'):
+            for filename in ('fetch_guard.mjs', 'broker_client.mjs', 'guard_bootstrap.mjs', 'preload.mjs', 'budget_guard.py', 'container_deadline.py', 'budget_guard.mjs', 'container_deadline.mjs', 'checkpoint_observer.ts'):
                 await environment.upload_file(Path(__file__).with_name(filename), evaluator+'/'+filename)
             if self.options.prepare_only:
                 await environment.upload_file(Path(__file__).with_name('probe_request.mjs'),evaluator+'/probe_request.mjs')
@@ -419,8 +411,7 @@ class ExperimentPi(Pi):
         )
         await self.exec_as_agent(
             environment, "node --input-type=module -e " + shlex.quote(script), timeout_sec=180,
-            env={'MEMWEAVE_EVAL_TRACE':'/logs/agent/preflight-observer.jsonl',
-                 'MEMWEAVE_EVAL_PROGRESS_AFTER':str(self.options.evaluation_progress_after_returns)}
+            env={'MEMWEAVE_EVAL_TRACE':'/logs/agent/preflight-observer.jsonl'}
         )
         if self.options.evaluation_deadline:
             await check_network(environment,self._asset_root+'/node/bin/node',self.logs_dir,
@@ -430,7 +421,6 @@ class ExperimentPi(Pi):
                   'default'if self.options.evaluation_primary_default else str(self.options.evaluation_output_tokens),self.options.smoke_barrier or '-']
             await self.exec_as_agent(environment,'node '+' '.join(shlex.quote(arg) for arg in args),
                 timeout_sec=180,env={'MEMWEAVE_EVAL_TRACE':'/logs/agent/mock-request-trace.jsonl',
-                                    'MEMWEAVE_EVAL_PROGRESS_AFTER':str(self.options.evaluation_progress_after_returns),
                                     'MEMWEAVE_EVAL_QUOTA_BACKEND':self.options.evaluation_quota_backend})
             await self.cli_transport_preflight(environment)
 
@@ -462,17 +452,8 @@ if(a.length!==EXPECTED || s.length!==EXPECTED)throw Error('CLI guard missing or 
 if(e.some(x=>x.event==='sealed_tool_rejected'))throw Error('Harmless query rejected');
 fs.renameSync('/logs/agent/cli-request-trace.jsonl','/logs/agent/cli-positive-trace.jsonl');
 fs.renameSync('/logs/agent/cli-fake-upstream.jsonl','/logs/agent/cli-positive-upstream.jsonl');
-""".replace('EXPECTED',str((2 if self.options.variant=='pi-memweave' else 1)+(1 if self._evaluation_sealed else 0)))
+""".replace('EXPECTED',str(2 if self.options.variant=='pi-memweave' else 1))
         await self.exec_as_agent(environment,'node --input-type=module -e '+shlex.quote(validate),timeout_sec=20)
-        if self._evaluation_sealed:
-            await self.exec_as_agent(environment,command,timeout_sec=120,env={'MEMWEAVE_EVAL_EXECUTION_NEGATIVE':'1'})
-            check="import fs from 'node:fs';const e=fs.readFileSync('/logs/agent/cli-request-trace.jsonl','utf8').trim().split('\\n').map(JSON.parse);if(!e.some(x=>x.event==='sealed_tool_rejected'&&x.executables?.includes('injected-runtime')))throw Error('Actual interpreter execution not rejected');fs.renameSync('/logs/agent/cli-request-trace.jsonl','/logs/agent/cli-execution-negative-trace.jsonl');fs.rmSync('/logs/agent/cli-fake-upstream.jsonl',{force:true});"
-            await self.exec_as_agent(environment,'node --input-type=module -e '+shlex.quote(check),timeout_sec=20)
-            negative=await self.exec_as_agent(environment,command+' || true',timeout_sec=120,
-                env={'MEMWEAVE_EVAL_COMPRESSED_FIXTURE_NEGATIVE':'1'})
-            if 'Codec unavailable in sealed evaluation runtime' not in ((negative.stdout or '')+(negative.stderr or '')):
-                raise ValueError('compressed real-HTTP CLI negative did not reproduce codec isolation')
-            await self.exec_as_agent(environment,"mv /logs/agent/cli-request-trace.jsonl /logs/agent/cli-compression-negative-trace.jsonl; rm -f /logs/agent/cli-fake-upstream.jsonl",timeout_sec=20)
         await self.exec_as_agent(environment,command+' || true',timeout_sec=120,
                                  env={'MEMWEAVE_EVAL_DROP_GUARD':'1'})
         negative="""import fs from 'node:fs';
@@ -546,19 +527,15 @@ fs.writeFileSync('/logs/agent/cli-transport-result.json',JSON.stringify({real_mo
                     NODE_OPTIONS='--import '+evaluator+'/preload.mjs',
                     MEMWEAVE_EVAL_LEDGER='/logs/agent/cli-probe-quota.json' if self.options.prepare_only else '/opt/memweave-eval-control/quota.json',
                     MEMWEAVE_EVAL_TRACE='/logs/agent/cli-request-trace.jsonl' if self.options.prepare_only else '/logs/agent/request-trace.jsonl',
-                    MEMWEAVE_EVAL_DEADLINE=str(getattr(self,'_evaluation_effective_deadline',self.options.evaluation_deadline)),
+                    MEMWEAVE_EVAL_DEADLINE=str(self.options.evaluation_deadline),
                     MEMWEAVE_EVAL_VARIANT=self.options.variant,
                     MEMWEAVE_EVAL_QUOTA_BACKEND=self.options.evaluation_quota_backend,
                     MEMWEAVE_EVAL_BROKER_CONFIG=evaluator+'/broker-client.json'if self.options.evaluation_broker_client else '',
                     MEMWEAVE_EVAL_PRIMARY_DEFAULT='1'if self.options.evaluation_primary_default else '0',
                     MEMWEAVE_EVAL_BUDGET_ARM=(self._evaluation_task_id+':'+self.options.variant) if self.options.evaluation_per_task_arms else self.options.variant,
-                    MEMWEAVE_EVAL_SEALED='1' if self._evaluation_sealed else '0',
-                    MEMWEAVE_EVAL_POLICY_FILE=evaluator+'/sealed_bash_env.sh',
                     MEMWEAVE_EVAL_ASSET_ROOT=self._asset_root,
-                    MEMWEAVE_EVAL_WORKSPACE=json.dumps(self._evaluation_task_config.get('workspace',{})),
                     MEMWEAVE_EVAL_MAX_OUTPUT=str(self.options.evaluation_output_tokens),
                     MEMWEAVE_EVAL_RUN_ID=self.options.evaluation_run_id or 'unknown',
-                    MEMWEAVE_EVAL_PROGRESS_AFTER=str(self.options.evaluation_progress_after_returns),
                     MEMWEAVE_EVAL_INSTRUCTION_PATH=evaluator+'/instruction.md',
                     MEMWEAVE_EVAL_CREDENTIAL_FILE=''if self.options.evaluation_broker_client else evaluator+'/private-auth.json',
                     MEMWEAVE_EVAL_REQUEST_LIMIT=str(self.options.evaluation_request_limit or 0),
@@ -587,21 +564,6 @@ fs.writeFileSync('/logs/agent/cli-transport-result.json',JSON.stringify({real_mo
         try:
             if self.options.evaluation_canary:
                 instruction='Reply only OK. Do not call any tools. This is a connectivity canary.'
-            timeout=self.options.evaluation_task_timeouts.get(self._evaluation_task_id)
-            if timeout and not self.options.evaluation_canary:
-                self._evaluation_effective_deadline=min(self.options.evaluation_deadline,time.time()+timeout)
-                instruction+=('\n\nEvaluation budget notice (identical policy for both arms): '
-                    f'the effective agent execution budget is {timeout} seconds ({timeout/3600:g} hours), '
-                    'with 2 CPUs and 8192 MiB memory. This notice supersedes any larger time budget in the original statement. '
-                    'Run bash /app/timer.sh for actual remaining time. The external model cutoff is '
-                    +datetime.fromtimestamp(self.options.evaluation_deadline,UTC).isoformat()+'.')
-                script=('#!/bin/bash\n'+f'DEADLINE={int(self._evaluation_effective_deadline)}\n'+
-                    'NOW=$(date +%s)\nREMAINING=$((DEADLINE-NOW))\n[ "$REMAINING" -gt 0 ] || REMAINING=0\n'+
-                    'printf "Remaining agent seconds: %s\\n" "$REMAINING"\n')
-                await self.exec_as_agent(environment,'cp /app/timer.sh /logs/agent/original-timer.sh')
-                await self.upload_private(environment,script,'/app/timer.sh')
-                (self.logs_dir/'effective-budget.json').write_text(json.dumps({'seconds':timeout,
-                    'deadline_unix':self._evaluation_effective_deadline,'notice':instruction.split('Evaluation budget notice',1)[1]}))
             if self.options.evaluation_deadline:
                 with tempfile.TemporaryDirectory(prefix='memweave-eval-instruction-') as directory:
                     local=Path(directory)/'instruction.md'
@@ -611,15 +573,6 @@ fs.writeFileSync('/logs/agent/cli-transport-result.json',JSON.stringify({real_mo
                 await check_network(environment, self._asset_root + "/node/bin/node", self.logs_dir)
             await super().run(instruction, environment, context)
         finally:
-            if getattr(self,'_evaluation_sealed',False):
-                capture="tar -czf /logs/agent/model-source-original.tar.gz -C /app src"
-                result=await environment.exec(command=capture,user='root',timeout_sec=120)
-                if result.return_code: raise RuntimeError('Sealed source evidence archive failed')
-                try:
-                    await self.exec_as_agent(environment,'node '+shlex.quote(self._asset_root+'/evaluation/sealed_runtime.mjs')+
-                        ' /app/src /logs/agent/sealed-handoff.json',timeout_sec=120)
-                except Exception as error:
-                    raise RuntimeError('ADAPTER_HANDOFF_FAILED: see sealed-handoff.json; not an Agent business score') from error
             if self.options.protocol == "swe-pro-v2":
                 # Match the pinned official locked-agent capture: include untracked files,
                 # preserve the original task cwd, and leave the index reset afterwards.

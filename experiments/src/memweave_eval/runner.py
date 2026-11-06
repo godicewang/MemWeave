@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import fcntl
-import importlib.metadata
 import json
 import os
 import signal
@@ -16,21 +14,13 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
-import yaml
-
 from .images import TaskPreparationError, prepare_task, verify_prepared_task
-from .report import generate_report
 from .runtime_cache import create_plan, snapshot
 from .spec import (
     REPOSITORY,
     Experiment,
-    Subset,
-    Suite,
-    primary_actor_seconds,
-    validate_primary_inputs,
 )
-from .storage import atomic_json, check_private_evidence, evidence_index, file_digest
-from .suites import resolve_suite, select_tasks, task_digest
+from .storage import atomic_json, file_digest
 
 
 def effective_concurrency(
@@ -165,18 +155,14 @@ def build_job_config(
                 **({'evaluation_primary_default':spec.evaluation.primary_default}if getattr(spec,'evaluation',None)else{}),
                 **({'evaluation_deadline': datetime.fromisoformat(
                     spec.evaluation.deadline_utc).timestamp()-spec.evaluation.finalization_reserve_seconds,
-                    'evaluation_output_tokens':spec.evaluation.output_tokens,
-                    'evaluation_progress_after_returns':spec.evaluation.progress_after_returns}
+                    'evaluation_output_tokens':spec.evaluation.output_tokens}
                    if getattr(spec, 'evaluation', None) else {}),
                 **({'evaluation_episode_budget':spec.evaluation.episode_budget_usd}
                    if getattr(spec,'evaluation',None) else {}),
                 **({'evaluation_run_id':run_root.name} if getattr(spec,'evaluation',None) else {}),
                 **({'evaluation_quota_backend':spec.evaluation.quota_backend,
                     'evaluation_per_task_arms':spec.evaluation.per_task_arm_caps,
-                    'evaluation_task_ids':[p.name for p in tasks],
-                    'evaluation_task_timeouts':spec.evaluation.agent_timeouts,
-                    'evaluation_task_configs':json.loads(spec.evaluation.gold.read_text()).get('tasks',{}),
-                    'evaluation_sealed_tasks':spec.evaluation.sealed_tasks}
+                    'evaluation_task_ids':[p.name for p in tasks]}
                    if getattr(spec,'evaluation',None) else {}),
             },
         }
@@ -239,6 +225,8 @@ def tool_environment(spec: Experiment, upstream: Path, *, inference=False) -> di
 
 def auth_file() -> Path:
     return Path.home() / ".local/share/memweave-dev/pi-agent/auth.json"
+
+
 
 
 def observed_cost(root: Path) -> float:
@@ -443,15 +431,7 @@ def admit_tb_tasks(spec, subset, candidates, task_root, root, state, env, deadli
                         raise ValueError('frozen original image preparation missing')
                 record = prepare_task(task_root / task_id, root, spec.execution.platform,
                                       deadline, env, subset.model_dump(),frozen=frozen,
-                                      resources=spec.evaluation.resources if spec.evaluation else None,
-                                      sealed=bool(spec.evaluation and task_id in spec.evaluation.sealed_tasks),
-                                      agent_timeout=(primary_actor_seconds(spec)
-                                                     if spec.evaluation and spec.evaluation.primary_default else
-                                                     spec.evaluation.agent_timeouts.get(task_id) if spec.evaluation else None))
-                if spec.evaluation and spec.evaluation.primary_default:
-                    from .tb01_case import secure_prepared_task
-                    contract=json.loads(spec.evaluation.primary_contract.read_text())
-                    record=secure_prepared_task(root,record,env,deadline,protocol=contract.get('memory_protocol'))
+                                      resources=spec.evaluation.resources if spec.evaluation else None)
             except TaskPreparationError as exc:
                 attempt.update(status="preparation_failed", reason=str(exc))
                 atomic_json(root / "admission.json", admission)
@@ -468,18 +448,7 @@ def admit_tb_tasks(spec, subset, candidates, task_root, root, state, env, deadli
         frozen_images = image_snapshot(batch_paths)
         controls, control_codes = {}, {}
         def expectation(task_id, control):
-            override=spec.evaluation.control_expectations.get(task_id,{}) if spec.evaluation else {}
-            return override.get(control, int(control=='oracle'))
-        if spec.evaluation:
-            for task,_,_ in batch:
-                override=spec.evaluation.control_expectations.get(task['task_id'],{})
-                if override:
-                    receipt=Path(override['known_good_receipt'])
-                    if file_digest(receipt)!=override['known_good_sha256']:
-                        raise ValueError('isolated known-good control receipt changed')
-                    data=json.loads(receipt.read_text())
-                    if data.get('exception_info') or (data.get('verifier_result')or{}).get('rewards',{}).get('reward')!=1:
-                        raise ValueError('isolated known-good control is not passing')
+            return int(control == 'oracle')
         for control in ("oracle", "nop"):
             name = f"control-{control}-a{batch_number:03d}"
             controls[control] = name
@@ -501,13 +470,6 @@ def admit_tb_tasks(spec, subset, candidates, task_root, root, state, env, deadli
             attempt["control_exit_codes"] = control_codes
             failed = [control for control, expected in ((c,expectation(task_id,c)) for c in ("oracle","nop"))
                       if not control_ok(root / "harbor" / controls[control], task_id, expected)]
-            if spec.evaluation and spec.evaluation.primary_default:
-                from .tb01_case import control_evidence_ok
-                for control in ('oracle','nop'):
-                    item=trial_results(root/'harbor'/controls[control]).get(task_id)
-                    protocol=json.loads(spec.evaluation.primary_contract.read_text()).get('memory_protocol')
-                    if (not item or not control_evidence_ok(item[0].parent,control=='oracle',protocol))and control not in failed:
-                        failed.append(control)
             if failed:
                 attempt.update(status="control_failed", reason="official " + ", ".join(failed))
             else:
@@ -574,429 +536,3 @@ def require_primary_time(paths,model_deadline,global_deadline,*,now=None):
     # Setup/canary precede the full actor timeout; these are admission margins.
     if now+600+actor>model_deadline or model_deadline+verifier+180>global_deadline:
         raise ValueError('insufficient authorized time for original primary actor, verifier and finalization budgets')
-
-
-def run_experiment(spec: Experiment, suite: Suite, subset: Subset) -> Path:
-    validate_primary_inputs(spec,suite,subset)
-    from .spec import require_primary_authorization
-    require_primary_authorization(spec)
-    if importlib.metadata.version("harbor") != spec.runtime.harbor_version:
-        raise ValueError("installed Harbor version does not match experiment")
-    package = verify_package(spec.subject.package, spec.subject.sha256, spec.subject.commit)
-    dirty = subprocess.check_output(
-        ["git", "-C", str(REPOSITORY), "status", "--porcelain", "--", "experiments"], text=True
-    )
-    if dirty:
-        raise ValueError("commit the experiment implementation before a frozen run")
-    code_commit = subprocess.check_output(
-        ["git", "-C", str(REPOSITORY), "rev-parse", "HEAD"], text=True
-    ).strip()
-    code_files = {
-        p.relative_to(REPOSITORY).as_posix(): file_digest(p)
-        for p in sorted((REPOSITORY / "experiments/src").rglob("*"))
-        if p.is_file() and p.suffix in ('.py','.mjs','.ts','.sh')
-    }
-    spec.root.mkdir(parents=True, exist_ok=True, mode=0o700)
-    with (spec.root / ".run.lock").open("a") as lease:
-        try:
-            fcntl.flock(lease.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as exc:
-            raise ValueError("another experiment is active under this root") from exc
-        started = time.monotonic()
-        deadline = started + spec.limits.max_elapsed_seconds
-        if spec.evaluation:
-            deadline = min(deadline, started + datetime.fromisoformat(
-                spec.evaluation.deadline_utc).timestamp() - time.time()-120)
-        run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ-") + uuid.uuid4().hex[:10]
-        root = spec.root / "runs" / run_id
-        root.mkdir(parents=True, mode=0o700)
-        print(f"Experiment evidence: {root}", file=sys.stderr, flush=True)
-        state = {
-            "schema_version": 1,
-            "run_id": run_id,
-            "jobs": {},
-            "stop_reason": None,
-            "started_at": datetime.now(UTC).isoformat(),
-            "complete": False,
-        }
-        atomic_json(root / "run.json", state)
-        lock_written = False
-        credential = None
-        paid_broker = None
-        active_quota_stop = None
-        try:
-            upstream = resolve_suite(suite, spec.root / "cache")
-            selection = select_tasks(upstream / suite.tasks_dir, suite.id, subset.model_dump())
-            atomic_json(root / "selection.json", selection, immutable=True)
-            if len(selection["selected"]) < subset.count:
-                raise ValueError("insufficient eligible tasks; review the recorded exclusions")
-            selected = selection["selected"]
-            docker = docker_preflight(spec, selected)
-            spec = spec.model_copy(
-                update={
-                    "execution": spec.execution.model_copy(
-                        update={"concurrency": docker["effective_concurrency"]}
-                    )
-                }
-            )
-            paths = [upstream / suite.tasks_dir / t["task_id"] for t in selected]
-            env = tool_environment(spec, upstream)
-            # Explicit platform on the single main service, without task/resource changes.
-            platform_overlay = root / "platform.yaml"
-            platform_overlay.write_text(
-                yaml.safe_dump({"services": {"main": {"platform": spec.execution.platform,
-                    'labels':{'org.memweave.eval.run':run_id},
-                    **({'extra_hosts':{'memweave-broker.internal':'host-gateway'}}if spec.evaluation and spec.evaluation.primary_default else{})}}})
-            )
-
-            def execute(cfg, *, required=True):
-                cfg["environment"]["extra_docker_compose"] = [str(platform_overlay)]
-                code = execute_harbor(cfg, root, env, deadline, spec.limits.max_cost_usd,
-                    budget_stop_file=active_quota_stop)
-                if code and required:
-                    raise RuntimeError(
-                        f"Harbor Job {cfg['job_name']} exited {code}; see private console log"
-                    )
-                return code
-
-            preparations = {}
-            if suite.protocol in ("tb4", "swe-marathon"):
-                selected, paths, preparations = admit_tb_tasks(
-                    spec, subset, selection["selected"] + selection["reserves"],
-                    upstream / suite.tasks_dir, root, state, env, deadline, execute)
-                docker = docker_preflight(spec, selected, preparations)
-                spec = spec.model_copy(update={"execution": spec.execution.model_copy(
-                    update={"concurrency": docker["effective_concurrency"]})})
-            else:
-                for control in ("oracle", "nop"):
-                    state["jobs"]["control-" + control] = {
-                        "path": "harbor/control-" + control,
-                        "purpose": "official_" + control,
-                    }
-                    atomic_json(root / "run.json", state)
-                    cfg = build_job_config(spec, root, f"control-{control}", paths, control=control)
-                    execute(cfg)
-                for task in selected:
-                    task_id = task["task_id"]
-                    if not control_ok(root / "harbor/control-oracle", task_id, 1):
-                        raise ValueError(
-                            f"official oracle control failed: {task_id}; do not modify tests")
-                    if not control_ok(root / "harbor/control-nop", task_id, 0):
-                        raise ValueError(
-                            f"official empty control failed: {task_id}; review before admitting")
-            images = image_snapshot(paths)
-            if spec.evaluation and spec.evaluation.primary_default:
-                from .primary_runtime import free_authority
-                with free_authority(spec,root,images,env)as clients:
-                    active_quota_stop=root/'private/free-control/STOP_REQUESTED'
-                    runtimes=prepare_runtimes(spec,root,paths,images,state,execute,deadline,broker_clients=clients)
-                active_quota_stop=None
-            else:
-                runtimes = prepare_runtimes(spec, root, paths, images, state, execute, deadline)
-            if image_snapshot(paths) != images:
-                raise ValueError("task image changed during runtime preflight")
-            if any(file_digest(REPOSITORY / path) != digest for path, digest in code_files.items()):
-                raise ValueError(
-                    "experiment implementation changed during preflight; start a new run"
-                )
-            plan = [
-                {"task_id": task["task_id"], "variant_id": variant.id, "repetition": rep}
-                for rep in range(1, spec.execution.repetitions + 1)
-                for variant in spec.variants
-                for task in selected
-            ]
-            if spec.evaluation:
-                from .budget_guard import initialize
-                control = spec.root/'budgets'/spec.evaluation.budget_id
-                control.mkdir(parents=True,exist_ok=True,mode=0o700)
-                quota_deadline=datetime.fromisoformat(spec.evaluation.deadline_utc).timestamp()-spec.evaluation.finalization_reserve_seconds
-                if spec.evaluation.primary_default:
-                    require_primary_time(paths,quota_deadline,datetime.fromisoformat(spec.evaluation.deadline_utc).timestamp())
-                arms=[f"{t['task_id']}:{v.id}"for t in selected for v in spec.variants] if spec.evaluation.per_task_arm_caps else [v.id for v in spec.variants]
-                arm_limits=spec.evaluation.budget_arm_limits or {arm:spec.evaluation.arm_budget_usd for arm in arms}
-                if any(arm_limits.get(arm)!=spec.evaluation.arm_budget_usd for arm in arms):
-                    raise ValueError('selected arms must retain their registered equal cumulative caps')
-                if sum(arm_limits.values())>spec.evaluation.admission_budget_usd:
-                    raise ValueError('all task-arm caps must fit shared budget')
-                if not (control/'quota.json').exists():
-                    initialize(control/'quota.json', spec.evaluation.admission_budget_usd,
-                               quota_deadline,arm_limits=arm_limits)
-                else:
-                    previous=json.loads((control/'quota.json').read_text())
-                    if (previous['maximum_usd']!=spec.evaluation.admission_budget_usd
-                            or previous['deadline']!=quota_deadline or previous.get('arm_limits')!=arm_limits):
-                        raise ValueError('shared task budget settings cannot change or reset')
-                if spec.evaluation.primary_default:
-                    owner=control/'WRITER_PLATFORM'
-                    if not owner.exists():
-                        with owner.open('x')as stream:stream.write('linux\n')
-                    if owner.read_text().strip()!='linux' or (control/'STOP_REQUESTED').exists():
-                        raise ValueError('primary quota must retain Linux VM writer ownership and durable stop')
-                    from .primary_runtime import start_paid_authority
-                    credential=json.loads(auth_file().read_text())['deepseek']['key'].encode()
-                    paid_broker=start_paid_authority(spec,root,control,images,env,credential.decode())
-                    active_quota_stop=control/'STOP_REQUESTED'
-                platform_overlay.write_text(yaml.safe_dump({'services':{'main':{
-                    'platform':spec.execution.platform,'labels':{'org.memweave.eval.run':run_id},
-                    **({'extra_hosts':{'memweave-broker.internal':'host-gateway'}}if spec.evaluation.primary_default else
-                       {'volumes':[str(control.resolve())+':/opt/memweave-eval-control:rw']})}}}))
-                if spec.evaluation.canary_preflight:
-                    configs=[]
-                    for variant in spec.variants:
-                        name='canary-'+variant.id
-                        state['jobs'][name]={'path':'harbor/'+name,'purpose':'paid_canary'}
-                        cfg=build_job_config(spec,root,name,paths,variant=variant.id,auth_path=auth_file(),
-                            protocol=suite.protocol,runtime_plan=root/'runtime-assets.json',
-                            broker_client=paid_broker.clients[(run_id+':canary',(paths[0].name+':'+variant.id)if spec.evaluation.per_task_arm_caps else variant.id)]if paid_broker else None)
-                        cfg['n_concurrent_trials']=min(len(paths),spec.execution.concurrency//2)
-                        cfg['agents'][0]['override_timeout_sec']=120
-                        cfg['agents'][0]['kwargs'].update(evaluation_canary=True,evaluation_request_limit=1,
-                            evaluation_output_tokens=spec.evaluation.output_tokens if spec.evaluation.primary_default else 128,
-                            evaluation_run_id=run_id+':canary')
-                        configs.append(cfg)
-                    atomic_json(root/'run.json',state)
-                    with ThreadPoolExecutor(max_workers=2)as pool:list(pool.map(execute,configs))
-                    ledger=json.loads((control/'quota.json').read_text())
-                    for cfg in configs:
-                        results=trial_results(root/'harbor'/cfg['job_name'])
-                        for task in paths:
-                            item=results.get(task.name)
-                            if not item or item[1].get('exception_info'):raise ValueError('paid CLI canary failed')
-                            from .engineering_metrics import read_events
-                            events,_=read_events(item[0].parent/'agent/request-trace.jsonl')
-                            attempts=[e for e in events if e.get('event')=='http_attempt']
-                            ready=[e for e in events if e.get('event')=='request_ready']
-                            settled=[e for e in events if e.get('event')=='budget_settled']
-                            ids={e['request_id']for e in attempts}
-                            if len(ids)!=1 or ids!={e['request_id']for e in ready} or ids!={e['request_id']for e in settled} or any(ledger['requests'].get(i,{}).get('status')!='settled'for i in ids):
-                                raise ValueError('paid canary guard/ledger mismatch')
-                    atomic_json(root/'canary-gate.json',{'passed':True,'requests':len(paths)*len(spec.variants),
-                        'output_admission_ceiling':spec.evaluation.output_tokens if spec.evaluation.primary_default else 128,
-                        'primary_default':spec.evaluation.primary_default,
-                        'ledger_sha256_after_canaries':file_digest(control/'quota.json')},immutable=True)
-                if spec.evaluation.agent_timeouts and time.time()+max(spec.evaluation.agent_timeouts.values())+180>quota_deadline:
-                    raise ValueError('too late to provide frozen identical task timeouts before model cutoff')
-                if spec.evaluation.primary_default:
-                    require_primary_time(paths,quota_deadline,datetime.fromisoformat(spec.evaluation.deadline_utc).timestamp())
-                ledger=json.loads((control/'quota.json').read_text())
-                remaining=min(spec.evaluation.arm_budget_usd-sum(r['charge_usd'] for r in ledger['requests'].values()
-                    if r.get('arm')==arm) for arm in arms)
-                if remaining<=(.7753728 if spec.evaluation.primary_default else .32):
-                    raise ValueError('insufficient equal remaining arm budget')
-                spec=spec.model_copy(update={'evaluation':spec.evaluation.model_copy(update={
-                    'episode_budget_usd':min(remaining,spec.evaluation.episode_budget_usd or remaining)})})
-                if paid_broker:atomic_json(control/'phase.json',{'episode':run_id,'episode_budget':spec.evaluation.episode_budget_usd})
-                atomic_json(root/'case-gold.json',json.loads(spec.evaluation.gold.read_text()),immutable=True)
-                if spec.evaluation.primary_default:
-                    from .primary_report import validate_contract
-                    if not spec.evaluation.primary_contract:
-                        raise ValueError('primary_default requires its approved case contract')
-                    atomic_json(root/'primary-case.json',validate_contract(json.loads(spec.evaluation.primary_contract.read_text())),immutable=True)
-                platform_overlay.write_text(yaml.safe_dump({'services':{'main':{
-                    'platform':spec.execution.platform,
-                    'labels':{'org.memweave.eval.run':run_id},
-                    **({'extra_hosts':{'memweave-broker.internal':'host-gateway'}}if spec.evaluation.primary_default else
-                       {'volumes':[str(control.resolve())+':/opt/memweave-eval-control:rw']}),
-                }}}))
-            lock = {
-                "schema_version": 1,
-                "experiment_kind":"primary_default_paired"if spec.evaluation and spec.evaluation.primary_default else"legacy_paired",
-                "experiment_id": spec.experiment_id,
-                "run_id": run_id,
-                "config": spec.model_dump(mode="json"),
-                "suite": suite.model_dump(),
-                "subset": subset.model_dump(),
-                "selection": selected,
-                "package": package,
-                "experiment_commit": code_commit,
-                "implementation_files": code_files,
-                "pricing": {
-                    "source": "https://api-docs.deepseek.com/quick_start/pricing/",
-                    "checked_at": "2026-11-01T12:49:00Z" if spec.evaluation else "2026-10-27T00:33:05+08:00",
-                    "requested_model_id": spec.model.id,
-                    "catalog_model_version": "DeepSeek-V4.1-Flash-1017" if spec.evaluation and spec.model.id=='deepseek-flash' else None,
-                    "settlement_basis": "peak cache-miss input and all completion tokens (including reasoning); conservative ceiling, not account bill" if spec.evaluation else None,
-                    "currency": "USD",
-                    "basis": "Pi 1.4.0 native usage; peak reference rates, estimated not billed",
-                    "per_million_tokens": {
-                        "deepseek-flash": {"input": 0.3, "cache_read": 0.006, "output": 1.2},
-                        "deepseek-v4-pro": {"input": 1.32, "cache_read": 0.044, "output": 3.96},
-                    }.get(spec.model.id),
-                },
-                "docker": docker,
-                "images": images,
-                "runtime_assets": runtimes,
-                "preparations": preparations,
-                "tooling_sha256": {
-                    p.relative_to(upstream).as_posix(): file_digest(p)
-                    for p in sorted((upstream / "v2/tooling").rglob("*.py"))
-                }
-                if suite.protocol == "swe-pro-v2"
-                else {},
-                "plan": plan,
-                "evaluation_gold_sha256": file_digest(root/'case-gold.json') if spec.evaluation else None,
-                "primary_case_sha256":file_digest(root/'primary-case.json')if spec.evaluation and spec.evaluation.primary_default else None,
-            }
-            if spec.evaluation and spec.evaluation.primary_default:
-                lock['pricing']=json.loads((root/'primary-case.json').read_text())['pricing']
-            atomic_json(root / "experiment.lock.json", lock, immutable=True)
-            lock_written = True
-            env = tool_environment(spec, upstream, inference=True)
-            if spec.evaluation:
-                watchdog_log=(root/'watchdog-console.log').open('wb')
-                subprocess.Popen([sys.executable,'-m','memweave_eval.deadline_watchdog',str(root),run_id,
-                                  str(quota_deadline),str(datetime.fromisoformat(spec.evaluation.deadline_utc).timestamp()-120)],env=env,
-                                 stdin=subprocess.DEVNULL,stdout=watchdog_log,stderr=subprocess.STDOUT,
-                                 start_new_session=True)
-                watchdog_log.close()
-            credential = json.loads(auth_file().read_text())["deepseek"]["key"].encode()
-
-            def verify_inputs():
-                actual_code={p.relative_to(REPOSITORY).as_posix():file_digest(p)
-                    for p in (REPOSITORY/'experiments/src').rglob('*')
-                    if p.is_file() and p.suffix in ('.py','.mjs','.ts','.sh')}
-                if actual_code!=code_files:
-                    raise ValueError('frozen experiment implementation changed')
-                plan_path = root / "runtime-assets.json"
-                if (file_digest(plan_path) != runtimes["plan_sha256"]
-                        or snapshot(json.loads(plan_path.read_text())) != runtimes["objects"]):
-                    raise ValueError("frozen software cache changed; no implicit reinstall")
-                for task in selected:
-                    if task_digest(upstream / suite.tasks_dir / task["task_id"]) != task["sha256"]:
-                        raise ValueError("official task changed after freezing")
-                for record in preparations.values():
-                    verify_prepared_task(root, record)
-
-            for rep in range(1, spec.execution.repetitions + 1):
-                order = spec.variants if rep % 2 else list(reversed(spec.variants))
-                if spec.execution.paired_concurrent:
-                    parallel_tasks=min(len(paths),docker['effective_concurrency']//2)
-                    if (suite.protocol != 'swe-marathon' and not(spec.evaluation and spec.evaluation.primary_default))or parallel_tasks<1:
-                        raise ValueError('concurrent Marathon pair requires capacity for both official instances')
-                    verify_inputs()
-                    configs=[]
-                    for variant in order:
-                        name=f'{variant.id}-r{rep}'
-                        state['jobs'][name]={'path':f'harbor/{name}','purpose':'solve'}
-                        cfg=build_job_config(spec,root,name,paths,variant=variant.id,
-                            auth_path=auth_file(),protocol=suite.protocol,runtime_plan=root/'runtime-assets.json',
-                            broker_client=paid_broker.clients[(run_id,(paths[0].name+':'+variant.id)if spec.evaluation.per_task_arm_caps else variant.id)]if paid_broker else None)
-                        cfg['n_concurrent_trials']=parallel_tasks
-                        configs.append(cfg)
-                    atomic_json(root/'run.json',state)
-                    with ThreadPoolExecutor(max_workers=2) as pool:
-                        outcomes=list(pool.map(execute,configs))
-                    verify_inputs()
-                    if any(outcomes) or image_snapshot(paths)!=images:
-                        raise ValueError('concurrent pair failed or task images changed')
-                    continue
-                for variant in order:
-                    if any(
-                        file_digest(REPOSITORY / path) != digest
-                        for path, digest in code_files.items()
-                    ):
-                        raise ValueError("experiment implementation changed after freezing")
-                    if image_snapshot(paths) != images:
-                        raise ValueError("task image changed after freezing; start a new run")
-                    verify_inputs()
-                    name = f"{variant.id}-r{rep}"
-                    state["jobs"][name] = {"path": f"harbor/{name}", "purpose": "solve"}
-                    atomic_json(root / "run.json", state)
-                    cfg = build_job_config(
-                        spec,
-                        root,
-                        name,
-                        paths,
-                        variant=variant.id,
-                        auth_path=auth_file(),
-                        protocol=suite.protocol,
-                        runtime_plan=root / "runtime-assets.json",
-                    )
-                    execute(cfg)
-                    if suite.protocol == "swe-pro-v2":
-                        original_job = root / "harbor" / name
-                        sources = trial_results(original_job)
-                        for task in selected:
-                            source = sources.get(task["task_id"])
-                            if not source or not (source[0].parent / "agent/model.patch").is_file():
-                                raise ValueError(
-                                    "missing original Pro patch; not an implicit empty answer"
-                                )
-                        state["jobs"][name]["patches"] = {
-                            task_id: {
-                                "path": (item[0].parent / "agent/model.patch")
-                                .relative_to(root)
-                                .as_posix(),
-                                "sha256": file_digest(item[0].parent / "agent/model.patch"),
-                            }
-                            for task_id, item in sources.items()
-                        }
-                        regrade = name + "-regrade"
-                        state["jobs"][name]["regrade"] = "harbor/" + regrade
-                        atomic_json(root / "run.json", state)
-                        replay = build_job_config(
-                            spec,
-                            root,
-                            regrade,
-                            paths,
-                            source_job=original_job,
-                            protocol=suite.protocol,
-                        )
-                        execute(replay)
-                    verify_inputs()
-                    if image_snapshot(paths) != images:
-                        raise ValueError(
-                            "task image changed during execution; results are incomplete"
-                        )
-            state["complete"] = True
-        except BaseException as exc:
-            # Arbitrary provider exception bodies can contain credentials.
-            state["stop_reason"] = type(exc).__name__ + (
-                ": " + str(exc) if isinstance(exc, (ValueError, TimeoutError)) else ""
-            )
-            raise
-        finally:
-            if spec.evaluation:
-                cleanup={'confirmed_stopped':False}
-                try:
-                    query=['docker','ps','--filter','label=org.memweave.eval.run='+run_id,'--format','{{.ID}}']
-                    ids=subprocess.check_output(query,text=True,timeout=10).split()
-                    cleanup['killed']={identity:subprocess.run(['docker','kill',identity],
-                        capture_output=True,check=False,timeout=10).returncode for identity in ids}
-                    cleanup['confirmed_stopped']=not subprocess.check_output(query,text=True,timeout=10).split()
-                except (OSError,subprocess.SubprocessError):
-                    cleanup['reason']='Docker cleanup could not be confirmed; independent watchdog remains active'
-                atomic_json(root/'harbor/container-cleanup.json',cleanup)
-                if cleanup['confirmed_stopped']:
-                    (root/'.watchdog-stop').touch()
-                else:
-                    state.update(complete=False,stop_reason=cleanup.get('reason','container cleanup unconfirmed'))
-            state["finished_at"] = datetime.now(UTC).isoformat()
-            if paid_broker:
-                from .primary_runtime import seal_authority
-                try:seal_authority(root,paid_broker)
-                except (RuntimeError,OSError,ValueError):state.update(complete=False,stop_reason='trusted authority terminal or cleanup unavailable')
-            state["estimated_known_cost_usd"] = observed_cost(root)
-            if spec.evaluation:
-                quota=spec.root/'budgets'/spec.evaluation.budget_id/'quota.json'
-                if quota.is_file():
-                    atomic_json(root/'control/quota.json',json.loads(quota.read_text()))
-            atomic_json(root / "run.json", state)
-            if credential is not None:
-                try:
-                    check_private_evidence(root, credential)
-                except ValueError:
-                    state.update(
-                        complete=False,
-                        stop_reason="Evidence privacy validation failed; indexing stopped",
-                    )
-                    atomic_json(root / "run.json", state)
-                    raise
-            atomic_json(
-                root / "evidence-index.json", {"schema_version": 1, "files": evidence_index(root)}
-            )
-            if lock_written:
-                summary = generate_report(root)
-                state["complete"] = state["complete"] and summary["complete"]
-                atomic_json(root / "run.json", state)
-        return root

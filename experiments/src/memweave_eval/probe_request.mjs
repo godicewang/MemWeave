@@ -68,20 +68,13 @@ try {
   const records=(await fs.readFile(trace,'utf8')).trim().split('\n').map(JSON.parse);
   const ready=records.filter(e=>e.event==='request_ready');
   assert.equal(ready.length,enabled?2:1);
-  assert.equal(ready[0].rule_block_count,enabled?1:0);
   assert.ok(ready.every(e=>e.tool_names.includes('read')&&e.tool_names.includes('bash')));
   assert.equal(ready.at(-1).tool_names.includes('task_create'),enabled);
-  assert.equal(Boolean(ready.at(-1).state_blocks.length),enabled);
   if(primary)assert.ok(ready.every(e=>Number.isSafeInteger(e.max_output)&&e.max_output>0&&e.max_output<=nativeModel.maxTokens));
   else assert.ok(ready.every(e=>e.max_output===cap));
-  assert.ok(ready.every(e=>e.prepared_messages_sha256&&Array.isArray(e.prepared_messages)));
-  if(enabled){assert.equal(ready.at(-1).expected_version_at_prepare,ready.at(-1).state_blocks[0].version);
-    assert.equal(ready.at(-1).expected_task_id,ready.at(-1).state_blocks[0].task_id);}
-  if(primary&&enabled)assert.ok(ready.at(-1).rendered_budget_snapshots.some(b=>b?.recent_turns===200&&b.evict_turns===40&&b.state_event_max_chars===100));
   await fs.writeFile('/logs/agent/mock-request-result.json',JSON.stringify({
     mock:true,real_model_requests:0,transport_attempts:bodies.length,
-    rule_block_count:ready.at(-1).rule_block_count,state_blocks:ready.at(-1).state_blocks,
     max_output:cap,actual_output_limits:ready.map(e=>e.max_output),primary_default:primary,model_catalog_max_output:nativeModel?.maxTokens,
     thinking_level:session.thinkingLevel,thinking_payloads:ready.map(e=>e.thinking),
-    actual_rendered_budgets:ready.map(e=>e.rendered_budget_snapshots),tools:ready.at(-1).tool_names}));
+    tools:ready.at(-1).tool_names}));
 } finally {session.dispose();}

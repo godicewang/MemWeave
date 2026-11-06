@@ -1,7 +1,7 @@
 // Actor-side bounded capability client. Never receives the provider API key or ledger.
 import fs from 'node:fs';
-import {randomUUID,createHash} from 'node:crypto';
-export function brokerFetch({configPath,record,fetchImpl,summarize,originalInstruction,workspace}) {
+import {randomUUID} from 'node:crypto';
+export function brokerFetch({configPath,record,fetchImpl,summarize}) {
   const config=JSON.parse(fs.readFileSync(configPath,'utf8'));
   const base=new URL(config.url);
   if(base.protocol!=='http:'||base.hostname!=='memweave-broker.internal'||!Number.isInteger(Number(base.port))||!config.capability||!config.arm||!config.episode)throw Error('Invalid trusted broker client configuration');
@@ -20,10 +20,7 @@ export function brokerFetch({configPath,record,fetchImpl,summarize,originalInstr
       record({event:'request_denied',request_id:id,reason:'trusted_broker_rejected'});return response;
     }
     record({event:'budget_reserved',request_id:id,charge_usd:Number(response.headers.get('x-memweave-reserved-usd'))});
-    const boundary=globalThis[Symbol.for('memweave.eval.requestBoundary')];
-    const digest=createHash('sha256').update(JSON.stringify(payload.messages??[])).digest('hex');
-    record({event:'request_ready',request_id:id,...summarize(payload,originalInstruction),
-      ...(boundary?.prepared_messages_sha256===digest?boundary:{boundary_error:'no_matching_provider_preparation'}),workspace:workspace()});
+    record({event:'request_ready',request_id:id,...summarize(payload)});
     record({event:'http_attempt',request_id:id,timestamp_scope:'broker_ack_client_observation'});
     record({event:'http_response',request_id:id,status:response.status});
     if(!response.body)return response;

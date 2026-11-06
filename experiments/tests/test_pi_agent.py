@@ -214,30 +214,3 @@ def test_warm_install_has_no_network_installer_or_auth_in_preparation(tmp_path):
     agent.options.runtime_objects = {}
     with pytest.raises(ValueError, match="frozen object"):
         asyncio.run(agent.install(Environment()))
-
-
-def test_formal_budget_notice_and_timer_match_fixed_task_timeout(tmp_path):
-    import re
-    import time
-    from types import SimpleNamespace
-    from unittest.mock import AsyncMock, patch
-
-    from harbor.agents.installed.pi import Pi
-
-    import memweave_eval.pi_agent as module
-    agent=ExperimentPi(version='1.4.0',logs_dir=tmp_path,model_name='deepseek/deepseek-flash',node_version='24.22.0',
-        variant='pi-native',package_path='/tmp/a',package_sha256='a'*64,auth_path='/tmp/auth',protocol='swe-marathon',
-        evaluation_deadline=time.time()+40000,evaluation_task_timeouts={'rust-c-compiler':32400})
-    agent._evaluation_task_id='rust-c-compiler';agent._evaluation_sealed=False
-    agent._asset_root='/controller';agent._experiment_home='/root'
-    uploaded={}
-    async def private(env,content,path):uploaded[path]=content
-    environment=SimpleNamespace(upload_file=AsyncMock())
-    run=AsyncMock()
-    with patch.object(agent,'exec_as_agent',AsyncMock()),patch.object(agent,'upload_private',private),patch.object(Pi,'run',run),patch.object(module,'check_network',AsyncMock()):
-        asyncio.run(agent.run('Original statement says 10 hours.',environment,None))
-    instruction=run.call_args.args[0]
-    assert instruction.startswith('Original statement says 10 hours.')
-    assert '32400 seconds (9 hours)'in instruction and 'supersedes any larger time budget'in instruction
-    epoch=int(re.search(r'DEADLINE=(\d+)',uploaded['/app/timer.sh'])[1])
-    assert abs(epoch-(time.time()+32400))<3
