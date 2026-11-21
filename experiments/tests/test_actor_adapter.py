@@ -106,7 +106,7 @@ def test_operator_can_change_new_jobs_without_changing_historical_qualification(
 def test_frozen_worker_uses_the_registered_binding_and_restores_harbor(tmp_path, monkeypatch):
     from harbor.trial.trial import Trial
 
-    from memweave_eval.actor_adapter import run_paired_worker
+    from memweave_eval.actor_adapter import PAIRED_RUNTIME, run_paired_worker
     from memweave_eval.storage import file_digest
 
     calls = []
@@ -131,5 +131,10 @@ def test_frozen_worker_uses_the_registered_binding_and_restores_harbor(tmp_path,
     run_paired_worker(entry, file_digest(entry), [str(config)], adapter=future)
     assert calls == [future.bind_trial(trial, previous=PAIRED_PI)]
     assert Trial.create.__func__ is capture
+    run_paired_worker(entry, file_digest(entry), [str(config)])
+    assert calls[-1] == PAIRED_RUNTIME.bind_trial(trial, previous=PAIRED_PI)
+    expected = trial.model_dump()
+    expected['agent']['import_path'] = PAIRED_RUNTIME.plugin
+    assert calls[-1].model_dump() == expected
     with pytest.raises(ValueError, match="changed"):
         run_paired_worker(entry, "0" * 64, [str(config)], adapter=future)

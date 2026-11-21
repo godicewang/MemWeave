@@ -55,10 +55,13 @@ _EXPERIMENT_PI = "memweave_eval.pi_agent:ExperimentPi"
 RSI_PI = ActorAdapter(native=_EXPERIMENT_PI, plugin=_EXPERIMENT_PI, installer=_EXPERIMENT_PI)
 PAIRED_PI = ActorAdapter(native="native_agent:NativePi", plugin="pilot_paid:PaidPi",
                          installer="pilot_runtime:PilotPi")
+PAIRED_RUNTIME = ActorAdapter(native=PAIRED_PI.native,
+                              plugin="memweave_eval.paired_runtime:PairedPi",
+                              installer=PAIRED_PI.installer)
 
 
 def run_paired_worker(entry: Path, expected_sha256: str, arguments: list[str], *,
-                      adapter: ActorAdapter = PAIRED_PI) -> None:
+                      adapter: ActorAdapter = PAIRED_RUNTIME) -> None:
     """Run a maintainer-selected, frozen legacy entry in its dedicated worker process."""
     from harbor.trial.trial import Trial
 
