@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
+from .actor_adapter import RSI_PI, ActorAdapter
 from .images import TaskPreparationError, prepare_task, verify_prepared_task
 from .runtime_cache import create_plan, snapshot
 from .spec import (
@@ -125,6 +126,7 @@ def build_job_config(
     runtime_plan: Path | None = None,
     prepare_only: bool = False,
     broker_client: Path | None = None,
+    adapter: ActorAdapter = RSI_PI,
 ) -> dict:
     if control:
         agent = {"name": control}
@@ -135,37 +137,34 @@ def build_job_config(
             "kwargs": {"source_job": str(source_job)},
         }
     else:
-        agent = {
-            "import_path": "memweave_eval.pi_agent:ExperimentPi",
-            "model_name": f"{spec.model.provider}/{spec.model.id}",
-            "extra_allowed_hosts": ["api.deepseek.com"],
-            "kwargs": {
-                "version": spec.runtime.pi_version,
-                "node_version": spec.runtime.node_version,
-                "variant": variant,
-                "package_path": str(spec.subject.package),
-                "package_sha256": spec.subject.sha256,
-                "auth_path": "" if prepare_only else str(auth_path),
-                "protocol": protocol,
-                **({"thinking": spec.model.thinking}if spec.model.thinking is not None else{}),
-                "runtime_plan": str(runtime_plan) if runtime_plan else None,
-                "runtime_plan_sha256": file_digest(runtime_plan) if runtime_plan else None,
-                "prepare_only": prepare_only,
-                **({'evaluation_broker_client':str(broker_client),'evaluation_broker_client_sha256':file_digest(broker_client)}if broker_client else{}),
-                **({'evaluation_primary_default':spec.evaluation.primary_default}if getattr(spec,'evaluation',None)else{}),
-                **({'evaluation_deadline': datetime.fromisoformat(
-                    spec.evaluation.deadline_utc).timestamp()-spec.evaluation.finalization_reserve_seconds,
-                    'evaluation_output_tokens':spec.evaluation.output_tokens}
-                   if getattr(spec, 'evaluation', None) else {}),
-                **({'evaluation_episode_budget':spec.evaluation.episode_budget_usd}
-                   if getattr(spec,'evaluation',None) else {}),
-                **({'evaluation_run_id':run_root.name} if getattr(spec,'evaluation',None) else {}),
-                **({'evaluation_quota_backend':spec.evaluation.quota_backend,
-                    'evaluation_per_task_arms':spec.evaluation.per_task_arm_caps,
-                    'evaluation_task_ids':[p.name for p in tasks]}
-                   if getattr(spec,'evaluation',None) else {}),
-            },
+        options = {
+            "version": spec.runtime.pi_version,
+            "node_version": spec.runtime.node_version,
+            "variant": variant,
+            "package_path": str(spec.subject.package),
+            "package_sha256": spec.subject.sha256,
+            "auth_path": "" if prepare_only else str(auth_path),
+            "protocol": protocol,
+            **({"thinking": spec.model.thinking}if spec.model.thinking is not None else{}),
+            "runtime_plan": str(runtime_plan) if runtime_plan else None,
+            "runtime_plan_sha256": file_digest(runtime_plan) if runtime_plan else None,
+            "prepare_only": prepare_only,
+            **({'evaluation_broker_client':str(broker_client),'evaluation_broker_client_sha256':file_digest(broker_client)}if broker_client else{}),
+            **({'evaluation_primary_default':spec.evaluation.primary_default}if getattr(spec,'evaluation',None)else{}),
+            **({'evaluation_deadline': datetime.fromisoformat(
+                spec.evaluation.deadline_utc).timestamp()-spec.evaluation.finalization_reserve_seconds,
+                'evaluation_output_tokens':spec.evaluation.output_tokens}
+               if getattr(spec, 'evaluation', None) else {}),
+            **({'evaluation_episode_budget':spec.evaluation.episode_budget_usd}
+               if getattr(spec,'evaluation',None) else {}),
+            **({'evaluation_run_id':run_root.name} if getattr(spec,'evaluation',None) else {}),
+            **({'evaluation_quota_backend':spec.evaluation.quota_backend,
+                'evaluation_per_task_arms':spec.evaluation.per_task_arm_caps,
+                'evaluation_task_ids':[p.name for p in tasks]}
+               if getattr(spec,'evaluation',None) else {}),
         }
+        agent = adapter.agent(f"{spec.model.provider}/{spec.model.id}", options,
+                             allowed_hosts=["api.deepseek.com"])
     cfg = {
         "job_name": name,
         "jobs_dir": str(run_root / "harbor"),

@@ -23,6 +23,7 @@ from typing import Annotated, Literal
 import yaml
 from pydantic import Field, model_validator
 
+from .actor_adapter import RSI_PI, ActorAdapter
 from .rsi_catalog import load_catalog, validate_catalog
 from .rsi_policy import active_history_seconds, is_active_policy, policy_for_catalog
 from .rsi_resources import ResourceAmounts, ResourcePolicy
@@ -161,7 +162,7 @@ def build_single_job(spec: RSIConfig, root: Path, name: str, task: Path, protoco
                      runtime_cache_read_only: bool = False, asset_only: bool = False,
                      control: str | None = None, source_job: Path | None = None,
                      broker_client: Path | None = None, deadline: float | None = None,
-                     elapsed_clock: dict | None = None) -> dict:
+                     elapsed_clock: dict | None = None, adapter: ActorAdapter = RSI_PI) -> dict:
     if asset_only and (not prepare_only or variant != 'pi-memweave' or control or source_job
                        or broker_client or deadline is not None or elapsed_clock is not None or runtime_cache_read_only):
         raise ValueError('asset-only job forbids model/control authority')
@@ -190,9 +191,8 @@ def build_single_job(spec: RSIConfig, root: Path, name: str, task: Path, protoco
                            evaluation_broker_client_sha256=file_digest(broker_client),
                            evaluation_deadline=deadline, evaluation_run_id=root.name,
                            **({'evaluation_elapsed_clock': elapsed_clock} if elapsed_clock is not None else {}))
-        agent = {'import_path': 'memweave_eval.pi_agent:ExperimentPi',
-                 'model_name': 'deepseek/deepseek-flash',
-                 'extra_allowed_hosts': ['memweave-broker.internal'] if broker_client else [], 'kwargs': options}
+        agent = adapter.agent('deepseek/deepseek-flash', options,
+                             allowed_hosts=['memweave-broker.internal'] if broker_client else [])
     cfg = {'job_name': name, 'jobs_dir': str(root/'harbor'), 'n_attempts': 1,
            'n_concurrent_trials': 1, 'quiet': True, 'retry': {'max_retries': 0},
            'environment': {'type': 'docker', 'delete': True}, 'agents': [agent],

@@ -237,8 +237,12 @@ def test_owned_child_identity_and_terminal_receipt_are_persisted(tmp_path):
 
     from memweave_eval.runner import execute_harbor
     spec=Experiment.model_validate(configuration(tmp_path));cfg=build_job_config(spec,tmp_path,'identity',[],control='nop')
-    original=subprocess.Popen
-    def harmless(command,**kwargs):return original([sys.executable,'-c','import time;time.sleep(.1)'],**kwargs)
+    original = subprocess.Popen
+
+    def harmless(command, **kwargs):
+        if command[:3] == [sys.executable, '-m', 'harbor.cli.main']:
+            command = [sys.executable, '-c', 'import time;time.sleep(.3)']
+        return original(command, **kwargs)
     with patch('subprocess.Popen',side_effect=harmless):
         assert execute_harbor(cfg,tmp_path,os.environ.copy(),time.monotonic()+10,20)==0
     start=json.loads((tmp_path/'lifecycle/identity.start.json').read_text());end=json.loads((tmp_path/'lifecycle/identity.end.json').read_text())

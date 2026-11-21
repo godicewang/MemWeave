@@ -12,6 +12,7 @@ from dataclasses import asdict
 from itertools import combinations
 from pathlib import Path
 
+from .actor_adapter import RSI_PI
 from .rsi_attempt_evidence import _unique
 from .rsi_baseline import _contract, question_set_digest
 from .rsi_catalog import Catalog, catalog_counts
@@ -143,7 +144,7 @@ def _verify_official_attempt(attempt, expected_runtime, config):
         raise ValueError('official result lacks exact completed actor/fresh grading evidence')
     actor = inspection['job_configs']['actor']['raw']['agents'][0]
     options = actor.get('kwargs', {})
-    if (actor.get('import_path') != 'memweave_eval.pi_agent:ExperimentPi'
+    if (actor.get('import_path') != RSI_PI.entry(attempt['variant']['variant_id'])
             or options.get('prepare_only') is not False
             or options.get('variant') != attempt['variant']['variant_id']
             or actor.get('model_name') != 'deepseek/deepseek-flash'

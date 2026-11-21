@@ -14,6 +14,7 @@ import time
 import uuid
 from pathlib import Path
 
+from .actor_adapter import RSI_PI
 from .storage import atomic_json, contained, file_digest
 
 VARIANTS = ('pi-native', 'pi-memweave')
@@ -327,7 +328,7 @@ def _verify_task_evidence(spec, root, row, contract, *, catalog, historical):
                                 'runtime_plan': str(root/'runtime-assets.json'),
                                 'runtime_plan_sha256': value['runtime_plan_sha256'],
                                 'evaluation_quota_backend': 'node'}
-            if (agent.get('import_path') != 'memweave_eval.pi_agent:ExperimentPi'
+            if (agent.get('import_path') != RSI_PI.entry(variant)
                     or cfg.get('verifier') != {'disable': True}
                     or any(options.get(key) != item for key, item in expected_options.items())):
                 raise ValueError('native/plugin CLI execution identity changed')

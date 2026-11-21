@@ -217,6 +217,7 @@ def offline_preparation(tmp_path, monkeypatch):
     from memweave_eval import (
         budget_guard,
         images,
+        rsi_elapsed,
         rsi_runtime,
         runner,
         runtime_cache,
@@ -244,6 +245,9 @@ def offline_preparation(tmp_path, monkeypatch):
                             jobs=[], authorities=[], proof_changes={}, backend_changes={}, probe_requests=0,
                             omit_transport=False, environment_ready=True, cleanup_confirmed=True, results={},
                             rewards={}, prepare_inputs=[], helper_docker=helper_docker)
+    # This offline fixture also replaces subprocess.run for broker and Docker probes.
+    monkeypatch.setattr(rsi_elapsed, 'clock_domain',
+                        lambda: {'clock': 'linux:CLOCK_BOOTTIME', 'host_boot_id': 'a' * 64})
     monkeypatch.setattr(rsi_runtime, 'validate_catalog', lambda *a: {})
     monkeypatch.setattr(runner, 'verify_package', lambda *a: {})
     state.environment_identity = {'schema_version': 1, 'docker_endpoint': 'synthetic-dedicated',
