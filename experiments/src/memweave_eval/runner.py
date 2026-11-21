@@ -246,21 +246,29 @@ def observed_cost(root: Path) -> float:
     return total
 
 
-def execute_harbor(config: dict, root: Path, env: dict, deadline: float, budget: float, *, budget_stop_file: Path | None = None) -> int:
+def execute_harbor(config: dict, root: Path, env: dict, deadline: float, budget: float, *, budget_stop_file: Path | None = None, stop_event=None, spawned_event=None) -> int:
     def close_admission():
         if budget_stop_file is not None:
             budget_stop_file.parent.mkdir(parents=True,exist_ok=True)
             budget_stop_file.touch()
-    if (root/'STOP_REQUESTED').exists():close_admission()
+    def local_stop():
+        return (root/'STOP_REQUESTED').exists() or (stop_event is not None and stop_event.is_set())
+    if local_stop():close_admission()
     from harbor.models.job.config import JobConfig
 
     JobConfig.model_validate(config)  # Verify against the installed fixed Harbor API.
-    if (root/"STOP_REQUESTED").exists()or time.monotonic() >= deadline or observed_cost(root) >= budget:
+    if local_stop() or time.monotonic() >= deadline or observed_cost(root) >= budget:
         raise TimeoutError("experiment stop before starting the next Job")
     config_path = root / "configs" / f"{config['job_name']}.json"
     atomic_json(config_path, config, immutable=True)
     log = root / "harbor-console" / f"{config['job_name']}.log"
     log.parent.mkdir(parents=True, exist_ok=True)
+    identity = uuid.uuid4().hex
+    lifecycle = root/"lifecycle"
+    from .rsi_elapsed import observation
+    record = {"monotonic": observation(), "identity": identity, "job_name": config['job_name'],
+              "config_sha256": file_digest(config_path), "controller_pid": os.getpid(),
+              "started_at": datetime.now(UTC).isoformat(), "stop_file": str(root/"STOP_REQUESTED")}
     with log.open("wb") as stream:
         process = subprocess.Popen(
             [sys.executable, "-m", "harbor.cli.main", "run", "-c", str(config_path), "--yes"],
@@ -270,16 +278,17 @@ def execute_harbor(config: dict, root: Path, env: dict, deadline: float, budget:
             env=env,
             start_new_session=True,
         )
-        identity=uuid.uuid4().hex
-        lifecycle=root/"lifecycle"
-        record={"identity":identity,"job_name":config['job_name'],"config_sha256":file_digest(config_path),
-            "controller_pid":os.getpid(),"child_pid":process.pid,"child_process_group":process.pid,
-            "started_at":datetime.now(UTC).isoformat(),"stop_file":str(root/"STOP_REQUESTED")}
         try:
+            if spawned_event is not None:
+                spawned_event.set()
+            record.update(child_pid=process.pid, child_process_group=process.pid)
+            from .rsi_recovery import capture_process_identity
+
+            record['process_identity'] = capture_process_identity(process.pid)
             atomic_json(lifecycle/(config['job_name']+".start.json"),record,immutable=True)
             while process.poll() is None:
                 atomic_json(lifecycle/(config['job_name']+".lease.json"),dict(record,heartbeat_at=datetime.now(UTC).isoformat()))
-                if (root/"STOP_REQUESTED").exists():
+                if local_stop():
                     close_admission()
                     raise TimeoutError("explicit user stop requested")
                 if time.monotonic() >= deadline:
@@ -290,7 +299,11 @@ def execute_harbor(config: dict, root: Path, env: dict, deadline: float, budget:
             return process.returncode
         except BaseException:
             close_admission()
-            os.killpg(process.pid, signal.SIGINT)
+            if process.poll() is None:
+                try:
+                    os.killpg(process.pid, signal.SIGINT)
+                except ProcessLookupError:
+                    pass
             try:
                 process.wait(timeout=60)
             except subprocess.TimeoutExpired:
@@ -303,9 +316,12 @@ def execute_harbor(config: dict, root: Path, env: dict, deadline: float, budget:
             raise
         finally:
             atomic_json(lifecycle/(config['job_name']+".end.json"),{
-                "identity":identity,"status":"terminal"if process.returncode is not None else"stop_unconfirmed","return_code":process.returncode,
-                "finished_at":datetime.now(UTC).isoformat(),
-                "explicit_stop":(root/"STOP_REQUESTED").exists()},immutable=True)
+                "identity":identity,"job_name":config['job_name'],
+                "config_sha256":record['config_sha256'],
+                "process_identity":record.get('process_identity'),
+                "status":"terminal"if process.returncode is not None else"stop_unconfirmed","return_code":process.returncode,
+                "finished_at":datetime.now(UTC).isoformat(), "monotonic": observation(),
+                "explicit_stop":local_stop()},immutable=True)
 
 
 def docker_preflight(spec: Experiment, selected: list[dict], preparations=None) -> dict:
