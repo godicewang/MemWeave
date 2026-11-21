@@ -558,13 +558,18 @@ class NoMountPilotEnvironment(DockerEnvironment):
             raise TransferError("extra Compose is outside pilot transfer scope")
         self._pilot_role = pilot_role
         super().__init__(*args, mounts=[], **kwargs)
-        if self._uses_compose or self._is_windows_container:
-            raise TransferError("only audited Linux Dockerfile task supported")
+        if self._is_windows_container:
+            raise TransferError("only audited Linux tasks supported")
         source_allowed(self.environment_dir, pilot_role)
+        self._validate_task_compose()
         if pilot_role == "verifier" and pilot_trial_id is None:
             raise TransferError("shared explicit trial identity required for verifier")
         self._archive = PilotArchive(self.session_id, pilot_role, pilot_trial_id)
         self._io_lock = asyncio.Lock()
+
+    def _validate_task_compose(self):
+        if self._uses_compose:
+            raise TransferError("only audited Linux Dockerfile task supported")
 
     async def start(self, *args, **kwargs):
         await super().start(*args, **kwargs)
